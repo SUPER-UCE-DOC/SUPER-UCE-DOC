@@ -4,8 +4,9 @@ import {
   HeartPulse, Stethoscope, Zap, CheckCircle, Menu, X
 } from "lucide-react";
 import { useState } from "react";
-import logoImg from "../../imports/image-1.png";
-import heroVideo from "../../imports/hands.mov";
+
+const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
+const heroVideo = new URL("../../imports/hands.mp4", import.meta.url).href;
 
 interface LandingPageProps {
   onEnterPortal: (role?: "patient" | "doctor" | "pharmacy") => void;

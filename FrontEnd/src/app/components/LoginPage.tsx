@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } from "lucide-react";
-import logoImg from "../../imports/image-1.png";
+
+const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type AuthMode = "login" | "register";

@@ -4,8 +4,9 @@ import {
   Settings, LogOut, ChevronLeft, ChevronRight,
   ClipboardList, Users, PackageOpen, TrendingUp, LayoutDashboard
 } from "lucide-react";
-import logoImg from "../../imports/image-1.png";
-import logoIconImg from "../../imports/image-2.png";
+
+const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
+const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type View = string;
