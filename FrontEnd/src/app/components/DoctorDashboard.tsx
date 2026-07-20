@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, Send, CheckCircle,
   Calendar, Users, Stethoscope, FileText, Clock, AlertCircle,
@@ -54,18 +55,52 @@ export function DoctorDashboard({ userName, currentView, onNavigate }: DoctorDas
 
 /* ─── MI AGENDA ─── */
 function AgendaView({ userName }: { userName: string }) {
+  const [agenda, setAgenda] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAgenda = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getAppointments();
+      const formatted = data.map((app: any) => ({
+        id: app.id,
+        patient: app.patient_name,
+        time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        type: app.type || "Teleconsulta",
+        deaf: app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales"),
+        status: app.status
+      }));
+      setAgenda(formatted);
+    } catch (err) {
+      console.error("Error al cargar la agenda:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAgenda();
+  }, []);
+
+  const totalHoy = agenda.length;
+  const completadas = agenda.filter(item => item.status === "completada").length;
+  const pendientes = agenda.filter(item => item.status === "pendiente" || item.status === "en_curso").length;
+
+  const dateStr = new Date().toLocaleDateString("es-DO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const dateCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
   return (
     <div className="p-6 space-y-6 anim-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
         <div>
           <h1 style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Mi Agenda</h1>
-          <p className="text-sm" style={{ color: "#6B7280" }}>Dr. {userName} · Lunes 13 de Julio, 2026</p>
+          <p className="text-sm" style={{ color: "#6B7280" }}>Dr. {userName} · {dateCapitalized}</p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
           {[
-            { label: "Total hoy", value: "5", color: "#203A70" },
-            { label: "Completadas", value: "2", color: "#10B981" },
-            { label: "Pendientes", value: "2", color: "#D97706" },
+            { label: "Total hoy", value: totalHoy, color: "#203A70" },
+            { label: "Completadas", value: completadas, color: "#10B981" },
+            { label: "Pendientes", value: pendientes, color: "#D97706" },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-xl px-4 py-3 shadow-sm">
               <div style={{ color: s.color, fontSize: "22px", fontWeight: 800 }}>{s.value}</div>
@@ -77,69 +112,67 @@ function AgendaView({ userName }: { userName: string }) {
 
       {/* Timeline de citas */}
       <div className="space-y-3 anim-fade-in-up anim-d-1">
-        {agendaItems.map((item, i) => {
-          const statusConf = {
-            completada: { bg: "#F3F4F6", color: "#9CA3AF", dot: "#10B981", label: "✓ Completada" },
-            en_curso: { bg: "#F0FFFE", color: "#00A69D", dot: "#00A69D", label: "● En curso" },
-            pendiente: { bg: "white", color: "#203A70", dot: "#E5E7EB", label: "Pendiente" },
-          };
-          const s = statusConf[item.status as keyof typeof statusConf];
-          return (
-            <div key={item.id} className="flex gap-4 items-stretch">
-              {/* Línea de tiempo */}
-              <div className="flex flex-col items-center" style={{ width: "40px" }}>
-                <div
-                  className="w-4 h-4 rounded-full border-4 flex-shrink-0 mt-4"
-                  style={{ borderColor: s.dot, background: item.status === "en_curso" ? s.dot : "white" }}
-                />
-                {i < agendaItems.length - 1 && <div className="flex-1 w-0.5 mt-1" style={{ background: "#E5E7EB" }} />}
-              </div>
+        {loading ? (
+          <div className="text-center py-8 text-gray-500 text-sm">Cargando agenda médica...</div>
+        ) : agenda.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 text-sm">No hay citas programadas para hoy.</div>
+        ) : (
+          agenda.map((item, i) => {
+            const statusConf = {
+              completada: { bg: "#F3F4F6", color: "#9CA3AF", dot: "#10B981", label: "✓ Completada" },
+              en_curso: { bg: "#F0FFFE", color: "#00A69D", dot: "#00A69D", label: "● En curso" },
+              pendiente: { bg: "white", color: "#203A70", dot: "#E5E7EB", label: "Pendiente" },
+            };
+            const s = statusConf[item.status as keyof typeof statusConf] || statusConf.pendiente;
+            return (
+              <div key={item.id} className="flex gap-4 items-stretch" style={{ opacity: item.status === "completada" ? 0.65 : 1 }}>
+                {/* Línea de tiempo */}
+                <div className="flex flex-col items-center" style={{ width: "40px" }}>
+                  <div
+                    className="w-4 h-4 rounded-full border-4 flex-shrink-0 mt-4"
+                    style={{ borderColor: s.dot, background: item.status === "en_curso" ? s.dot : "white" }}
+                  />
+                  {i < agenda.length - 1 && <div className="flex-1 w-0.5 mt-1" style={{ background: "#E5E7EB" }} />}
+                </div>
 
-              <div
-                className="flex-1 rounded-2xl p-4 border mb-2"
-                style={{ background: s.bg, borderColor: item.status === "en_curso" ? "#00A69D" : "#E5E7EB" }}
-              >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>{item.time}</span>
-                      <span className="text-sm" style={{ color: s.color, fontWeight: 600 }}>— {item.patient}</span>
-                      {item.deaf && (
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full"
-                          style={{ background: "#F0FFFE", color: "#00A69D", border: "1px solid #00C7C0", fontWeight: 600 }}
-                        >
-                          🤟 Sordo · LSE
-                        </span>
-                      )}
+                <div
+                  className="flex-1 rounded-2xl p-4 border mb-2"
+                  style={{ background: s.bg, borderColor: item.status === "en_curso" ? "#00A69D" : "#E5E7EB" }}
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>{item.time}</span>
+                        <span className="text-sm" style={{ color: s.color, fontWeight: 600 }}>— {item.patient}</span>
+                        {item.deaf && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{ background: "#F0FFFE", color: "#00A69D", border: "1px solid #00C7C0", fontWeight: 600 }}
+                          >
+                            🤟 Sordo · LSE
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs mt-1" style={{ color: "#9CA3AF" }}>{item.type}</div>
                     </div>
-                    <div className="text-xs mt-1" style={{ color: "#9CA3AF" }}>{item.type}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-xs px-3 py-1 rounded-full"
-                      style={{
-                        background: item.status === "en_curso" ? "#DCFCE7" : item.status === "completada" ? "#F3F4F6" : "#FEF3C7",
-                        color: item.status === "en_curso" ? "#10B981" : item.status === "completada" ? "#9CA3AF" : "#D97706",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {s.label}
-                    </span>
-                    {item.status !== "completada" && (
-                      <button
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-white"
-                        style={{ background: item.status === "en_curso" ? "#00A69D" : "#203A70", fontWeight: 600 }}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-xs px-3 py-1 rounded-full"
+                        style={{
+                          background: item.status === "en_curso" ? "#DCFCE7" : item.status === "completada" ? "#F3F4F6" : "#FEF3C7",
+                          color: item.status === "en_curso" ? "#10B981" : item.status === "completada" ? "#9CA3AF" : "#D97706",
+                          fontWeight: 600,
+                        }}
                       >
-                        <Video size={12} /> {item.status === "en_curso" ? "Continuar" : "Iniciar"}
-                      </button>
-                    )}
+                        {s.label}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -238,6 +271,8 @@ const waitingPatients = [
 
 /* ─── TELECONSULTA CON TRADUCTOR IA ─── */
 function TeleconsultaView() {
+  const [waitingList, setWaitingList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activePatient, setActivePatient] = useState<string | null>(null);
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -246,7 +281,33 @@ function TeleconsultaView() {
   const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "" });
   const [rxSubmitted, setRxSubmitted] = useState(false);
 
-  const selectedPatient = waitingPatients.find((p) => p.name === activePatient) ?? null;
+  const selectedPatient = waitingList.find((p) => p.name === activePatient) ?? null;
+
+  const loadWaitingRoom = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getWaitingRoom();
+      const formatted = data.map((app: any) => ({
+        id: app.id,
+        patient_id: app.patient_id,
+        name: app.patient_name,
+        time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        reason: app.reason || "Teleconsulta de seguimiento",
+        deaf: app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales"),
+        avatar: app.patient_name.substring(0, 2).toUpperCase(),
+        status: app.status
+      }));
+      setWaitingList(formatted);
+    } catch (err) {
+      console.error("Error al cargar sala de espera:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWaitingRoom();
+  }, [inCall]);
 
   useEffect(() => {
     if (!inCall) return;
@@ -255,20 +316,51 @@ function TeleconsultaView() {
     return () => { clearInterval(t1); clearInterval(t2); };
   }, [inCall]);
 
-  const startCall = (name: string) => {
-    setActivePatient(name);
-    setInCall(true);
-    setElapsedSecs(0);
-    setVisibleLines(0);
-    setRxSubmitted(false);
-    setRx({ medicine: "", dose: "", frequency: "" });
+  const startCall = async (patient: any) => {
+    try {
+      await api.updateAppointmentStatus(patient.id, "en_curso");
+      setActivePatient(patient.name);
+      setInCall(true);
+      setElapsedSecs(0);
+      setVisibleLines(0);
+      setRxSubmitted(false);
+      setRx({ medicine: "", dose: "", frequency: "" });
+    } catch (err: any) {
+      alert("No se pudo iniciar la llamada: " + err.message);
+    }
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    if (selectedPatient) {
+      try {
+        // Generar historial de conversación de prueba para el resumen clínico IA
+        const transcript = aiTranslations.map(t => `${t.gesture} -> ${t.translation}`).join("\n");
+        await api.summarizeConsultation(selectedPatient.id, transcript);
+      } catch (err) {
+        console.error("Error guardando resumen clínico:", err);
+      }
+    }
     setInCall(false);
     setActivePatient(null);
     setElapsedSecs(0);
     setVisibleLines(0);
+  };
+
+  const handleEmitRx = async () => {
+    if (!rx.medicine || !selectedPatient) return;
+    try {
+      await api.createPrescription({
+        patient_id: selectedPatient.patient_id,
+        appointment_id: selectedPatient.id,
+        medicine: rx.medicine,
+        dose: rx.dose || "1 comprimido",
+        frequency: rx.frequency || "Cada 24 horas",
+        expires_in_days: 30
+      });
+      setRxSubmitted(true);
+    } catch (err: any) {
+      alert("Error al emitir receta: " + err.message);
+    }
   };
 
   const formatTime = (s: number) => {
@@ -287,7 +379,12 @@ function TeleconsultaView() {
       </div>
 
       <div className="space-y-3">
-        {waitingPatients.map((p, i) => (
+        {loading ? (
+          <div className="text-center py-8 text-gray-500 text-sm">Cargando sala de espera...</div>
+        ) : waitingList.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 text-sm">No hay pacientes esperando consulta.</div>
+        ) : (
+          waitingList.map((p, i) => (
           <div
             key={i}
             className="bg-white rounded-xl p-5 flex items-center gap-4 shadow-sm anim-fade-in-up"
@@ -335,7 +432,7 @@ function TeleconsultaView() {
                 </span>
               )}
               <button
-                onClick={() => startCall(p.name)}
+                onClick={() => startCall(p)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all"
                 style={{ background: "#00A69D", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,166,157,0.25)" }}
                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#008f87")}
@@ -345,7 +442,8 @@ function TeleconsultaView() {
               </button>
             </div>
           </div>
-        ))}
+        )))
+      }
       </div>
     </div>
   );
@@ -486,7 +584,7 @@ function TeleconsultaView() {
                   ))}
                 </div>
                 <button
-                  onClick={() => { if (rx.medicine) setRxSubmitted(true); }}
+                  onClick={handleEmitRx}
                   className="w-full py-3 rounded-xl text-white flex items-center justify-center gap-2"
                   style={{ background: "#00A69D", fontWeight: 800, fontSize: "15px" }}
                 >

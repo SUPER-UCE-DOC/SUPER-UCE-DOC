@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SettingsView } from "./SettingsView";
+import { api } from "../utils/api";
 import {
   CheckCircle, Clock, Package, AlertCircle, Filter, Pill,
   Search, RefreshCw, Truck, FlaskConical, Plus, ChevronRight,
@@ -78,11 +79,48 @@ export function PharmacyDashboard({ userName, currentView }: PharmacyDashboardPr
    RECETAS ENTRANTES — gestión de pacientes
 ════════════════════════════════════════ */
 function RecetasEntrantes({ userName }: { userName: string }) {
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(initialPrescriptions);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"todas" | "urgentes" | "despachadas">("todas");
 
-  const dispatch = (id: string) =>
-    setPrescriptions((prev) => prev.map((rx) => (rx.id === id ? { ...rx, dispatched: true } : rx)));
+  const loadPrescriptions = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getPrescriptions();
+      const formatted = data.map((rx: any) => ({
+        id: rx.id,
+        patient: rx.patient_name,
+        medicine: rx.medicine,
+        dose: `${rx.dose} · ${rx.frequency}`,
+        doctor: rx.doctor_name,
+        issuedAt: new Date(rx.issued_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        urgent: rx.medicine.includes("Sertralina") || rx.medicine.includes("Furosemida"),
+        dispatched: rx.status === "despachada",
+        deaf: rx.patient_name.includes("Rosa") || rx.patient_name.includes("María") || rx.patient_name.includes("Morales"),
+      }));
+      setPrescriptions(formatted);
+    } catch (err) {
+      console.error("Error cargando recetas en farmacia:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPrescriptions();
+  }, []);
+
+  const dispatch = async (id: string) => {
+    try {
+      await api.dispatchPrescription(id);
+      setPrescriptions((prev) =>
+        prev.map((rx) => (rx.id === id ? { ...rx, dispatched: true } : rx))
+      );
+      alert("Receta validada y despachada con éxito. Stock actualizado en base de datos (Transacción ACID).");
+    } catch (err: any) {
+      alert("Error al despachar receta: " + err.message);
+    }
+  };
 
   const pending = prescriptions.filter((r) => !r.dispatched).length;
   const urgent = prescriptions.filter((r) => r.urgent && !r.dispatched).length;

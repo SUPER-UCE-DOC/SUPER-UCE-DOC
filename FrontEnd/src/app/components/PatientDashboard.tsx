@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
   Hand, Captions, Volume2, Sparkles
@@ -312,11 +313,40 @@ function TelemedicinaSala({ userName }: { userName: string }) {
 
 /* ─── RECETAS ─── */
 function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: string) => void }) {
+  const [prescriptionsList, setPrescriptionsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadRx() {
+      try {
+        const data = await api.getPrescriptions();
+        const formatted = data.map((rx: any) => ({
+          id: rx.id,
+          medicine: rx.medicine,
+          doctor: rx.doctor_name,
+          doses: `${rx.dose} · ${rx.frequency}`,
+          status: rx.status
+        }));
+        setPrescriptionsList(formatted);
+      } catch (err) {
+        console.error("Error cargando recetas:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadRx();
+  }, []);
+
   return (
     <div className="p-6 space-y-5 anim-fade-in">
       <h1 className="anim-fade-in-up anim-d-0" style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>Mis Recetas</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 anim-fade-in-up anim-d-1">
-        {prescriptions.map((rx, rxIdx) => (
+        {loading ? (
+          <div className="col-span-full text-center py-8 text-gray-500 text-sm">Cargando recetas médicas...</div>
+        ) : prescriptionsList.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-gray-500 text-sm">No tienes recetas médicas asignadas.</div>
+        ) : (
+          prescriptionsList.map((rx, rxIdx) => (
           <div
             key={rx.id}
             className="bg-white rounded-xl p-5 anim-fade-in-up"
@@ -354,7 +384,8 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
               </button>
             )}
           </div>
-        ))}
+        )))
+      }
       </div>
     </div>
   );
@@ -413,19 +444,37 @@ function AsistenteView() {
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState<{ from: string; text: string }[]>([]);
   const [typing, setTyping] = useState(false);
-  const msgsEndRef = { current: null as HTMLDivElement | null };
+  const msgsEndRef = useRef<HTMLDivElement | null>(null);
 
-  const send = (text?: string) => {
+  const send = async (text?: string) => {
     const query = (text ?? input).trim();
     if (!query) return;
     setInput("");
     setMsgs((p) => [...p, { from: "user", text: query }]);
     setTyping(true);
-    setTimeout(() => {
+
+    try {
+      // Formatear historial de chat para la API
+      const history = msgs.map(m => ({
+        role: m.from === "bot" ? "assistant" : "user",
+        content: m.text
+      }));
+      
+      const res = await api.queryChatbot(query, history);
+      
       setTyping(false);
-      setMsgs((p) => [...p, { from: "bot", text: botReplies[p.length % botReplies.length] }]);
-    }, 1100);
+      setMsgs((p) => [...p, { from: "bot", text: res.reply }]);
+    } catch (err: any) {
+      setTyping(false);
+      setMsgs((p) => [...p, { from: "bot", text: "Lo siento, hubo un error de conexión con mi cerebro clínico." }]);
+    }
   };
+
+  useEffect(() => {
+    if (msgsEndRef.current) {
+      msgsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [msgs, typing]);
 
   const isEmpty = msgs.length === 0;
 

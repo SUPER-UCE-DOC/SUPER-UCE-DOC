@@ -1,0 +1,22 @@
+GUÍA CLÍNICA DE ATENCIÓN PRIMARIA - SUPER-UCE DOC
+
+1. HIPERTENSIÓN ARTERIAL (HTA):
+- Diagnóstico: Presión arterial sistólica >= 140 mmHg o diastólica >= 90 mmHg medida en múltiples ocasiones.
+- Tratamiento inicial: Cambios en el estilo de vida (baja en sal, ejercicio). Tratamiento farmacológico común incluye: Enalapril (5mg-20mg por día), Losartán (25mg-100mg por día), Amlodipino (5mg-10mg).
+- Síntomas de alarma: Dolor de cabeza severo (cefalea), mareos intensos, visión borrosa, zumbido en los oídos (tinnitus), dolor de pecho.
+- Frecuencia de control: Pacientes estables cada 3-6 meses. Pacientes no controlados semanalmente.
+
+2. DIABETES MELLITUS TIPO 2:
+- Diagnóstico: Glucosa en ayunas >= 126 mg/dL, o hemoglobina glicosilada (HbA1c) >= 6.5%.
+- Tratamiento inicial: Metformina (500mg-2000mg diarios con alimentos) como fármaco de elección.
+- Síntomas comunes: Poliuria (mucha orina), polidipsia (mucha sed), pérdida de peso inexplicable, fatiga.
+- Cuidado de pies: Inspección diaria obligatoria para evitar úlceras diabéticas.
+
+3. ANSIEDAD GENERALIZADA:
+- Tratamiento farmacológico de apoyo: ISRS como Sertralina (50mg diarios) o Escitalopram.
+- Recomendaciones: Terapia cognitivo-conductual, evitar estimulantes (café, té, refrescos de cola).
+
+4. PROTOCOLO DE VIDEOCONSULTAS Y RECETAS:
+- Las recetas digitales emitidas tienen una validez estándar de 30 días.
+- Las recetas se geolocalizan automáticamente para enviarse a farmacias en un radio de 2 km a la redonda del paciente para su despacho inmediato.
+- Las farmacias deben restar el stock inmediatamente al despachar la receta en una transacción ACID segura.

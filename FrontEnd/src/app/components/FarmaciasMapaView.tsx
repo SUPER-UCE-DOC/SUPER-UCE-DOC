@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Search, MapPin, Navigation, Clock, CheckCircle, XCircle, Phone } from "lucide-react";
+import { api } from "../utils/api";
 
 interface Pharmacy {
   id: number;
@@ -30,14 +31,49 @@ interface FarmaciasMapaViewProps {
 
 export function FarmaciasMapaView({ medicine, onBack }: FarmaciasMapaViewProps) {
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<number | null>(1);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [pharmaciesList, setPharmaciesList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = pharmacies.filter((p) =>
+  useEffect(() => {
+    async function loadNearby() {
+      try {
+        setLoading(true);
+        // Usar coordenadas por defecto del paciente en SPM
+        const lat = 18.463;
+        const lon = -69.304;
+        const data = await api.getNearbyPharmacies(lat, lon, medicine);
+        const formatted = data.map((p: any, idx: number) => ({
+          id: p.id,
+          name: p.name,
+          address: p.address,
+          distance: `${p.distance} km`,
+          open: true,
+          hasStock: p.has_stock,
+          phone: p.phone,
+          hours: "08:00 – 22:00",
+          x: 25 + (idx * 18) % 55,
+          y: 30 + (idx * 14) % 45,
+        }));
+        setPharmaciesList(formatted);
+        if (formatted.length > 0) {
+          setSelected(formatted[0].id);
+        }
+      } catch (err) {
+        console.error("Error al buscar farmacias:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadNearby();
+  }, [medicine]);
+
+  const filtered = pharmaciesList.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.address.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedPharmacy = pharmacies.find((p) => p.id === selected);
+  const selectedPharmacy = pharmaciesList.find((p) => p.id === selected);
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#F9FAFB" }}>

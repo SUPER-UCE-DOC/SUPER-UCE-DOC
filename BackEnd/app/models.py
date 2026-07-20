@@ -1,0 +1,147 @@
+import datetime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
+from sqlalchemy.orm import relationship
+from app.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # "patient", "doctor", "pharmacy"
+    full_name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    patient_profile = relationship("Patient", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    doctor_profile = relationship("Doctor", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    pharmacy_profile = relationship("Pharmacy", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    age = Column(Integer, nullable=False)
+    condition = Column(String, nullable=True)
+    avatar = Column(String, nullable=True)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="patient_profile")
+    appointments = relationship("Appointment", back_populates="patient", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan")
+    clinical_histories = relationship("ClinicalHistory", back_populates="patient", cascade="all, delete-orphan")
+
+
+class Doctor(Base):
+    __tablename__ = "doctors"
+
+    id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    specialty = Column(String, nullable=False)
+    room_state = Column(String, default="libre")  # "libre", "esperando", "en_consulta"
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="doctor_profile")
+    appointments = relationship("Appointment", back_populates="doctor", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="doctor", cascade="all, delete-orphan")
+    clinical_histories = relationship("ClinicalHistory", back_populates="doctor")
+
+
+class Pharmacy(Base):
+    __tablename__ = "pharmacies"
+
+    id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    business_name = Column(String, nullable=False)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    address = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="pharmacy_profile")
+    inventory_items = relationship("PharmacyInventory", back_populates="pharmacy", cascade="all, delete-orphan")
+
+
+class PharmacyInventory(Base):
+    __tablename__ = "pharmacy_inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pharmacy_id = Column(Integer, ForeignKey("pharmacies.id"), nullable=False)
+    medicine = Column(String, nullable=False, index=True)
+    stock = Column(Integer, default=0)
+
+    # Relationships
+    pharmacy = relationship("Pharmacy", back_populates="inventory_items")
+
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    date_time = Column(DateTime, default=datetime.datetime.utcnow)
+    status = Column(String, default="pendiente")  # "pendiente", "en_curso", "completada"
+    type = Column(String, nullable=False)  # "Teleconsulta", "Presencial", "Seguimiento"
+    reason = Column(String, nullable=True)
+
+    # Relationships
+    patient = relationship("Patient", back_populates="appointments")
+    doctor = relationship("Doctor", back_populates="appointments")
+    prescriptions = relationship("Prescription", back_populates="appointment")
+
+
+class Prescription(Base):
+    __tablename__ = "prescriptions"
+
+    id = Column(String, primary_key=True, index=True)  # Format e.g., RX-2026-0841
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    medicine = Column(String, nullable=False)
+    dose = Column(String, nullable=False)
+    frequency = Column(String, nullable=False)
+    status = Column(String, default="activa")  # "activa", "vencida", "despachada"
+    issued_at = Column(DateTime, default=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    patient_lat = Column(Float, nullable=False)
+    patient_lon = Column(Float, nullable=False)
+
+    # Relationships
+    appointment = relationship("Appointment", back_populates="prescriptions")
+    patient = relationship("Patient", back_populates="prescriptions")
+    doctor = relationship("Doctor", back_populates="prescriptions")
+
+
+class ClinicalHistory(Base):
+    __tablename__ = "clinical_histories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    date = Column(DateTime, default=datetime.datetime.utcnow)
+    gestures_detected = Column(String, nullable=True)  # Stored as text / comma-separated
+    translation_text = Column(String, nullable=True)
+    summary_ia = Column(String, nullable=True)
+
+    # Relationships
+    patient = relationship("Patient", back_populates="clinical_histories")
+    doctor = relationship("Doctor", back_populates="clinical_histories")
+
+
+class SupplierOrder(Base):
+    __tablename__ = "supplier_orders"
+
+    id = Column(String, primary_key=True, index=True)  # Format e.g. ORD-9921
+    pharmacy_id = Column(Integer, ForeignKey("pharmacies.id"), nullable=False)
+    supplier = Column(String, nullable=False)
+    items = Column(String, nullable=False)  # Comma separated or JSON string
+    total = Column(Float, nullable=False)
+    estimated_delivery = Column(String, nullable=False)
+    status = Column(String, default="borrador")  # "borrador", "enviado", "transito", "recibido"
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

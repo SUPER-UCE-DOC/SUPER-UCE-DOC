@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } from "lucide-react";
+import { api } from "../utils/api";
 
 const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
 
@@ -50,7 +51,55 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
     window.setTimeout(() => onBack(), 260);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const handleGoogleLogin = () => {
+    setError("");
+    if (!(window as any).google) {
+      setError("La API de Google se está cargando. Inténtalo de nuevo en unos segundos.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1098656113946-localhost.apps.googleusercontent.com";
+      console.log("Using Google Client ID:", clientId);
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "email profile openid",
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            try {
+              await api.loginWithGoogle(tokenResponse.access_token, selectedRole);
+              const profile = await api.getMe();
+              setLoading(false);
+              onLogin(profile.role as Role, profile.full_name);
+            } catch (err: any) {
+              setError(err.message || "Error al sincronizar sesión con el servidor.");
+              setLoading(false);
+            }
+          } else {
+            setError("No se recibió el token de acceso de Google.");
+            setLoading(false);
+          }
+        },
+      });
+      client.requestAccessToken();
+    } catch (err: any) {
+      setError("Error al iniciar el diálogo de Google: " + err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email || !password) {
@@ -62,10 +111,31 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    
+    try {
+      if (authMode === "register") {
+        await api.register({
+          email,
+          password,
+          full_name: name,
+          role: selectedRole,
+          age: 30, // Valores por defecto
+          condition: selectedRole === "patient" ? "General" : undefined,
+          lat: 18.46,
+          lon: -69.30
+        });
+      }
+      
+      // Realizar login y obtener datos de perfil real del backend
+      await api.login(email, password);
+      const profile = await api.getMe();
+      
       setLoading(false);
-      onLogin(selectedRole, name || email.split("@")[0]);
-    }, 1200);
+      onLogin(profile.role as Role, profile.full_name);
+    } catch (err: any) {
+      setError(err.message || "Ocurrió un error en la autenticación.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -273,7 +343,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                   </div>
                   <button
                     type="button"
-                    onClick={() => onLogin("patient", "Usuario Google")}
+                    onClick={handleGoogleLogin}
                     className="w-full flex items-center justify-center gap-3 py-2.5 rounded-lg border transition-all"
                     style={{ borderColor: "#E5E7EB", background: "white", fontWeight: 600, fontSize: "14px", color: "#374151" }}
                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#F9FAFB")}
