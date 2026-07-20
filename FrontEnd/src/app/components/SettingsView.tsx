@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { api } from "../utils/api";
 import {
   User, Bell, Eye, Clock, Stethoscope,
-  Building2, Truck, MapPin,
+  Building2, Truck, MapPin, X, Image as ImageIcon, Trash2
 } from "lucide-react";
 
 type Role = "patient" | "doctor" | "pharmacy";
@@ -9,6 +11,178 @@ type Role = "patient" | "doctor" | "pharmacy";
 interface SettingsViewProps {
   role: Role;
   userName: string;
+  userName: string;
+}
+
+/* ── Profile Image Upload ───────────────────────────────── */
+function ProfileImageUpload({ userName }: { userName: string }) {
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isClosingPreview, setIsClosingPreview] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.getMe().then(u => setAvatar(u.avatar || null));
+  }, []);
+
+  const handleProcessFile = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      setAvatar(base64);
+      try {
+        await api.updateAvatar(base64);
+        window.dispatchEvent(new Event("avatarUpdated"));
+        setIsModalOpen(false);
+      } catch (err) {
+        console.error("Error updating avatar", err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClosePreview = () => {
+    setIsClosingPreview(true);
+    setTimeout(() => {
+      setIsPreviewOpen(false);
+      setIsClosingPreview(false);
+    }, 250);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleProcessFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      handleProcessFile(file);
+    }
+  };
+
+  const handleDelete = async () => {
+    setAvatar(null);
+    try {
+      await api.updateAvatar("");
+      window.dispatchEvent(new Event("avatarUpdated"));
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Error deleting avatar", err);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-4 py-4 mb-4">
+      <div 
+        onClick={() => avatar && setIsPreviewOpen(true)}
+        className={`w-16 h-16 rounded-xl overflow-hidden border-2 flex-shrink-0 flex items-center justify-center text-2xl font-bold ${avatar ? 'cursor-default hover:opacity-80 transition-opacity' : ''}`} 
+        style={{ borderColor: "#E5E7EB", background: avatar ? "white" : "#00A69D", color: "white" }}
+      >
+        {avatar ? (
+          <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+        ) : (
+          userName.charAt(0).toUpperCase()
+        )}
+      </div>
+      <div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="px-4 py-2 bg-white border rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50"
+          style={{ borderColor: "#E5E7EB", color: "#203A70" }}
+        >
+          Cambiar foto de perfil
+        </button>
+        <p className="text-xs text-gray-500 mt-1">Administra tu foto actual</p>
+      </div>
+
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setIsModalOpen(false)}>
+          <div 
+            className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in"
+            style={{ border: "1px solid #E5E7EB" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Foto de perfil</h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div 
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all"
+              style={{
+                borderColor: isDragging ? "#00A69D" : "#D1D5DB",
+                background: isDragging ? "#F0FFFE" : "#F9FAFB"
+              }}
+            >
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm mb-3" style={{ color: "#00A69D" }}>
+                <ImageIcon size={24} />
+              </div>
+              <p className="text-sm font-semibold text-gray-700 mb-1">Arrastra tu imagen aquí</p>
+              <p className="text-xs text-gray-500 mb-4">o selecciona un archivo desde tu equipo</p>
+              
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
+                style={{ background: "#00A69D", boxShadow: "0 2px 10px rgba(0,166,157,0.3)" }}
+              >
+                Buscar archivo
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+            </div>
+
+            {avatar && (
+              <div className="mt-6 pt-6 border-t flex justify-between items-center" style={{ borderColor: "#F3F4F6" }}>
+                <div className="flex items-center gap-3">
+                  <img src={avatar} alt="Current" className="w-10 h-10 rounded-xl object-cover border" style={{ borderColor: "#E5E7EB", background: "white" }} />
+                  <span className="text-sm font-medium text-gray-700">Foto actual</span>
+                </div>
+                <button 
+                  onClick={handleDelete}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                  style={{ color: "#EF4444", background: "rgba(239,68,68,0.08)" }}
+                >
+                  <Trash2 size={16} /> Eliminar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isPreviewOpen && avatar && createPortal(
+        <div 
+          className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm ${isClosingPreview ? 'anim-fade-out' : 'anim-fade-in'}`}
+          onClick={handleClosePreview}
+        >
+          <img 
+            src={avatar} 
+            alt="Avatar Preview" 
+            className={`max-w-[90vw] max-h-[90vh] object-contain rounded-2xl ${isClosingPreview ? 'anim-scale-out' : 'anim-scale-in'}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.5)", background: "white" }}
+          />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 /* ── Shared primitives ──────────────────────────────────── */
@@ -24,7 +198,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         borderRadius: "12px",
         background: checked ? "#00A69D" : "#D1D5DB",
         border: "none",
-        cursor: "pointer",
         position: "relative",
         flexShrink: 0,
         transition: "background 0.2s",
@@ -187,6 +360,7 @@ function PatientSettings({ userName }: { userName: string }) {
 
       <Card title="Cuenta y Datos Personales" icon={<User size={16} />} delay={120}>
         <div className="py-4 space-y-4">
+          <ProfileImageUpload userName={userName} />
           <FieldInput label="Nombre Completo" value={nombre} onChange={setNombre} placeholder="Tu nombre completo" />
           <FieldInput label="Correo Electrónico" value={email} onChange={setEmail} placeholder="correo@ejemplo.com" type="email" />
           <FieldInput label="Teléfono" value={telefono} onChange={setTelefono} placeholder="+1 809-000-0000" type="tel" />
@@ -238,6 +412,7 @@ function DoctorSettings({ userName }: { userName: string }) {
     <>
       <Card title="Perfil Profesional" icon={<Stethoscope size={16} />} delay={60}>
         <div className="py-4 space-y-4">
+          <ProfileImageUpload userName={userName} />
           <FieldInput label="Nombre" value={userName} onChange={() => {}} placeholder="Dr. Nombre Apellido" />
           <FieldInput label="Especialidad Médica" value={especialidad} onChange={setEspecialidad} placeholder="Ej: Cardiología" />
           <FieldInput label="N.º de Exequátur / Licencia" value={exequatur} onChange={setExequatur} placeholder="EX-YYYY-00000" />
@@ -363,9 +538,10 @@ function PharmacySettings({ userName }: { userName: string }) {
 
   return (
     <>
-      <Card title="Datos del Negocio" icon={<Building2 size={16} />} delay={60}>
+      <Card title="Datos del Establecimiento" icon={<Building2 size={16} />} delay={60}>
         <div className="py-4 space-y-4">
-          <FieldInput label="Nombre de la Farmacia" value={nombre} onChange={setNombre} placeholder="Farmacia Suiza Plus" />
+          <ProfileImageUpload userName={userName} />
+          <FieldInput label="Nombre de la Farmacia" value={userName} onChange={() => {}} placeholder="Farmacia XYZ" />
 
           <div>
             <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>
@@ -426,7 +602,7 @@ function PharmacySettings({ userName }: { userName: string }) {
               max={20}
               value={radio}
               onChange={(e) => setRadio(Number(e.target.value))}
-              className="w-full h-2 rounded-full appearance-none cursor-pointer"
+              className="w-full h-2 rounded-full appearance-none cursor-default"
               style={{ accentColor: "#00A69D" }}
             />
             <div className="flex justify-between text-xs mt-1.5" style={{ color: "#9CA3AF" }}>

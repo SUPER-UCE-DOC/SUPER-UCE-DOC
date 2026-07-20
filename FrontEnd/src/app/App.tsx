@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api, getToken, removeToken } from "./utils/api";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { Sidebar } from "./components/Sidebar";
@@ -8,11 +9,12 @@ import { PharmacyDashboard } from "./components/PharmacyDashboard";
 import { Bell, Search, HelpCircle } from "lucide-react";
 
 type Role = "patient" | "doctor" | "pharmacy";
-type Screen = "landing" | "login" | "app";
+type Screen = "loading" | "landing" | "login" | "app";
 
 interface User {
   role: Role;
   name: string;
+  avatar?: string;
 }
 
 const topbarLabels: Record<Role, string> = {
@@ -22,19 +24,51 @@ const topbarLabels: Record<Role, string> = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("landing");
+  const [screen, setScreen] = useState<Screen>(() => getToken() ? "loading" : "landing");
   const [preselectedRole, setPreselectedRole] = useState<Role | undefined>(undefined);
   const [user, setUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState("dashboard");
+  const [currentView, setCurrentView] = useState(() => {
+    return sessionStorage.getItem("currentView") || "";
+  });
   const [notifications] = useState(3);
+
+  useEffect(() => {
+    if (currentView) {
+      sessionStorage.setItem("currentView", currentView);
+    }
+  }, [currentView]);
+
+  useEffect(() => {
+    const token = getToken();
+    const fetchUser = () => {
+      if (token) {
+        api.getMe().then(userData => {
+          setUser({ role: userData.role, name: userData.full_name, avatar: userData.avatar });
+          if (!sessionStorage.getItem("currentView")) {
+            setCurrentView(userData.role === "pharmacy" ? "dashboard" : "home");
+          }
+          setScreen("app");
+        }).catch(err => {
+          console.error("Sesión expirada o inválida", err);
+          removeToken();
+          setScreen("landing");
+        });
+      }
+    };
+    
+    fetchUser();
+    
+    window.addEventListener("avatarUpdated", fetchUser);
+    return () => window.removeEventListener("avatarUpdated", fetchUser);
+  }, []);
 
   const handleEnterPortal = (role?: Role) => {
     setPreselectedRole(role);
     setScreen("login");
   };
 
-  const handleLogin = (role: Role, name: string) => {
-    setUser({ role, name });
+  const handleLogin = (role: Role, name: string, avatar?: string) => {
+    setUser({ role, name, avatar });
     setCurrentView(role === "pharmacy" ? "dashboard" : "home");
     setScreen("app");
   };
@@ -42,9 +76,23 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
     setPreselectedRole(undefined);
-    setCurrentView("dashboard");
+    setCurrentView("");
+    sessionStorage.removeItem("currentView");
     setScreen("login");
+    removeToken();
   };
+
+  if (screen === "loading") {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "#F9FAFB" }}>
+        <div className="flex items-center gap-3">
+           <div className="w-4 h-4 rounded-full animate-bounce" style={{ background: "#00A69D", animationDelay: "0s" }} />
+           <div className="w-4 h-4 rounded-full animate-bounce" style={{ background: "#203A70", animationDelay: "0.15s" }} />
+           <div className="w-4 h-4 rounded-full animate-bounce" style={{ background: "#00C7C0", animationDelay: "0.3s" }} />
+        </div>
+      </div>
+    );
+  }
 
   if (screen === "landing") {
     return <LandingPage onEnterPortal={handleEnterPortal} />;
@@ -59,7 +107,7 @@ export default function App() {
   const renderDashboard = () => {
     switch (user.role) {
       case "patient":
-        return <PatientDashboard userName={user.name} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
+        return <PatientDashboard userName={user.name} userAvatar={user.avatar} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
       case "doctor":
         return <DoctorDashboard userName={user.name} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
       case "pharmacy":
@@ -120,12 +168,16 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-2">
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm"
-                style={{ background: "#00A69D", fontWeight: 700 }}
-              >
-                {user.name.charAt(0).toUpperCase()}
-              </div>
+              {user.avatar ? (
+                <img src={user.avatar} alt="Avatar" className="w-9 h-9 rounded-xl object-cover border" style={{ borderColor: "#E5E7EB", background: "white" }} />
+              ) : (
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm"
+                  style={{ background: "#00A69D", fontWeight: 700 }}
+                >
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:block">
                 <div className="text-sm" style={{ color: "#203A70", fontWeight: 600, lineHeight: 1.2 }}>
                   {user.name}

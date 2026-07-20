@@ -73,7 +73,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El correo electrónico ya está registrado."
+            detail="Esta cuenta ya está registrada. Por favor, ingresa una dirección de correo electrónico diferente"
         )
     
     # Hash password
@@ -136,11 +136,20 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    
+    # 1. Validar correo y contraseña PRIMERO (evita enumeración de roles con contraseñas falsas)
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    # 2. Una vez demostrada la identidad, validar que está entrando a su portal correspondiente
+    if form_data.client_id and user.role != form_data.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Esta cuenta pertenece a otro rol. Por favor, inicia sesión con la cuenta correcta."
         )
     
     # Generate token
@@ -148,6 +157,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         data={"sub": user.email, "role": user.role}
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.put("/me/avatar", response_model=schemas.UserResponse)
+def update_avatar(
+    req: schemas.AvatarUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    current_user.avatar = req.avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.get("/me")
@@ -188,6 +209,7 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role,
+        "avatar": current_user.avatar,
         "profile": profile_data
     }
 

@@ -37,10 +37,14 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    avatar: Optional[str] = None
     created_at: datetime.datetime
 
     class Config:
         from_attributes = True
+
+class AvatarUpdateRequest(BaseModel):
+    avatar_url: str
 
 
 # --- Patient Profile ---
@@ -196,8 +200,27 @@ class SummarizeRequest(BaseModel):
 class SummarizeResponse(BaseModel):
     summary: str
 
+class ChatMessageResponse(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatSessionResponse(BaseModel):
+    id: int
+    title: str
+    created_at: datetime.datetime
+    messages: Optional[List[ChatMessageResponse]] = None
+
+    class Config:
+        from_attributes = True
+
 class ChatbotRequest(BaseModel):
     message: str
+    session_id: Optional[int] = None
     chat_history: Optional[List[dict]] = None
 
 class ChatbotResponse(BaseModel):

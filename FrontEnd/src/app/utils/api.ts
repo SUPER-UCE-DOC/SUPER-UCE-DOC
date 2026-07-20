@@ -48,10 +48,11 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
 export const api = {
   // --- Autenticación ---
-  async login(email: string, password: string): Promise<{ access_token: string; token_type: string }> {
+  async login(email: string, password: string, role?: string): Promise<{ access_token: string; token_type: string }> {
     const formData = new FormData();
     formData.append("username", email);
     formData.append("password", password);
+    if (role) formData.append("client_id", role);
 
     const data = await request("/api/auth/login", {
       method: "POST",
@@ -79,6 +80,13 @@ export const api = {
 
   async getMe(): Promise<any> {
     return request("/api/auth/me");
+  },
+
+  async updateAvatar(avatarUrl: string): Promise<any> {
+    return request("/api/auth/me/avatar", {
+      method: "PUT",
+      body: JSON.stringify({ avatar_url: avatarUrl }),
+    });
   },
 
   // --- Citas Médicas ---
@@ -179,10 +187,30 @@ export const api = {
     });
   },
 
-  async queryChatbot(message: string, history?: any[]): Promise<{ reply: string; sources: string[] }> {
+  async getChatSessions(): Promise<any[]> {
+    return request("/api/ai/sessions");
+  },
+
+  async createChatSession(): Promise<any> {
+    return request("/api/ai/sessions", {
+      method: "POST",
+    });
+  },
+
+  async getChatSessionById(id: number): Promise<any> {
+    return request(`/api/ai/sessions/${id}`);
+  },
+
+  async deleteChatSession(id: number): Promise<any> {
+    return request(`/api/ai/sessions/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  async queryChatbot(message: string, sessionId?: number, history?: any[]): Promise<{ reply: string; sources: string[] }> {
     return request("/api/ai/chatbot", {
       method: "POST",
-      body: JSON.stringify({ message, chat_history: history }),
+      body: JSON.stringify({ message, session_id: sessionId, chat_history: history }),
     });
   },
 };

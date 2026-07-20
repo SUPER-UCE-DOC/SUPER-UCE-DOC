@@ -11,6 +11,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False)  # "patient", "doctor", "pharmacy"
     full_name = Column(String, nullable=False)
+    avatar = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -145,3 +146,27 @@ class SupplierOrder(Base):
     estimated_delivery = Column(String, nullable=False)
     status = Column(String, default="borrador")  # "borrador", "enviado", "transito", "recibido"
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, default="Nueva consulta médica")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
+    role = Column(String, nullable=False)  # "user" or "assistant"
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    session = relationship("ChatSession", back_populates="messages")

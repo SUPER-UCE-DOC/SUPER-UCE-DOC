@@ -70,7 +70,7 @@ def summarize_consultation(
         try:
             headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
             payload = {
-                "model": "llama3-8b-8192",
+                "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2
             }
@@ -126,13 +126,75 @@ def summarize_consultation(
     return schemas.SummarizeResponse(summary=summary_text)
 
 
+@router.get("/sessions", response_model=list[schemas.ChatSessionResponse])
+def get_chat_sessions(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Devuelve todas las sesiones de chat del usuario actual"""
+    sessions = db.query(models.ChatSession).filter(models.ChatSession.user_id == current_user.id).order_by(models.ChatSession.created_at.desc()).all()
+    return sessions
+
+@router.post("/sessions", response_model=schemas.ChatSessionResponse)
+def create_chat_session(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Crea una nueva sesión vacía para el usuario actual"""
+    session = models.ChatSession(user_id=current_user.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+@router.get("/sessions/{session_id}", response_model=schemas.ChatSessionResponse)
+def get_chat_session_by_id(session_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Devuelve una sesión específica y todos sus mensajes"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.user_id == current_user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    return session
+
+@router.delete("/sessions/{session_id}")
+def delete_chat_session(session_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Elimina una sesión y todos sus mensajes"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.user_id == current_user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    
+    db.delete(session)
+    db.commit()
+    return {"status": "ok", "message": "Sesión eliminada correctamente"}
+
 @router.post("/chatbot", response_model=schemas.ChatbotResponse)
 def medical_chatbot_query(
     req: schemas.ChatbotRequest,
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """
-    Ruta del Chatbot Clínico que utiliza RAG para responder con contexto médico.
-    """
-    reply, sources = medical_chatbot.ask(req.message, req.chat_history)
+    """Ruta del Chatbot Clínico RAG con soporte para guardado en Base de Datos"""
+    chat_history = req.chat_history or []
+    
+    # Si hay un session_id, guardar la pregunta del usuario y cargar el historial real
+    if req.session_id:
+        session = db.query(models.ChatSession).filter(models.ChatSession.id == req.session_id, models.ChatSession.user_id == current_user.id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sesión no encontrada")
+            
+        # Si la sesión es nueva (título por defecto) e inyectamos el primer mensaje, actualizamos el título
+        if session.title == "Nueva consulta médica":
+            session.title = req.message[:30] + "..." if len(req.message) > 30 else req.message
+            
+        # Guardar mensaje del usuario
+        user_msg = models.ChatMessage(session_id=req.session_id, role="user", content=req.message)
+        db.add(user_msg)
+        
+        # Cargar los últimos 10 mensajes de esta sesión para la IA
+        db_messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == req.session_id).order_by(models.ChatMessage.created_at.asc()).limit(10).all()
+        # Solo pasamos mensajes previos, sin incluir el recién agregado (ya que la IA lo recibe como query)
+        chat_history = [{"role": m.role, "content": m.content} for m in db_messages[:-1]]
+
+    # Llamar al bot (IA)
+    reply, sources = medical_chatbot.ask(req.message, chat_history)
+    
+    # Si hay un session_id, guardar la respuesta de la IA
+    if req.session_id:
+        bot_msg = models.ChatMessage(session_id=req.session_id, role="assistant", content=reply)
+        db.add(bot_msg)
+        db.commit()
+
     return schemas.ChatbotResponse(reply=reply, sources=sources)

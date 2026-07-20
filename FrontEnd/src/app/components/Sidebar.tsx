@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar, Video, FileText, MessageSquareHeart,
   Settings, LogOut, ChevronLeft, ChevronRight,
@@ -42,7 +42,14 @@ const menuByRole: Record<Role, { id: string; label: string; icon: React.ReactNod
 };
 
 export function Sidebar({ role, userName, currentView, onViewChange, onLogout }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = sessionStorage.getItem("mainSidebarCollapsed");
+    return saved !== null ? saved === "true" : false;
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem("mainSidebarCollapsed", collapsed.toString());
+  }, [collapsed]);
   const menu = menuByRole[role];
 
   return (

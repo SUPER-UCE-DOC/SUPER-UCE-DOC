@@ -169,7 +169,7 @@ class MedicalRAGChatbot:
                 messages.append({"role": "user", "content": query})
                 
                 payload = {
-                    "model": "llama3-8b-8192",
+                    "model": "llama-3.1-8b-instant",
                     "messages": messages,
                     "temperature": 0.3,
                     "max_tokens": 512

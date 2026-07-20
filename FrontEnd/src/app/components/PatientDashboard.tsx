@@ -2,16 +2,19 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
-  Hand, Captions, Volume2, Sparkles
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User
 } from "lucide-react";
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
 import { PatientHome } from "./PatientHome";
 import { SettingsView } from "./SettingsView";
 
+const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
+
 type View = string;
 
 interface PatientDashboardProps {
   userName: string;
+  userAvatar?: string;
   currentView: View;
   onNavigate?: (view: string) => void;
 }
@@ -38,7 +41,7 @@ const gestureLabels = [
   "🤟 Señal detectada: SÍ / CONFIRMACIÓN",
 ];
 
-export function PatientDashboard({ userName, currentView, onNavigate }: PatientDashboardProps) {
+export function PatientDashboard({ userName, userAvatar, currentView, onNavigate }: PatientDashboardProps) {
   const [pharmacyMedicine, setPharmacyMedicine] = useState<string | null>(null);
   const [lastView, setLastView] = useState(currentView);
   if (currentView !== lastView) { setLastView(currentView); setPharmacyMedicine(null); }
@@ -52,7 +55,7 @@ export function PatientDashboard({ userName, currentView, onNavigate }: PatientD
   if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} />;
   if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
   if (currentView === "appointments") return <CitasView />;
-  if (currentView === "ai-assistant") return <AsistenteView />;
+  if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
   if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
   return <PatientHome userName={userName} onNavigate={navigate} />;
 }
@@ -427,46 +430,154 @@ function CitasView() {
 }
 
 /* ─── ASISTENTE IA ─── */
-const suggestions = [
-  { icon: "💊", text: "Explicar mi última receta médica", desc: "Entiende cada medicamento prescrito" },
-  { icon: "🩸", text: "¿Cómo prepararme para un análisis de sangre?", desc: "Ayuno, hidratación y más" },
-  { icon: "❓", text: "Tengo dudas sobre un medicamento", desc: "Efectos, dosis e interacciones" },
-  { icon: "🫀", text: "¿Qué síntomas debo vigilar?", desc: "Señales de alerta por condición" },
+const allSuggestions = [
+  { icon: "📅", text: "¿Cuándo es mi próxima cita?" },
+  { icon: "📝", text: "Resumen de mi última cita" },
+  { icon: "💊", text: "Explicar mi receta actual" },
+  { icon: "⏳", text: "¿Tengo citas pendientes?" },
+  { icon: "📋", text: "Mis medicamentos actuales" },
+  { icon: "👨‍⚕️", text: "¿Con qué doctor me toca?" },
+  { icon: "📜", text: "Validez de mis recetas" },
+  { icon: "🗂️", text: "Historial de mis consultas" }
 ];
 
-const botReplies = [
-  "Entiendo tu consulta. Basándome en información médica general, te recomiendo consultar con tu médico para una evaluación personalizada. ¿Deseas que te explique algo en más detalle?",
-  "Esa es una excelente pregunta. Los medicamentos deben tomarse siempre según la indicación de tu médico. Puedo darte información general, pero recuerda que cada caso es único. ¿Hay algo específico que quieras saber?",
-  "Para prepararte correctamente, generalmente se recomienda ayunar entre 8 y 12 horas antes. Puedes beber agua con moderación. ¿Quieres más detalles sobre el procedimiento?",
-];
+const TypewriterMessage = ({ text, animate }: { text: string, animate: boolean }) => {
+  const [displayed, setDisplayed] = useState(animate ? "" : text);
+  useEffect(() => {
+    if (!animate) { setDisplayed(text); return; }
+    let i = 0;
+    const interval = setInterval(() => {
+      setDisplayed(text.slice(0, i));
+      i += 2; // velocidad de escritura
+      if (i > text.length) {
+        setDisplayed(text);
+        clearInterval(interval);
+      }
+    }, 15);
+    return () => clearInterval(interval);
+  }, [text, animate]);
+  return <>{displayed}</>;
+};
 
-function AsistenteView() {
+function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar?: string }) {
+  const [randomSuggestions, setRandomSuggestions] = useState<{icon: string, text: string}[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(() => {
+    const saved = sessionStorage.getItem("aiActiveSessionId");
+    return saved ? (saved === "new" ? null : Number(saved)) : null;
+  });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = sessionStorage.getItem("aiSidebarOpen");
+    return saved !== null ? saved === "true" : true;
+  });
+  const skipFetchRef = useRef(false);
+  const isSendingRef = useRef(false);
   const [input, setInput] = useState("");
-  const [msgs, setMsgs] = useState<{ from: string; text: string }[]>([]);
+  const [msgs, setMsgs] = useState<{ from: string; text: string; isNew?: boolean }[]>([]);
   const [typing, setTyping] = useState(false);
   const msgsEndRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    sessionStorage.setItem("aiActiveSessionId", activeSessionId === null ? "new" : activeSessionId.toString());
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    sessionStorage.setItem("aiSidebarOpen", isSidebarOpen.toString());
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    api.getChatSessions().then(data => {
+      setSessions(data);
+      const saved = sessionStorage.getItem("aiActiveSessionId");
+      if (!saved && data.length > 0) {
+        setActiveSessionId(data[0].id);
+      }
+    }).catch(console.error);
+    
+    // Pick 3 random suggestions
+    const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random());
+    setRandomSuggestions(shuffled.slice(0, 3));
+  }, []);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      if (skipFetchRef.current) {
+        skipFetchRef.current = false;
+        return;
+      }
+      api.getChatSessionById(activeSessionId).then(data => {
+        if (data.messages) {
+          setMsgs(data.messages.map((m: any) => ({
+            from: m.role === "assistant" ? "bot" : "user",
+            text: m.content,
+            isNew: false
+          })));
+        } else {
+          setMsgs([]);
+        }
+      }).catch(console.error);
+    } else {
+      setMsgs([]);
+    }
+  }, [activeSessionId]);
+
+  const createNewChat = () => {
+    setActiveSessionId(null);
+    setMsgs([]);
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await api.deleteChatSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (activeSessionId === id) {
+        setActiveSessionId(null);
+        setMsgs([]);
+      }
+    } catch (err) {
+      console.error("Error al borrar sesión", err);
+    }
+  };
+
   const send = async (text?: string) => {
+    if (isSendingRef.current) return;
+    
     const query = (text ?? input).trim();
     if (!query) return;
+    
+    isSendingRef.current = true;
     setInput("");
-    setMsgs((p) => [...p, { from: "user", text: query }]);
+    
+    let currentSessionId = activeSessionId;
+    if (!currentSessionId) {
+       skipFetchRef.current = true;
+       const newSession = await api.createChatSession();
+       currentSessionId = newSession.id;
+       setActiveSessionId(currentSessionId);
+       setSessions(prev => [newSession, ...prev]);
+    }
+
+    setMsgs((p) => [...p, { from: "user", text: query, isNew: true }]);
     setTyping(true);
 
     try {
-      // Formatear historial de chat para la API
       const history = msgs.map(m => ({
         role: m.from === "bot" ? "assistant" : "user",
         content: m.text
       }));
       
-      const res = await api.queryChatbot(query, history);
+      const res = await api.queryChatbot(query, currentSessionId, history);
       
       setTyping(false);
-      setMsgs((p) => [...p, { from: "bot", text: res.reply }]);
+      setMsgs((p) => [...p, { from: "bot", text: res.reply, isNew: true }]);
+      
+      setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: query.slice(0, 30) + (query.length > 30 ? "..." : "") } : s));
     } catch (err: any) {
       setTyping(false);
-      setMsgs((p) => [...p, { from: "bot", text: "Lo siento, hubo un error de conexión con mi cerebro clínico." }]);
+      setMsgs((p) => [...p, { from: "bot", text: "Lo siento, hubo un error de conexión con mi cerebro clínico.", isNew: true }]);
+    } finally {
+      isSendingRef.current = false;
     }
   };
 
@@ -479,174 +590,191 @@ function AsistenteView() {
   const isEmpty = msgs.length === 0;
 
   return (
-    <div
-      className="flex flex-col"
-      style={{ height: "calc(100vh - 66px)", background: "#F9FAFB" }}
-    >
-      {/* ── Estado vacío: saludo + input centrado ── */}
-      {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10 anim-fade-in">
+    <div className="flex h-full relative" style={{ height: "calc(100vh - 66px)", background: "#F9FAFB", overflow: "hidden" }}>
+      
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="absolute top-4 left-4 z-50 bg-white p-2.5 rounded-xl text-gray-500 hover:text-gray-800 transition-all hover:bg-gray-50"
+          style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.06)", border: "1px solid #F3F4F6" }}
+        >
+          <PanelLeft size={20} />
+        </button>
+      )}
 
-          {/* Icono decorativo */}
-
-          {/* Saludo */}
-          <h1
-            className="text-center mb-2 anim-fade-in-up anim-d-0"
-            style={{
-              fontSize: "clamp(22px, 4vw, 32px)",
-              fontWeight: 800,
-              lineHeight: 1.25,
-              background: "linear-gradient(135deg, #203A70 30%, #00A69D 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
+      {/* Sidebar Historial de Chats */}
+      <div 
+        className="border-r flex flex-col bg-white transition-all duration-300 overflow-hidden" 
+        style={{ 
+          width: isSidebarOpen ? "260px" : "0px", 
+          opacity: isSidebarOpen ? 1 : 0,
+          borderColor: "#F3F4F6",
+          flexShrink: 0
+        }}
+      >
+        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: "#F3F4F6", minWidth: "260px" }}>
+          <button 
+            onClick={createNewChat}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold transition-all mr-2"
+            style={{ background: "#00A69D", boxShadow: "0 2px 10px rgba(0,166,157,0.3)" }}
           >
-            Hola. ¿En qué te puedo ayudar<br />con tu salud hoy?
-          </h1>
-          <p className="text-sm mb-8" style={{ color: "#9CA3AF" }}>
-            MediBot · Asistente de salud con IA · Disponible 24/7
-          </p>
-
-          {/* Input bar */}
-          <div className="w-full anim-fade-in-up anim-d-1" style={{ maxWidth: "780px" }}>
+            <Plus size={18} /> Nuevo Chat
+          </button>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2.5 rounded-xl text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 transition-all flex-shrink-0"
+          >
+            <PanelLeft size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ minWidth: "260px" }}>
+          <p className="text-xs font-bold px-2 py-2" style={{ color: "#9CA3AF" }}>Tus consultas</p>
+          {sessions.map(s => (
             <div
-              className="flex items-center gap-3 bg-white px-5 py-4 rounded-3xl"
-              style={{ boxShadow: "0 8px 32px rgba(32,58,112,0.10), 0 1px 4px rgba(0,0,0,0.06)" }}
+              key={s.id}
+              onClick={() => setActiveSessionId(s.id)}
+              className="group w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left rounded-lg transition-colors cursor-pointer"
+              style={{
+                background: activeSessionId === s.id ? "#F3F4F6" : "transparent",
+                color: activeSessionId === s.id ? "#203A70" : "#6B7280",
+                fontWeight: activeSessionId === s.id ? 700 : 500,
+              }}
             >
-              <Mic size={20} style={{ color: "#9CA3AF", flexShrink: 0 }} />
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
-                placeholder="Escribe tu consulta médica aquí..."
-                className="flex-1 outline-none bg-transparent"
-                style={{ color: "#203A70", fontSize: "16px" }}
-                autoFocus
-              />
-              <button
-                onClick={() => send()}
-                disabled={!input.trim()}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-white text-sm transition-all"
-                style={{
-                  background: input.trim() ? "#00A69D" : "#E5E7EB",
-                  color: input.trim() ? "white" : "#9CA3AF",
-                  fontWeight: 700,
-                  boxShadow: input.trim() ? "0 2px 10px rgba(0,166,157,0.3)" : "none",
-                }}
+              <div className="flex items-center gap-2 overflow-hidden flex-1">
+                <MessageSquare size={15} style={{ opacity: 0.7, flexShrink: 0 }} />
+                <span className="text-sm truncate">{s.title}</span>
+              </div>
+              
+              <button 
+                onClick={(e) => handleDeleteSession(e, s.id)}
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all flex-shrink-0 p-1 rounded hover:bg-red-50"
+                title="Borrar chat"
               >
-                <Sparkles size={15} />
-                Enviar
+                <Trash2 size={15} />
               </button>
             </div>
-          </div>
-
-          {/* Suggestions */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 w-full" style={{ maxWidth: "780px" }}>
-            {suggestions.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => send(s.text)}
-                className="bg-white rounded-2xl p-4 text-left transition-all anim-fade-in-up"
-                style={{
-                  boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                  border: "1px solid #F3F4F6",
-                  animationDelay: `${60 + i * 60}ms`,
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#00C7C0";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(0,199,192,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#F3F4F6";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 6px rgba(0,0,0,0.06)";
-                }}
-              >
-                <span className="text-xl block mb-2">{s.icon}</span>
-                <p className="text-xs leading-snug" style={{ color: "#203A70", fontWeight: 600 }}>{s.text}</p>
-                <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>{s.desc}</p>
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
+      </div>
 
-      ) : (
-        /* ── Estado con conversación ── */
-        <>
-          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5" style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
-            {msgs.map((m, i) => (
-              <div key={i} className={`flex gap-3 ${m.from === "user" ? "flex-row-reverse" : ""}`}>
-                <div
-                  className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm"
-                  style={{ background: m.from === "bot" ? "linear-gradient(135deg,#203A70,#00A69D)" : "#00A69D", color: "white" }}
-                >
-                  {m.from === "bot" ? "🤖" : "👤"}
+      {/* Área Principal del Chat */}
+      <div className="flex-1 flex flex-col relative bg-[#FCFCFD]">
+        
+        {/* Animated Background Orbs */}
+        <div className="glowing-orb"></div>
+        <div className="glowing-orb-2"></div>
+        
+        {isEmpty ? (
+          <div className="flex-1 flex flex-col relative z-10 w-full h-full">
+            <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20 anim-fade-in-up">
+              <h1 className="text-center mb-4" style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#203A70" }}>
+                Hola, {userName || "Usuario"}
+              </h1>
+              <p className="text-lg mb-10 text-center" style={{ color: "#6B7280", maxWidth: "500px" }}>
+                Mejora tu salud con IA: consultas instantáneas, análisis rápidos y conexión segura.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 w-full z-10 relative modern-scroll pb-40">
+            <div className="space-y-6" style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
+              {msgs.map((m, i) => (
+                <div key={`${activeSessionId}-${i}`} className={`flex gap-4 anim-fade-in-up ${m.from === "user" ? "flex-row-reverse" : ""}`} style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s`, animationFillMode: "both" }}>
+                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden font-bold" style={{ background: m.from === "bot" ? "transparent" : (userAvatar ? "white" : "#00A69D"), color: m.from === "bot" ? "white" : (userAvatar ? "#6B7280" : "white") }}>
+                    {m.from === "bot" ? (
+                      <img src={logoIconImg} alt="Bot" className="w-full h-full object-contain" />
+                    ) : userAvatar ? (
+                      <img src={userAvatar} alt="Tú" className="w-full h-full object-cover" />
+                    ) : (
+                      userName ? userName.charAt(0).toUpperCase() : "U"
+                    )}
+                  </div>
+                  <div className={`max-w-xl px-6 py-4 text-[15px] ${m.from === 'bot' ? 'glass-panel text-gray-800 rounded-3xl rounded-tl-sm' : 'bg-[#203A70] text-white rounded-3xl rounded-tr-sm shadow-md'}`} style={{ lineHeight: 1.6 }}>
+                    {m.from === "bot" ? <TypewriterMessage text={m.text} animate={!!m.isNew} /> : m.text}
+                  </div>
                 </div>
-                <div
-                  className="max-w-lg px-5 py-3.5 rounded-2xl text-sm"
-                  style={{
-                    background: m.from === "bot" ? "white" : "#203A70",
-                    color: m.from === "bot" ? "#374151" : "white",
-                    boxShadow: m.from === "bot" ? "0 1px 6px rgba(0,0,0,0.07)" : "none",
-                    lineHeight: 1.6,
+              ))}
+              {typing && (
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden" style={{ background: "transparent", color: "white" }}>
+                    <img src={logoIconImg} alt="Bot" className="w-full h-full object-contain" />
+                  </div>
+                  <div className="glass-panel px-6 py-5 rounded-3xl rounded-tl-sm flex items-center gap-1.5">
+                    {[0, 1, 2].map((d) => (
+                      <span key={d} className="w-2.5 h-2.5 rounded-full animate-bounce inline-block" style={{ background: "#00A69D", animationDelay: `${d * 0.15}s` }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div ref={(el) => { msgsEndRef.current = el; }} />
+            </div>
+          </div>
+        )}
+
+        {/* Floating Input Area (Shared between empty and chat state) */}
+        <div className="absolute bottom-6 left-0 w-full px-4 z-20 flex justify-center pointer-events-none">
+          <div className="w-full max-w-4xl flex flex-col pointer-events-auto">
+            
+            {/* Modern Floating Input */}
+            <div className="animated-border-wrapper w-full shadow-2xl transition-all mb-4">
+              <div className="animated-border-inner w-full flex flex-col p-4 relative">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
                   }}
-                >
-                  {m.text}
+                  placeholder={isEmpty ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
+                  className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll"
+                  style={{ fontSize: "16px", minHeight: "72px" }}
+                  rows={1}
+                  autoFocus
+                />
+                
+                <div className="flex items-center justify-between mt-1">
+                  <div className="flex items-center gap-1">
+                    <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                      <Plus size={20} />
+                    </button>
+                    <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                      <Mic size={20} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => send()}
+                    disabled={!input.trim()}
+                    className="p-3 rounded-full text-white shadow-md transition-all disabled:opacity-40 disabled:scale-95 flex items-center justify-center"
+                    style={{ background: "#203A70" }}
+                  >
+                    <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />
+                  </button>
                 </div>
               </div>
-            ))}
+            </div>
 
-            {typing && (
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#203A70,#00A69D)" }}>
-                  🤖
-                </div>
-                <div className="px-5 py-4 rounded-2xl bg-white flex items-center gap-1.5" style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
-                  {[0, 1, 2].map((d) => (
-                    <span
-                      key={d}
-                      className="w-2 h-2 rounded-full animate-bounce inline-block"
-                      style={{ background: "#00A69D", animationDelay: `${d * 0.15}s` }}
-                    />
-                  ))}
-                </div>
+            {/* Suggestion Cards (Only in empty state, now BELOW) */}
+            {isEmpty && (
+              <div className="grid grid-cols-3 gap-3 anim-fade-in-up pb-2 w-full">
+                {randomSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => send(s.text)}
+                    className="bg-white/90 backdrop-blur-md rounded-full px-3 py-2.5 shadow-sm border border-gray-100/50 hover:bg-white hover:shadow-md transition-all flex items-center justify-center gap-2 group w-full"
+                    style={{ animationDelay: `${i * 100}ms` }}
+                  >
+                    <span className="text-lg">{s.icon}</span>
+                    <span className="text-[13px] font-semibold text-gray-600 group-hover:text-gray-900 transition-colors whitespace-nowrap overflow-hidden text-ellipsis">{s.text}</span>
+                  </button>
+                ))}
               </div>
             )}
-            <div ref={(el) => { msgsEndRef.current = el; }} />
+            
           </div>
-
-          {/* Input bar fixed at bottom */}
-          <div className="px-6 py-4 border-t" style={{ borderColor: "#F3F4F6", background: "#F9FAFB" }}>
-            <div
-              className="flex items-center gap-3 bg-white px-5 py-3.5 rounded-3xl mx-auto"
-              style={{ maxWidth: "860px", boxShadow: "0 4px 20px rgba(32,58,112,0.08), 0 1px 4px rgba(0,0,0,0.05)" }}
-            >
-              <Mic size={18} style={{ color: "#9CA3AF", flexShrink: 0 }} />
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
-                placeholder="Escribe tu siguiente consulta..."
-                className="flex-1 outline-none bg-transparent text-sm"
-                style={{ color: "#203A70" }}
-                autoFocus
-              />
-              <button
-                onClick={() => send()}
-                disabled={!input.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-white text-sm transition-all"
-                style={{
-                  background: input.trim() ? "#00A69D" : "#E5E7EB",
-                  color: input.trim() ? "white" : "#9CA3AF",
-                  fontWeight: 700,
-                }}
-              >
-                <Sparkles size={14} />
-                Enviar
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

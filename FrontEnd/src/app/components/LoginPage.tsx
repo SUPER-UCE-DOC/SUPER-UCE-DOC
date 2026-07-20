@@ -8,7 +8,7 @@ type Role = "patient" | "doctor" | "pharmacy";
 type AuthMode = "login" | "register";
 
 interface LoginPageProps {
-  onLogin: (role: Role, name: string) => void;
+  onLogin: (role: Role, name: string, avatar?: string) => void;
   preselectedRole?: Role;
   onBack?: () => void;
 }
@@ -80,8 +80,16 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
             try {
               await api.loginWithGoogle(tokenResponse.access_token, selectedRole);
               const profile = await api.getMe();
+
+              if (profile.role !== selectedRole) {
+                localStorage.removeItem("token");
+                setLoading(false);
+                setError("Esta cuenta pertenece a otro rol. Por favor, inicia sesión con la cuenta correcta.");
+                return;
+              }
+
               setLoading(false);
-              onLogin(profile.role as Role, profile.full_name);
+              onLogin(profile.role as Role, profile.full_name, profile.avatar);
             } catch (err: any) {
               setError(err.message || "Error al sincronizar sesión con el servidor.");
               setLoading(false);
@@ -111,7 +119,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
       return;
     }
     setLoading(true);
-    
+
     try {
       if (authMode === "register") {
         await api.register({
@@ -125,13 +133,13 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           lon: -69.30
         });
       }
-      
-      // Realizar login y obtener datos de perfil real del backend
-      await api.login(email, password);
+
+      // Realizar login pasando el rol solicitado
+      await api.login(email, password, selectedRole);
       const profile = await api.getMe();
-      
+
       setLoading(false);
-      onLogin(profile.role as Role, profile.full_name);
+      onLogin(profile.role as Role, profile.full_name, profile.avatar);
     } catch (err: any) {
       setError(err.message || "Ocurrió un error en la autenticación.");
       setLoading(false);
@@ -220,7 +228,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                   {roles.map((role) => (
                     <button
                       key={role.id}
-                      onClick={() => setSelectedRole(role.id)}
+                      onClick={() => { setSelectedRole(role.id); setError(""); }}
                       className="flex flex-col items-center p-3 rounded-xl border-2 text-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:scale-[0.97]"
                       style={{
                         borderColor: selectedRole === role.id ? "#00A69D" : "#E5E7EB",
