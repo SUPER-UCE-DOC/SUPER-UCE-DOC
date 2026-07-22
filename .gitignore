@@ -1,7 +1,8 @@
 node_modules/
 __pycache__/
-.env
 venv/
 .venv/
 *.pyc
 .DS_Store
+FrontEnd/node_modules/
+BackEnd/medical_knowledge_vectors/
