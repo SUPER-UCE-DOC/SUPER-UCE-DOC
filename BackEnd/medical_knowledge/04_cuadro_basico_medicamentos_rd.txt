@@ -1,0 +1,30 @@
+CUADRO BÁSICO DE MEDICAMENTOS ESENCIALES (CBME) - REPÚBLICA DOMINICANA
+
+1. ANALGÉSICOS, ANTIPIRÉTICOS Y ANTIINFLAMATORIOS NO ESTEROIDEOS (AINEs):
+- Paracetamol (Acetaminofén): Comprimidos 500 mg, Jarabe 120 mg/5ml. Indicado para dolor leve a moderado y fiebre. Medicamento de elección en casos de Dengue.
+- Ibuprofeno: Comprimidos 400 mg y 600 mg, Suspensión 100 mg/5ml. Antiinflamatorio y analgésico. Contraindicado en sospecha de dengue, úlceras gástricas activas y falla renal severa.
+- Diclofenaco: Comprimidos 50 mg, Inyectable 75 mg/3ml. Para dolor musculoesquelético severo.
+
+2. FÁRMACOS CARDIOVASCULARES (ANTIHIPERTENSIVOS):
+- Enalapril: Comprimidos 5 mg y 20 mg. IECA. Primera línea para hipertensión. Contraindicado en embarazo.
+- Losartán: Comprimidos 50 mg. ARA II. Alternativa cuando hay tos por Enalapril.
+- Amlodipino: Comprimidos 5 mg y 10 mg. Calcioantagonista. Útil en hipertensión sistólica aislada y angina.
+- Atenolol: Comprimidos 50 mg y 100 mg. Betabloqueante.
+- Hidroclorotiazida: Comprimidos 25 mg y 50 mg. Diurético tiazídico, excelente en combinación.
+
+3. ANTIBIÓTICOS (USO RACIONAL):
+- Amoxicilina: Cápsulas 500 mg, Suspensión 250 mg/5ml. Infecciones respiratorias altas (faringoamigdalitis estreptocócica, otitis media), profilaxis dental.
+- Amoxicilina + Ácido Clavulánico: Comprimidos 875/125 mg. Para infecciones resistentes productoras de betalactamasas.
+- Azitromicina: Comprimidos 500 mg. Macrólido. Alternativa en alérgicos a penicilina, neumonías atípicas.
+- Ciprofloxacino: Comprimidos 500 mg. Fluoroquinolona. Uso en infecciones urinarias complicadas y gastroenteritis bacterianas severas.
+
+4. ANTIDIABÉTICOS:
+- Metformina: Comprimidos 500 mg y 850 mg. Biguanida. Primera línea en Diabetes Mellitus tipo 2.
+- Glibenclamida: Comprimidos 5 mg. Sulfonilurea. (Uso con precaución en ancianos por riesgo de hipoglucemia).
+- Insulina NPH (Humana Isófana): Vial 100 UI/ml. Insulina de acción intermedia.
+
+5. GASTROINTESTINALES:
+- Omeprazol: Cápsulas 20 mg. Inhibidor de la bomba de protones para gastritis, reflujo y ERGE.
+- Sales de Rehidratación Oral (SRO): Sobres para diluir en 1 litro de agua. Base del tratamiento de diarreas y cuadros febriles agudos como Dengue.
+
+NOTAS PARA LA IA: Si un paciente en RD pregunta por un medicamento, utiliza exclusivamente los mencionados en este Cuadro Básico, ya que son los autorizados y de mayor accesibilidad en las Farmacias del Pueblo (PROMESE/CAL) y farmacias privadas.

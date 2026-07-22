@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime
+from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime, invitations
 from app.services.sign_translator import sign_translator_service
 from app.services.chatbot import medical_chatbot
 
@@ -53,6 +53,7 @@ def on_startup():
 app.include_router(auth.router)
 app.include_router(appointments.router)
 app.include_router(prescriptions.router)
+app.include_router(invitations.router)
 app.include_router(pharmacies.router)
 app.include_router(ai.router)
 app.include_router(realtime.router)

@@ -9,8 +9,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     DATABASE_URL: str = "sqlite:///./super_uce_doc.db"
     GROQ_API_KEY: str = ""
-    QWEN_MODEL_NAME: str = "Qwen/Qwen2.5-0.5B-Instruct"
-    USE_LOCAL_LLM: bool = False
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    LOCAL_MODEL_NAME: str = "llama3.1"
+    USE_LOCAL_LLM: bool = True
+    TAVILY_API_KEY: str = ""
 
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")

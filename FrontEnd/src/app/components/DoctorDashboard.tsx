@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, Send, CheckCircle,
   Calendar, Users, Stethoscope, FileText, Clock, AlertCircle,
-  ChevronRight, Plus, Search, Brain, Zap
+  ChevronRight, Plus, Search, Brain, Zap, X
 } from "lucide-react";
 import { DoctorHome } from "./DoctorHome";
 import { SettingsView } from "./SettingsView";
+import { TelemedicinaRoom } from "./TelemedicinaRoom";
 
 type View = string;
 
@@ -14,6 +15,26 @@ interface DoctorDashboardProps {
   userName: string;
   currentView: View;
   onNavigate?: (view: string) => void;
+}
+
+function formatDateSafe(dateStr?: string, options?: Intl.DateTimeFormatOptions): string {
+  if (!dateStr) return "Fecha pendiente";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString("es-DO", options || { dateStyle: "short", timeStyle: "short" });
+  } catch (e) {
+    return String(dateStr);
+  }
+}
+
+function getAvatarInitials(name?: string): string {
+  if (!name) return "US";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return parts[0].substring(0, 2).toUpperCase();
 }
 
 const agendaItems = [
@@ -46,9 +67,9 @@ export function DoctorDashboard({ userName, currentView, onNavigate }: DoctorDas
   if (currentView === "dashboard") return <AgendaView userName={userName} />;
   if (currentView === "schedule") return <AgendaView userName={userName} />;
   if (currentView === "patients") return <PatientsView />;
-  if (currentView === "teleconsult") return <TeleconsultaView />;
+  if (currentView === "teleconsult") return <TeleconsultaView userName={userName} />;
   if (currentView === "prescriptions") return <RecetasView />;
-  if (currentView === "ai-assistant") return <TeleconsultaView />;
+  if (currentView === "ai-assistant") return <TeleconsultaView userName={userName} />;
   if (currentView === "settings") return <SettingsView role="doctor" userName={userName} />;
   return <DoctorHome userName={userName} onNavigate={navigate} />;
 }
@@ -58,28 +79,32 @@ function AgendaView({ userName }: { userName: string }) {
   const [agenda, setAgenda] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadAgenda = async () => {
+  const loadAgenda = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const data = await api.getAppointments();
-      const formatted = data.map((app: any) => ({
-        id: app.id,
-        patient: app.patient_name,
-        time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        type: app.type || "Teleconsulta",
-        deaf: app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales"),
-        status: app.status
-      }));
-      setAgenda(formatted);
+      if (Array.isArray(data)) {
+        const formatted = data.map((app: any) => ({
+          id: app.id,
+          patient: app.patient_name,
+          time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          type: app.type || "Teleconsulta",
+          deaf: app.patient_name ? (app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales")) : false,
+          status: app.status
+        }));
+        setAgenda(formatted);
+      }
     } catch (err) {
       console.error("Error al cargar la agenda:", err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAgenda();
+    loadAgenda(false);
+    const interval = setInterval(() => loadAgenda(true), 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalHoy = agenda.length;
@@ -121,6 +146,8 @@ function AgendaView({ userName }: { userName: string }) {
             const statusConf = {
               completada: { bg: "#F3F4F6", color: "#9CA3AF", dot: "#10B981", label: "✓ Completada" },
               en_curso: { bg: "#F0FFFE", color: "#00A69D", dot: "#00A69D", label: "● En curso" },
+              confirmada: { bg: "#DCFCE7", color: "#10B981", dot: "#10B981", label: "✓ Confirmada" },
+              rechazada: { bg: "#FEE2E2", color: "#EF4444", dot: "#EF4444", label: "✗ Rechazada" },
               pendiente: { bg: "white", color: "#203A70", dot: "#E5E7EB", label: "Pendiente" },
             };
             const s = statusConf[item.status as keyof typeof statusConf] || statusConf.pendiente;
@@ -181,84 +208,286 @@ function AgendaView({ userName }: { userName: string }) {
 /* ─── PACIENTES ─── */
 function PatientsView() {
   const [search, setSearch] = useState("");
-  const filtered = patients.filter((p) =>
+  const [patientsList, setPatientsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Modal de Invitación
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteSearchName, setInviteSearchName] = useState("");
+  const [searchResult, setSearchResult] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+
+  const loadPatients = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const formatted = data.map((p: any) => ({
+          id: p.id,
+          name: p.full_name,
+          age: p.age || "N/A",
+          condition: p.condition || "Sin especificar",
+          lastVisit: "Reciente",
+          status: "estable", 
+          deaf: false,
+          avatar: p.avatar || p.full_name.substring(0, 2).toUpperCase(),
+        }));
+        setPatientsList(formatted);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPatients();
+  }, []);
+
+  const handleSearchPatient = async () => {
+    if (!inviteSearchName.trim()) return;
+    setIsSearching(true);
+    setInviteStatus(null);
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await fetch(`http://localhost:8000/api/invitations/search-patient?name=${encodeURIComponent(inviteSearchName)}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResult(data);
+      } else {
+        setSearchResult([]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleInvite = async (patientId: number) => {
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await fetch("http://localhost:8000/api/invitations/send", {
+        method: "POST",
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ patient_id: patientId })
+      });
+      if (res.ok) {
+        setSearchResult(prev => prev.map(p => p.id === patientId ? { ...p, status: "pending" } : p));
+      } else {
+        const error = await res.json();
+        console.error("Error sending invite:", error.detail);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const filtered = patientsList.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.condition.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-6 space-y-5 anim-fade-in">
+    <div className="p-6 space-y-5 anim-fade-in relative">
       <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
         <h1 style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Mis Pacientes</h1>
         <button
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm"
+          onClick={() => setShowInviteModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm hover:opacity-90 transition-opacity"
           style={{ background: "#00A69D", fontWeight: 700 }}
         >
           <Plus size={16} /> Nuevo Paciente
         </button>
       </div>
 
-      {/* Buscador */}
+      {/* Buscador local */}
       <div className="relative">
         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "#9CA3AF" }} />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar paciente o diagnóstico..."
-          className="w-full pl-11 pr-4 py-3 rounded-xl border outline-none"
+          placeholder="Buscar paciente en mi lista..."
+          className="w-full pl-11 pr-4 py-3 rounded-xl border outline-none focus:border-[#00A69D] transition-colors"
           style={{ borderColor: "#E5E7EB", background: "white" }}
         />
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((p, i) => (
-          <div key={p.id} className="bg-white rounded-2xl p-5 shadow-sm anim-fade-in-up" style={{ animationDelay: `${i * 70}ms` }}>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="relative flex-shrink-0">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white"
-                  style={{ background: "#203A70", fontWeight: 800, fontSize: "16px" }}
-                >
-                  {p.avatar}
+      {loading ? (
+        <div className="text-center py-8 text-gray-500 text-sm">Cargando pacientes...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-8 text-gray-500 text-sm bg-white rounded-2xl shadow-sm border border-gray-100">
+          No tienes pacientes registrados o ninguno coincide con la búsqueda.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((p, i) => (
+            <div key={p.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-50 anim-fade-in-up" style={{ animationDelay: `${i * 70}ms` }}>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="relative flex-shrink-0">
+                  {p.avatar && (p.avatar.startsWith("http") || p.avatar.startsWith("data:")) ? (
+                    <img src={p.avatar} alt={p.name} className="w-12 h-12 rounded-full object-cover border border-gray-100" />
+                  ) : (
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white"
+                      style={{ background: "#203A70", fontWeight: 800, fontSize: "16px" }}
+                    >
+                      {getAvatarInitials(p.name)}
+                    </div>
+                  )}
+                  {p.deaf && (
+                    <div
+                      className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                      style={{ background: "#00A69D" }}
+                    >
+                      🤟
+                    </div>
+                  )}
                 </div>
-                {p.deaf && (
-                  <div
-                    className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs"
-                    style={{ background: "#00A69D" }}
-                  >
-                    🤟
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span style={{ color: "#203A70", fontWeight: 700 }}>{p.name}</span>
+                    <span className="text-sm" style={{ color: "#9CA3AF" }}>{p.age} años</span>
                   </div>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span style={{ color: "#203A70", fontWeight: 700 }}>{p.name}</span>
-                  <span className="text-sm" style={{ color: "#9CA3AF" }}>{p.age} años</span>
+                  <div className="text-sm mt-0.5" style={{ color: "#6B7280" }}>{p.condition}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>Última visita: {p.lastVisit}</div>
                 </div>
-                <div className="text-sm mt-0.5" style={{ color: "#6B7280" }}>{p.condition}</div>
-                <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>Última visita: {p.lastVisit} Jul 2026</div>
-              </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className="text-xs px-3 py-1 rounded-full"
-                  style={{
-                    background: p.status === "estable" ? "#DCFCE7" : p.status === "critico" ? "#FEE2E2" : "#FEF3C7",
-                    color: p.status === "estable" ? "#10B981" : p.status === "critico" ? "#EF4444" : "#D97706",
-                    fontWeight: 600,
-                  }}
-                >
-                  {p.status === "estable" ? "✓ Estable" : p.status === "critico" ? "🚨 Crítico" : "⚠ Seguimiento"}
-                </span>
-                <button className="text-xs px-3 py-2 rounded-xl border" style={{ borderColor: "#00A69D", color: "#00A69D", fontWeight: 600 }}>
-                  Ver historial
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className="text-xs px-3 py-1 rounded-full border"
+                    style={{
+                      background: p.status === "estable" ? "#F0FFFE" : p.status === "critico" ? "#FEF2F2" : "#FFFBEB",
+                      color: p.status === "estable" ? "#00A69D" : p.status === "critico" ? "#EF4444" : "#D97706",
+                      borderColor: p.status === "estable" ? "#CCFBF6" : p.status === "critico" ? "#FEE2E2" : "#FEF3C7",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {p.status === "estable" ? "✓ Estable" : p.status === "critico" ? "🚨 Crítico" : "⚠ Seguimiento"}
+                  </span>
+                  <button
+                    className="px-4 py-1.5 rounded-lg text-sm border font-semibold transition-colors"
+                    style={{ borderColor: "#E5E7EB", color: "#4B5563" }}
+                  >
+                    Ver historial
+                  </button>
+                </div>
               </div>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal de Búsqueda Exacta (Privacidad) */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => { setShowInviteModal(false); setSearchResult([]); setInviteSearchName(""); setInviteStatus(null); }}>
+          <div 
+            className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in"
+            style={{ border: "1px solid #E5E7EB" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Añadir Nuevo Paciente</h3>
+              <button 
+                onClick={() => { setShowInviteModal(false); setSearchResult([]); setInviteSearchName(""); setInviteStatus(null); }} 
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <p className="text-xs text-gray-500 mb-5">Por políticas de privacidad, debes escribir el nombre completo exacto del paciente.</p>
+
+            <div className="space-y-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nombre del paciente</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    value={inviteSearchName}
+                    onChange={(e) => setInviteSearchName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearchPatient()}
+                    placeholder="Ej. Brayan Mateo"
+                    className="w-full pl-10 pr-4 py-2.5 border rounded-xl outline-none text-sm transition-colors focus:border-[#00A69D]"
+                    style={{ borderColor: "#E5E7EB" }}
+                  />
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleSearchPatient}
+                disabled={isSearching}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: "#00A69D", boxShadow: "0 2px 10px rgba(0,166,157,0.25)" }}
+              >
+                {isSearching ? "Buscando..." : "Buscar paciente"}
+              </button>
+            </div>
+
+            {searchResult.length > 0 && (
+              <div className="space-y-3 mb-2 max-h-48 overflow-y-auto overflow-x-hidden pr-1">
+                {searchResult.map(res => (
+                  <div key={res.id} className="flex items-center justify-between p-3 border rounded-xl bg-white shadow-sm gap-2" style={{ borderColor: "#E5E7EB" }}>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
+                        {res.avatar && (res.avatar.startsWith("http") || res.avatar.startsWith("data:")) ? (
+                          <img src={res.avatar} alt={res.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          getAvatarInitials(res.full_name)
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-sm truncate" style={{ color: "#203A70" }}>{res.full_name}</div>
+                        <div className="text-xs text-gray-500 truncate">{res.email}</div>
+                      </div>
+                    </div>
+                    {res.status === "pending" ? (
+                      <button 
+                        disabled 
+                        className="px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg font-bold flex-shrink-0 cursor-not-allowed border border-gray-200"
+                      >
+                        Invitado
+                      </button>
+                    ) : res.status === "accepted" ? (
+                      <button 
+                        disabled 
+                        className="px-3 py-1.5 text-xs text-[#00A69D] bg-[#F0FFFE] rounded-lg font-bold flex-shrink-0 cursor-not-allowed border border-[#CCFBF6]"
+                      >
+                        Paciente
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => handleInvite(res.id)}
+                        className="px-3 py-1.5 text-xs text-white rounded-lg hover:opacity-90 transition-opacity font-bold flex-shrink-0"
+                        style={{ background: "#00A69D" }}
+                      >
+                        Invitar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {searchResult.length === 0 && inviteSearchName && !isSearching && (
+              <div className="text-center text-sm text-gray-400 py-2">No se encontraron pacientes.</div>
+            )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -270,10 +499,11 @@ const waitingPatients = [
 ];
 
 /* ─── TELECONSULTA CON TRADUCTOR IA ─── */
-function TeleconsultaView() {
-  const [waitingList, setWaitingList] = useState<any[]>([]);
+function TeleconsultaView({ userName }: { userName?: string }) {
+  const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePatient, setActivePatient] = useState<string | null>(null);
+  const [activeAppointment, setActiveAppointment] = useState<any>(null);
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
   const [visibleLines, setVisibleLines] = useState(0);
@@ -281,32 +511,35 @@ function TeleconsultaView() {
   const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "" });
   const [rxSubmitted, setRxSubmitted] = useState(false);
 
-  const selectedPatient = waitingList.find((p) => p.name === activePatient) ?? null;
+  // Modal Agendar Doctor
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [myPatients, setMyPatients] = useState<any[]>([]);
+  const [scheduleForm, setScheduleForm] = useState({ patient_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
+  const [patientSearchName, setPatientSearchName] = useState("");
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const scheduleDropdownRef = useRef<HTMLDivElement>(null);
 
-  const loadWaitingRoom = async () => {
+  const selectedPatient = appointmentsList.find((p) => p.patient_name === activePatient) ?? null;
+
+  const loadAppointments = async (isBackground = false) => {
     try {
-      setLoading(true);
-      const data = await api.getWaitingRoom();
-      const formatted = data.map((app: any) => ({
-        id: app.id,
-        patient_id: app.patient_id,
-        name: app.patient_name,
-        time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        reason: app.reason || "Teleconsulta de seguimiento",
-        deaf: app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales"),
-        avatar: app.patient_name.substring(0, 2).toUpperCase(),
-        status: app.status
-      }));
-      setWaitingList(formatted);
+      if (!isBackground) setLoading(true);
+      const data = await api.getAppointments();
+      if (Array.isArray(data)) {
+        setAppointmentsList(data);
+      }
     } catch (err) {
-      console.error("Error al cargar sala de espera:", err);
+      console.error("Error al cargar citas:", err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadWaitingRoom();
+    loadAppointments(false);
+    const interval = setInterval(() => loadAppointments(true), 3000);
+    return () => clearInterval(interval);
   }, [inCall]);
 
   useEffect(() => {
@@ -316,10 +549,78 @@ function TeleconsultaView() {
     return () => { clearInterval(t1); clearInterval(t2); };
   }, [inCall]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (scheduleDropdownRef.current && !scheduleDropdownRef.current.contains(e.target as Node)) {
+        setShowScheduleDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredSchedulePatients = myPatients.filter(p =>
+    p.full_name.toLowerCase().includes(patientSearchName.toLowerCase())
+  );
+
+  const handleOpenScheduleModal = async () => {
+    setShowScheduleModal(true);
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyPatients(data);
+        if (data.length > 0) {
+          setScheduleForm(prev => ({ ...prev, patient_id: data[0].id.toString() }));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDoctorSchedule = async () => {
+    if (!scheduleForm.patient_id || !scheduleForm.date || !scheduleForm.time || !scheduleForm.reason.trim()) {
+      alert("Por favor llena la fecha, hora, paciente y motivo clínico.");
+      return;
+    }
+
+    try {
+      setIsScheduling(true);
+      const dateTimeStr = `${scheduleForm.date}T${scheduleForm.time}:00`;
+      await api.createAppointment({
+        patient_id: parseInt(scheduleForm.patient_id),
+        date_time: dateTimeStr,
+        type: scheduleForm.type,
+        reason: scheduleForm.reason
+      });
+      setShowScheduleModal(false);
+      setScheduleForm({ patient_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
+      loadAppointments();
+    } catch (err: any) {
+      alert("Error agendando teleconsulta: " + err.message);
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
+  const handleUpdateStatus = async (appId: number, newStatus: string) => {
+    try {
+      await api.updateAppointmentStatus(appId, newStatus);
+      await loadAppointments();
+    } catch (err: any) {
+      alert("Error actualizando cita: " + err.message);
+    }
+  };
+
   const startCall = async (patient: any) => {
     try {
+      setActiveAppointment(patient);
+      setActivePatient(patient.patient_name);
       await api.updateAppointmentStatus(patient.id, "en_curso");
-      setActivePatient(patient.name);
       setInCall(true);
       setElapsedSecs(0);
       setVisibleLines(0);
@@ -333,9 +634,9 @@ function TeleconsultaView() {
   const endCall = async () => {
     if (selectedPatient) {
       try {
-        // Generar historial de conversación de prueba para el resumen clínico IA
         const transcript = aiTranslations.map(t => `${t.gesture} -> ${t.translation}`).join("\n");
         await api.summarizeConsultation(selectedPatient.id, transcript);
+        await api.updateAppointmentStatus(selectedPatient.id, "completada");
       } catch (err) {
         console.error("Error guardando resumen clínico:", err);
       }
@@ -344,6 +645,7 @@ function TeleconsultaView() {
     setActivePatient(null);
     setElapsedSecs(0);
     setVisibleLines(0);
+    loadAppointments();
   };
 
   const handleEmitRx = async () => {
@@ -368,346 +670,363 @@ function TeleconsultaView() {
     return `${m}:${(s % 60).toString().padStart(2, "0")}`;
   };
 
-  /* ── Sala de espera ── */
+  const pendingApps = appointmentsList.filter(a => a.status === "pendiente");
+  const confirmedApps = appointmentsList.filter(a => a.status === "confirmada" || a.status === "en_curso");
+
+  /* ── Vista de Sala de Espera / Solicitudes ── */
   if (!inCall) return (
-    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB", minHeight: "100vh" }}>
-      <div className="anim-fade-in-up anim-d-0">
-        <h1 style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Sala de Espera Virtual</h1>
-        <p className="text-sm mt-1" style={{ color: "#6B7280" }}>
-          Selecciona un paciente para iniciar la videollamada
-        </p>
+    <div className="p-6 space-y-6 anim-fade-in relative" style={{ background: "#F9FAFB" }}>
+      <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
+        <div>
+          <h1 style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Sala de Espera & Telemedicina</h1>
+          <p className="text-sm mt-1" style={{ color: "#6B7280" }}>
+            Gestiona las solicitudes de tus pacientes e inicia videollamadas
+          </p>
+        </div>
+        <button
+          onClick={handleOpenScheduleModal}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm hover:opacity-90 transition-opacity font-bold shadow-sm"
+          style={{ background: "#00A69D" }}
+        >
+          <Plus size={16} /> Agendar Teleconsulta
+        </button>
       </div>
 
-      <div className="space-y-3">
-        {loading ? (
-          <div className="text-center py-8 text-gray-500 text-sm">Cargando sala de espera...</div>
-        ) : waitingList.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 text-sm">No hay pacientes esperando consulta.</div>
-        ) : (
-          waitingList.map((p, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-xl p-5 flex items-center gap-4 shadow-sm anim-fade-in-up"
-            style={{ animationDelay: `${i * 80}ms` }}
-          >
-            {/* Avatar */}
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white flex-shrink-0"
-              style={{ background: i === 0 ? "#00A69D" : "#203A70", fontWeight: 800 }}
-            >
-              {p.avatar}
+      {loading ? (
+        <div className="text-center py-8 text-gray-500 text-sm">Cargando sala de telemedicina...</div>
+      ) : (
+        <div className="space-y-6">
+          {/* Seccion 1: Solicitudes Pendientes */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
+            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: "#203A70" }}>
+              <Clock size={18} className="text-amber-500" /> Solicitudes Pendientes de Pacientes ({pendingApps.length})
+            </h2>
+
+            {pendingApps.length === 0 ? (
+              <div className="text-sm text-gray-400 py-3 text-center">No tienes solicitudes pendientes de aprobación.</div>
+            ) : (
+              <div className="space-y-3">
+                {pendingApps.map(apt => (
+                  <div key={apt.id} className="flex items-center justify-between p-4 border rounded-xl bg-amber-50/40 border-amber-100 flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
+                        {apt.patient_avatar && (apt.patient_avatar.startsWith("http") || apt.patient_avatar.startsWith("data:")) ? (
+                          <img src={apt.patient_avatar} alt={apt.patient_name} className="w-full h-full object-cover" />
+                        ) : (
+                          getAvatarInitials(apt.patient_name)
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm" style={{ color: "#203A70" }}>{apt.patient_name}</div>
+                        <div className="text-xs text-gray-600">
+                          {apt.type} · {formatDateSafe(apt.date_time)}
+                        </div>
+                        {apt.reason && (
+                          <div className="text-xs text-gray-700 font-medium mt-1 bg-white px-2.5 py-1 rounded-lg border border-amber-200">
+                            <strong>Motivo:</strong> {apt.reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleUpdateStatus(apt.id, "confirmada")}
+                        className="px-3.5 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-opacity shadow-sm"
+                        style={{ background: "#00A69D" }}
+                      >
+                        Aceptar
+                      </button>
+                      <button
+                        onClick={() => handleUpdateStatus(apt.id, "rechazada")}
+                        className="px-3.5 py-1.5 rounded-lg text-gray-600 text-xs font-bold border border-gray-200 hover:bg-gray-100 bg-white transition-colors"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Seccion 2: Sala de Espera (Confirmadas) */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
+            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: "#203A70" }}>
+              <Video size={18} className="text-[#00A69D]" /> Citas Confirmadas / Sala de Espera ({confirmedApps.length})
+            </h2>
+
+            {confirmedApps.length === 0 ? (
+              <div className="text-sm text-gray-400 py-4 text-center">No hay pacientes esperando teleconsulta en este momento.</div>
+            ) : (
+              <div className="space-y-3">
+                {confirmedApps.map(apt => (
+                  <div key={apt.id} className="flex items-center justify-between p-4 border rounded-xl bg-white border-gray-100 flex-wrap gap-3 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-[#203A70] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
+                        {apt.patient_avatar && (apt.patient_avatar.startsWith("http") || apt.patient_avatar.startsWith("data:")) ? (
+                          <img src={apt.patient_avatar} alt={apt.patient_name} className="w-full h-full object-cover" />
+                        ) : (
+                          getAvatarInitials(apt.patient_name)
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm flex items-center gap-2" style={{ color: "#203A70" }}>
+                          {apt.patient_name}
+                          {(apt.patient_name.includes("Rosa") || apt.patient_name.includes("María") || apt.patient_name.includes("Morales")) && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-[#F0FFFE] text-[#00A69D] border border-[#00C7C0] font-semibold">
+                              🤟 Sordo · LSE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {apt.type} · {formatDateSafe(apt.date_time)}
+                        </div>
+                        {apt.reason && (
+                          <div className="text-xs text-gray-600 mt-1 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                            <strong>Motivo:</strong> {apt.reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => startCall(apt)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold shadow-sm transition-opacity hover:opacity-90"
+                      style={{ background: "#00A69D" }}
+                    >
+                      <Video size={16} /> Iniciar Videollamada
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Agendar Teleconsulta Doctor */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowScheduleModal(false)}>
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Agendar Teleconsulta</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X size={20} />
+              </button>
             </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span style={{ color: "#203A70", fontWeight: 700 }}>{p.name}</span>
-                {p.deaf && (
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: "#F0FFFE", color: "#00A69D", border: "1px solid #00C7C0", fontWeight: 600 }}
-                  >
-                    🤟 Paciente Sordo · LSE
-                  </span>
+            <div className="space-y-4 text-sm">
+              <div className="relative" ref={scheduleDropdownRef}>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Paciente</label>
+                <input
+                  type="text"
+                  value={patientSearchName}
+                  onFocus={() => setShowScheduleDropdown(true)}
+                  onChange={(e) => {
+                    setPatientSearchName(e.target.value);
+                    setScheduleForm({ ...scheduleForm, patient_id: "" });
+                    setShowScheduleDropdown(true);
+                  }}
+                  placeholder="Escribe para buscar paciente de tu lista..."
+                  className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-[#00A69D] text-sm transition-colors"
+                  style={{ borderColor: "#E5E7EB" }}
+                />
+
+                {showScheduleDropdown && filteredSchedulePatients.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                    {filteredSchedulePatients.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setPatientSearchName(p.full_name);
+                          setScheduleForm({ ...scheduleForm, patient_id: p.id.toString() });
+                          setShowScheduleDropdown(false);
+                        }}
+                        className="flex items-center gap-3 p-3 hover:bg-[#F0FFFE] cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden">
+                          {p.avatar && (p.avatar.startsWith("http") || p.avatar.startsWith("data:")) ? (
+                            <img src={p.avatar} alt={p.full_name} className="w-full h-full object-cover" />
+                          ) : (
+                            getAvatarInitials(p.full_name)
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold" style={{ color: "#203A70" }}>{p.full_name}</div>
+                          <div className="text-xs text-gray-500">{p.email}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-xs" style={{ color: "#9CA3AF" }}>
-                <span className="flex items-center gap-1">
-                  <Clock size={11} /> {p.time}
-                </span>
-                <span>·</span>
-                <span>{p.reason}</span>
-              </div>
-            </div>
 
-            {/* Estado + acción */}
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {i === 0 && (
-                <span
-                  className="hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-                  style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 600 }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-                  En espera
-                </span>
-              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={scheduleForm.date}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Hora</label>
+                  <input
+                    type="time"
+                    value={scheduleForm.time}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo clínico</label>
+                <textarea
+                  value={scheduleForm.reason}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, reason: e.target.value })}
+                  placeholder="Escribe el motivo o nota clínica para esta cita (ej. Control de hipertensión)..."
+                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none"
+                />
+              </div>
+
               <button
-                onClick={() => startCall(p)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all"
-                style={{ background: "#00A69D", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,166,157,0.25)" }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#008f87")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#00A69D")}
+                onClick={handleDoctorSchedule}
+                disabled={isScheduling || myPatients.length === 0}
+                className="w-full py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md"
+                style={{ background: "#00A69D" }}
               >
-                <Video size={15} /> Iniciar Videollamada
+                {isScheduling ? "Agendando..." : "Confirmar Teleconsulta"}
               </button>
             </div>
           </div>
-        )))
-      }
-      </div>
+        </div>
+      )}
     </div>
   );
 
-  /* ── Vista en llamada ── */
+  /* ── Vista en llamada unificada ── */
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>Teleconsulta — Vista Médico</h1>
-          <div className="flex items-center gap-2 text-sm">
-            <span style={{ color: "#6B7280" }}>Paciente:</span>
-            <strong style={{ color: "#203A70" }}>{selectedPatient?.name}</strong>
-            {selectedPatient?.deaf && (
-            <span
-              className="px-2 py-0.5 rounded-full text-xs"
-              style={{ background: "#F0FFFE", color: "#00A69D", border: "1px solid #00C7C0", fontWeight: 600 }}
-            >
-              🤟 Paciente Sordo — LSE activo
-            </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 700 }}>
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
-          EN CONSULTA · {formatTime(elapsedSecs)}
-        </div>
-      </div>
-
-      {/* Zona principal: Video + Traductor IA */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        {/* VIDEO DEL PACIENTE — ocupa 3/5 */}
-        <div className="lg:col-span-3 flex flex-col gap-3">
-          <div
-            className="relative rounded-2xl overflow-hidden"
-            style={{ background: "#0d1a2e", minHeight: "320px" }}
-          >
-            {/* Video paciente */}
-            <div className="absolute inset-0 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #1a2744, #0d1a2e)" }}>
-              <div className="text-center">
-                <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-white text-3xl mx-auto mb-3"
-                  style={{ background: "#374151", fontWeight: 800 }}
-                >
-                  RC
-                </div>
-                <p className="text-white text-lg" style={{ fontWeight: 600 }}>Rosa Chávez</p>
-                <p className="text-blue-300 text-sm">📷 Cámara paciente · Realizando señas LSE</p>
-              </div>
-            </div>
-
-            {/* Overlay: señas detectadas */}
-            {inCall && (
-              <div
-                className="absolute top-4 left-4 px-3 py-2 rounded-xl text-sm"
-                style={{ background: "rgba(0,166,157,0.9)", color: "white", fontWeight: 700 }}
-              >
-                🤟 {aiTranslations[Math.min(visibleLines - 1, aiTranslations.length - 1)]?.gesture}
-              </div>
-            )}
-
-            {/* Live badge */}
-            <div
-              className="absolute top-4 right-4 px-3 py-1 rounded-xl text-xs text-white"
-              style={{ background: "#10B981", fontWeight: 700 }}
-            >
-              ● EN VIVO
-            </div>
-
-            {/* Cámara del médico — pequeña en esquina inferior */}
-            <div
-              className="absolute bottom-4 right-4 rounded-xl overflow-hidden border-2 flex flex-col items-center justify-center"
-              style={{ width: "110px", height: "80px", borderColor: "#00A69D", background: "#1e3a5f" }}
-            >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs mb-1" style={{ background: "#203A70", fontWeight: 700 }}>Dr</div>
-              <p className="text-white text-xs" style={{ fontWeight: 600 }}>Tú (médico)</p>
-            </div>
-          </div>
-
-          {/* Controles */}
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => setMuted(!muted)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all shadow-sm"
-              style={{
-                background: muted ? "#FEE2E2" : "white",
-                color: muted ? "#EF4444" : "#203A70",
-                fontWeight: 600,
-              }}
-            >
-              {muted ? <MicOff size={18} /> : <Mic size={18} />}
-              {muted ? "Activar mic" : "Silenciar"}
-            </button>
-            <button
-              onClick={endCall}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm"
-              style={{ background: "#EF4444", fontWeight: 700 }}
-            >
-              <Phone size={18} /> Finalizar Consulta
-            </button>
-          </div>
-
-          {/* FORMULARIO RECETA RÁPIDA — debajo del video */}
-          <div className="bg-white rounded-2xl p-5 shadow-md">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText size={20} style={{ color: "#203A70" }} />
-              <h3 style={{ color: "#203A70", fontWeight: 700 }}>Receta Digital Rápida</h3>
-            </div>
-
-            {rxSubmitted ? (
-              <div className="flex flex-col items-center py-4 gap-3">
-                <CheckCircle size={40} style={{ color: "#10B981" }} />
-                <p style={{ color: "#203A70", fontWeight: 700 }}>Receta emitida y geoLocalizada</p>
-                <p className="text-sm text-center" style={{ color: "#6B7280" }}>Enviada a farmacias dentro de 2km del paciente</p>
-                <button onClick={() => setRxSubmitted(false)} className="px-4 py-2 rounded-xl text-white text-sm" style={{ background: "#00A69D", fontWeight: 600 }}>
-                  Nueva receta
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                  {[
-                    { key: "medicine", label: "Medicamento", placeholder: "Ej: Losartán 25mg" },
-                    { key: "dose", label: "Dosis", placeholder: "Ej: 1 comprimido" },
-                    { key: "frequency", label: "Frecuencia", placeholder: "Ej: Cada 24 horas" },
-                  ].map((f) => (
-                    <div key={f.key}>
-                      <label className="block text-xs mb-1" style={{ color: "#6B7280", fontWeight: 600 }}>{f.label}</label>
-                      <input
-                        value={rx[f.key as keyof typeof rx]}
-                        onChange={(e) => setRx({ ...rx, [f.key]: e.target.value })}
-                        placeholder={f.placeholder}
-                        className="w-full px-3 py-2.5 rounded-xl border outline-none text-sm"
-                        style={{ borderColor: "#E5E7EB" }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={handleEmitRx}
-                  className="w-full py-3 rounded-xl text-white flex items-center justify-center gap-2"
-                  style={{ background: "#00A69D", fontWeight: 800, fontSize: "15px" }}
-                >
-                  <Zap size={18} /> Emitir y Geolocalizar Receta
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* PANEL TRADUCTOR IA — ocupa 2/5 */}
-        <div className="lg:col-span-2 flex flex-col gap-3">
-          <div className="bg-white rounded-2xl shadow-md flex flex-col" style={{ minHeight: "400px" }}>
-            {/* Cabecera */}
-            <div
-              className="flex items-center gap-2 px-5 py-4 border-b rounded-t-2xl"
-              style={{ borderColor: "#E5E7EB", background: "#F0FFFE" }}
-            >
-              <Brain size={20} style={{ color: "#203A70" }} />
-              <div>
-                <p style={{ color: "#203A70", fontWeight: 700 }}>Traductor de Inteligencia Artificial</p>
-                <p className="text-xs" style={{ color: "#00A69D" }}>LSE → Texto · Activo en tiempo real</p>
-              </div>
-              {inCall && (
-                <span
-                  className="ml-auto text-xs px-2 py-1 rounded-full animate-pulse"
-                  style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 600 }}
-                >
-                  ● Procesando
-                </span>
-              )}
-            </div>
-
-            {/* Stream de traducciones */}
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-              {aiTranslations.slice(0, visibleLines).map((line, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl p-3 border"
-                  style={{
-                    background: i === visibleLines - 1 ? "#F0FFFE" : "#FAFAFA",
-                    borderColor: i === visibleLines - 1 ? "#00A69D" : "#F3F4F6",
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs" style={{ color: "#9CA3AF" }}>{line.time}</span>
-                    <span
-                      className="text-xs px-2 py-0.5 rounded"
-                      style={{ background: "#F0FFFE", color: "#00A69D", fontWeight: 600 }}
-                    >
-                      🤟 {line.gesture}
-                    </span>
-                  </div>
-                  <p className="text-sm" style={{ color: "#203A70", fontWeight: i === visibleLines - 1 ? 600 : 400 }}>
-                    {line.translation}
-                  </p>
-                </div>
-              ))}
-
-              {inCall && visibleLines < aiTranslations.length && (
-                <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: "#F9FAFB" }}>
-                  <div className="flex gap-1">
-                    {[0, 1, 2].map((d) => (
-                      <div key={d} className="w-2 h-2 rounded-full animate-bounce" style={{ background: "#00A69D", animationDelay: `${d * 0.15}s` }} />
-                    ))}
-                  </div>
-                  <span className="text-xs" style={{ color: "#9CA3AF" }}>Interpretando señas...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Resumen IA */}
-            <div className="p-4 border-t rounded-b-2xl" style={{ borderColor: "#E5E7EB", background: "#FAFAFA" }}>
-              <p className="text-xs mb-1" style={{ color: "#9CA3AF", fontWeight: 600 }}>RESUMEN CLÍNICO IA</p>
-              <p className="text-sm" style={{ color: "#374151" }}>
-                Paciente refiere <strong>cefalea de 3 días</strong> sin medicación, con <strong>mareos posturales</strong> asociados. Probable descompensación hipertensiva.
-              </p>
-            </div>
-          </div>
-
-          {/* Info del paciente en consulta */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="text-xs mb-3" style={{ color: "#9CA3AF", fontWeight: 600 }}>DATOS DEL PACIENTE</p>
-            <div className="space-y-2">
-              {[
-                { label: "Diagnóstico", value: "Ansiedad + HTA leve" },
-                { label: "Último PA", value: "145/92 mmHg ⚠" },
-                { label: "Medicación", value: "Sertralina 50mg + Enalapril 5mg" },
-                { label: "Alergias", value: "Ninguna conocida" },
-              ].map((d) => (
-                <div key={d.label} className="flex justify-between text-sm">
-                  <span style={{ color: "#9CA3AF" }}>{d.label}</span>
-                  <span style={{ color: "#203A70", fontWeight: 600 }}>{d.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <TelemedicinaRoom
+      role="doctor"
+      userName={userName || "Dr. Jose Miguel"}
+      counterpartName={activeAppointment?.patient_name || selectedPatient?.patient_name || activePatient || "Paciente"}
+      counterpartAvatar={activeAppointment?.patient_avatar || selectedPatient?.patient_avatar}
+      appointmentId={activeAppointment?.id || selectedPatient?.id}
+      appointmentReason={activeAppointment?.reason || selectedPatient?.reason}
+      onEndCall={endCall}
+      onEmitRxSuccess={() => {
+        loadAppointments();
+      }}
+    />
   );
 }
 
 /* ─── RECETAS ─── */
 function RecetasView() {
   const [form, setForm] = useState({ patient: "", medicine: "", dose: "", frequency: "" });
+  const [myPatients, setMyPatients] = useState<any[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    async function loadPatients() {
+      try {
+        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+        const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMyPatients(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    loadPatients();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredPatients = myPatients.filter(p =>
+    p.full_name.toLowerCase().includes(form.patient.toLowerCase())
+  );
+
+  const handleSelectPatient = (p: any) => {
+    setForm({ ...form, patient: p.full_name });
+    setSelectedPatientId(p.id);
+    setShowDropdown(false);
+  };
+
+  const handleEmit = async () => {
+    if (!form.medicine || !form.patient) {
+      alert("Por favor completa el paciente y el medicamento.");
+      return;
+    }
+    
+    // Find patient ID if not explicitly selected
+    let patId = selectedPatientId;
+    if (!patId) {
+      const match = myPatients.find(p => p.full_name.toLowerCase() === form.patient.toLowerCase());
+      if (match) patId = match.id;
+    }
+
+    if (!patId) {
+      alert("Debes seleccionar un paciente válido de tu lista de pacientes vinculados.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.createPrescription({
+        patient_id: patId,
+        medicine: form.medicine,
+        dose: form.dose || "1 comprimido",
+        frequency: form.frequency || "Cada 24 horas",
+        expires_in_days: 30
+      });
+      setSubmitted(true);
+    } catch (err: any) {
+      alert("Error emitiendo receta: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 anim-fade-in">
       <h1 className="anim-fade-in-up anim-d-0" style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Emitir Receta Digital</h1>
 
       {submitted ? (
-        <div className="bg-white rounded-2xl p-10 shadow-sm text-center anim-scale-in">
+        <div className="bg-white rounded-2xl p-10 shadow-sm text-center anim-scale-in max-w-2xl">
           <CheckCircle size={56} style={{ color: "#10B981", margin: "0 auto 16px" }} />
-          <h2 style={{ color: "#203A70", fontWeight: 800, fontSize: "20px" }}>Receta Emitida y Geolocalizadal</h2>
+          <h2 style={{ color: "#203A70", fontWeight: 800, fontSize: "20px" }}>Receta Emitida y Geolocalizada</h2>
           <p className="text-sm mt-2" style={{ color: "#6B7280" }}>
-            La receta fue enviada al paciente y notificada a farmacias en un radio de 2km.
+            La receta fue enviada al paciente y notificada a las farmacias en su radio cercano.
           </p>
           <button
-            onClick={() => { setSubmitted(false); setForm({ patient: "", medicine: "", dose: "", frequency: "" }); }}
-            className="mt-6 px-8 py-3 rounded-xl text-white"
-            style={{ background: "#00A69D", fontWeight: 700 }}
+            onClick={() => {
+              setSubmitted(false);
+              setForm({ patient: "", medicine: "", dose: "", frequency: "" });
+              setSelectedPatientId(null);
+            }}
+            className="mt-6 px-8 py-3 rounded-xl text-white font-bold transition-opacity hover:opacity-90 shadow-sm"
+            style={{ background: "#00A69D" }}
           >
             Nueva Receta
           </button>
@@ -715,30 +1034,91 @@ function RecetasView() {
       ) : (
         <div className="bg-white rounded-2xl p-6 shadow-sm max-w-2xl anim-fade-in-up anim-d-1">
           <div className="space-y-4">
-            {[
-              { key: "patient", label: "Paciente", placeholder: "Nombre del paciente" },
-              { key: "medicine", label: "Medicamento", placeholder: "Ej: Atorvastatina 20mg" },
-              { key: "dose", label: "Dosis", placeholder: "Ej: 1 comprimido" },
-              { key: "frequency", label: "Frecuencia", placeholder: "Ej: Cada 24 horas por 30 días" },
-            ].map((f) => (
-              <div key={f.key}>
-                <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>{f.label}</label>
-                <input
-                  value={form[f.key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                  placeholder={f.placeholder}
-                  className="w-full px-4 py-3 rounded-xl border outline-none"
-                  style={{ borderColor: "#E5E7EB" }}
-                />
-              </div>
-            ))}
+            {/* Campo Paciente con Autocomplete */}
+            <div className="relative" ref={dropdownRef}>
+              <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Paciente</label>
+              <input
+                value={form.patient}
+                onFocus={() => setShowDropdown(true)}
+                onChange={(e) => {
+                  setForm({ ...form, patient: e.target.value });
+                  setSelectedPatientId(null);
+                  setShowDropdown(true);
+                }}
+                placeholder="Escribe para buscar paciente de tu lista..."
+                className="w-full px-4 py-3 rounded-xl border outline-none text-sm transition-colors focus:border-[#00A69D]"
+                style={{ borderColor: "#E5E7EB" }}
+              />
+
+              {showDropdown && filteredPatients.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                  {filteredPatients.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleSelectPatient(p)}
+                      className="flex items-center gap-3 p-3 hover:bg-[#F0FFFE] cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden">
+                        {p.avatar && (p.avatar.startsWith("http") || p.avatar.startsWith("data:")) ? (
+                          <img src={p.avatar} alt={p.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          getAvatarInitials(p.full_name)
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: "#203A70" }}>{p.full_name}</div>
+                        <div className="text-xs text-gray-500">{p.email}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Medicamento */}
+            <div>
+              <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Medicamento</label>
+              <input
+                value={form.medicine}
+                onChange={(e) => setForm({ ...form, medicine: e.target.value })}
+                placeholder="Ej: Atorvastatina 20mg"
+                className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
+                style={{ borderColor: "#E5E7EB" }}
+              />
+            </div>
+
+            {/* Dosis */}
+            <div>
+              <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Dosis</label>
+              <input
+                value={form.dose}
+                onChange={(e) => setForm({ ...form, dose: e.target.value })}
+                placeholder="Ej: 1 comprimido"
+                className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
+                style={{ borderColor: "#E5E7EB" }}
+              />
+            </div>
+
+            {/* Frecuencia */}
+            <div>
+              <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Frecuencia</label>
+              <input
+                value={form.frequency}
+                onChange={(e) => setForm({ ...form, frequency: e.target.value })}
+                placeholder="Ej: Cada 24 horas por 30 días"
+                className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
+                style={{ borderColor: "#E5E7EB" }}
+              />
+            </div>
           </div>
+
           <button
-            onClick={() => { if (form.medicine) setSubmitted(true); }}
-            className="w-full mt-6 py-4 rounded-xl text-white flex items-center justify-center gap-2"
-            style={{ background: "#00A69D", fontWeight: 800, fontSize: "16px" }}
+            onClick={handleEmit}
+            disabled={loading}
+            className="w-full mt-6 py-4 rounded-xl text-white flex items-center justify-center gap-2 font-extrabold text-base transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md"
+            style={{ background: "#00A69D" }}
           >
-            <Zap size={20} /> Emitir y Geolocalizar Receta
+            <Zap size={20} /> {loading ? "Emitiendo..." : "Emitir y Geolocalizar Receta"}
           </button>
         </div>
       )}

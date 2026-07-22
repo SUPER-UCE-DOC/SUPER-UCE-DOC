@@ -1,0 +1,31 @@
+PROTOCOLO DE ATENCIÓN MATERNO-NEONATAL - REPÚBLICA DOMINICANA (MINISTERIO DE SALUD PÚBLICA)
+
+1. CONTROL PRENATAL:
+- Frecuencia: Todo embarazo de bajo riesgo debe tener al menos 4 consultas prenatales, idealmente iniciando antes de las 12 semanas.
+- Suplementación obligatoria: 
+  * Ácido Fólico: 0.4 mg/día (o 4 mg/día si hay antecedentes de defectos del tubo neural) desde 1 mes antes de la concepción hasta las 12 semanas.
+  * Sulfato Ferroso: 300 mg/día a partir del segundo trimestre para profilaxis de anemia.
+  * Calcio: 1.5 a 2.0 g/día a partir de las 20 semanas para prevenir preeclampsia en poblaciones con baja ingesta.
+- Pruebas diagnósticas mínimas: Tipificación sanguínea y factor Rh (aplicar Inmunoglobulina anti-D en semana 28 si madre es Rh negativa y padre Rh positivo), Hemograma, Glicemia en ayunas, VDRL/RPR (Sífilis), VIH, HBsAg (Hepatitis B), y examen general de orina.
+
+2. TRASTORNOS HIPERTENSIVOS DEL EMBARAZO:
+- Preeclampsia Leve: Presión arterial >= 140/90 mmHg con proteinuria después de las 20 semanas. Manejo ambulatorio o ingreso para vigilancia. Terminación del embarazo a las 37 semanas.
+- Preeclampsia Severa: Presión arterial >= 160/110 mmHg, cefalea persistente, alteraciones visuales (escotomas), dolor epigástrico, enzimas hepáticas elevadas, plaquetopenia. 
+  * Tratamiento agudo: Sulfato de Magnesio para prevenir convulsiones (esquema Pritchard o Zuspan). Antihipertensivos: Hidralazina IV, Labetalol IV o Nifedipina oral.
+  * Acción médica: Terminación del embarazo independientemente de la edad gestacional una vez estabilizada la madre.
+- Eclampsia: Presencia de convulsiones tónico-clónicas en una paciente con preeclampsia. Emergencia médica absoluta. Manejo con Sulfato de Magnesio y terminación inmediata del embarazo.
+
+3. HEMORRAGIA POSTPARTO (HPP):
+- Prevención (Manejo Activo del Tercer Período del Parto - MATPP): Administración de Oxitocina 10 UI IM inmediatamente después del nacimiento del hombro anterior del bebé. Tracción controlada del cordón umbilical y masaje uterino posterior a la expulsión de la placenta.
+- Tratamiento de HPP por Atonía Uterina:
+  * Masaje uterino bimanual.
+  * Oxitocina: 20-40 UI en 1000 ml de solución cristaloide IV a goteo rápido.
+  * Metilergonovina (Ergotrate): 0.2 mg IM (Contraindicado en hipertensión o preeclampsia).
+  * Misoprostol: 800 a 1000 mcg por vía rectal.
+  * Ácido Tranexámico: 1 gramo IV lento (en los primeros minutos si no cede el sangrado).
+
+4. ATENCIÓN INMEDIATA DEL RECIÉN NACIDO:
+- Pinzamiento tardío del cordón umbilical (1 a 3 minutos posparto) excepto si el neonato está deprimido y requiere reanimación.
+- Prevención de Oftalmía Neonatal: Pomada oftálmica de Eritromicina al 0.5% o Tetraciclina al 1% en la primera hora de vida.
+- Prevención de Enfermedad Hemorrágica: Vitamina K (Fitomenadiona) 1 mg IM dosis única (0.5 mg en prematuros).
+- Vacunación al nacer: Vacuna contra Hepatitis B (en las primeras 24 horas) y BCG (contra tuberculosis).

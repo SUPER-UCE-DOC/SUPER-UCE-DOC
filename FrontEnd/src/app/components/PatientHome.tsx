@@ -1,15 +1,119 @@
+import { useState, useEffect } from "react";
 import { Video, Calendar, MessageSquareHeart, Pill, ChevronRight, Clock, Activity } from "lucide-react";
+import { api } from "../utils/api";
 
 interface PatientHomeProps {
   userName: string;
   onNavigate: (view: string) => void;
+  onJoinCall?: (apt: any) => void;
 }
 
-export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
-  const firstName = userName.split(" ")[0];
+function LiveHomeBadge({ roomCode }: { roomCode: number }) {
+  const [elapsed, setElapsed] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchStart = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.start_time) {
+            const diff = Math.floor(Date.now() / 1000 - data.start_time);
+            setElapsed(Math.max(0, diff));
+          }
+        }
+      } catch (e) {}
+    };
+
+    fetchStart();
+    const interval = setInterval(fetchStart, 1000);
+    return () => clearInterval(interval);
+  }, [roomCode]);
+
+  const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
+  const s = (elapsed % 60).toString().padStart(2, "0");
 
   return (
-    <div className="p-6 space-y-6 anim-fade-in" style={{ background: "#F9FAFB", minHeight: "100vh" }}>
+    <div className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-cyan-500/30 text-cyan-200 font-bold border border-cyan-400/50">
+      <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
+      ● En Curso · {m}:{s}
+    </div>
+  );
+}
+
+function formatDateSafe(dateStr?: string) {
+  if (!dateStr) return "Hoy";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("es-DO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+export function PatientHome({ userName, onNavigate, onJoinCall }: PatientHomeProps) {
+  const firstName = (userName || "Paciente").split(" ")[0];
+  const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
+  const [prescriptionsList, setPrescriptionsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const apts = await api.getAppointments();
+        if (Array.isArray(apts)) setAppointmentsList(apts);
+      } catch (e) {}
+
+      try {
+        const rxs = await api.getPrescriptions();
+        if (Array.isArray(rxs)) setPrescriptionsList(rxs);
+      } catch (e) {}
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const nextApp = appointmentsList.find(a => a.status === "en_curso") ||
+                  appointmentsList.find(a => a.status === "confirmada") ||
+                  appointmentsList.find(a => a.status === "pendiente") || null;
+
+  // Build dynamic recent activity timeline from real appointments & prescriptions
+  const recentActivities: any[] = [];
+
+  appointmentsList.forEach(apt => {
+    if (apt.status === "completada") {
+      recentActivities.push({
+        id: `apt_${apt.id}`,
+        icon: <Activity size={15} style={{ color: "#00A69D" }} />,
+        title: "Consulta completada",
+        desc: `Teleconsulta con ${apt.doctor_name || "Doctor"}`,
+        time: formatDateSafe(apt.date_time)
+      });
+    } else if (apt.status === "confirmada" || apt.status === "en_curso") {
+      recentActivities.push({
+        id: `apt_${apt.id}`,
+        icon: <Calendar size={15} style={{ color: "#203A70" }} />,
+        title: apt.status === "en_curso" ? "Consulta en curso" : "Cita confirmada",
+        desc: `Teleconsulta con ${apt.doctor_name || "Doctor"}`,
+        time: formatDateSafe(apt.date_time)
+      });
+    }
+  });
+
+  prescriptionsList.forEach(rx => {
+    recentActivities.push({
+      id: `rx_${rx.id}`,
+      icon: <Pill size={15} style={{ color: "#D97706" }} />,
+      title: "Receta emitida",
+      desc: `${rx.medicine} (${rx.dose || "Dosis prescrita"})`,
+      time: formatDateSafe(rx.created_at)
+    });
+  });
+
+  return (
+    <div className="p-6 space-y-6 anim-fade-in" style={{ background: "#F9FAFB" }}>
 
       {/* ── Bienvenida ── */}
       <div className="anim-fade-in-up anim-d-0">
@@ -50,42 +154,70 @@ export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <h2 className="text-white" style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1.3 }}>
-                Dr. Carlos Mendoza
+                {nextApp ? (nextApp.doctor_name || "Doctor Especialista") : "No tienes citas agendadas"}
               </h2>
               <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "14px", marginTop: "2px" }}>
-                Cardiología · Teleconsulta
+                {nextApp ? `${nextApp.type || "Teleconsulta"} · ${nextApp.reason || "Consulta General"}` : "Solicita una teleconsulta médica cuando lo necesites"}
               </p>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5">
-                  <Calendar size={14} style={{ color: "#00C7C0" }} />
-                  <span className="text-white text-sm" style={{ fontWeight: 600 }}>Hoy, 15:30</span>
+              {nextApp && (
+                <div className="flex items-center gap-4 mt-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar size={14} style={{ color: "#00C7C0" }} />
+                    <span className="text-white text-sm" style={{ fontWeight: 600 }}>{formatDateSafe(nextApp.date_time)}</span>
+                  </div>
+
+                  {nextApp.status === "en_curso" ? (
+                    <LiveHomeBadge roomCode={nextApp.id} />
+                  ) : (
+                    <div
+                      className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+                      style={{
+                        background: nextApp.status === "confirmada" ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)",
+                        color: nextApp.status === "confirmada" ? "#6EE7B7" : "#FDE68A",
+                        fontWeight: 600
+                      }}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full inline-block ${nextApp.status === "confirmada" ? "bg-green-400" : "bg-amber-400"}`} />
+                      {nextApp.status === "confirmada" ? "✓ Confirmada" : "⏳ Pendiente"}
+                    </div>
+                  )}
                 </div>
-                <div
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-                  style={{ background: "rgba(16,185,129,0.25)", color: "#6EE7B7", fontWeight: 600 }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-                  Confirmada
-                </div>
-              </div>
+              )}
             </div>
 
-            <button
-              onClick={() => onNavigate("teleconsult")}
-              className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all"
-              style={{
-                background: "#00A69D",
-                color: "white",
-                fontWeight: 800,
-                fontSize: "15px",
-                boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
-              }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#008f87")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#00A69D")}
-            >
-              <Video size={18} />
-              Entrar a la Sala de Telemedicina
-            </button>
+            {nextApp && nextApp.status === "en_curso" ? (
+              <button
+                onClick={() => onJoinCall?.(nextApp)}
+                className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all hover:opacity-90 cursor-pointer"
+                style={{
+                  background: "#00A69D",
+                  color: "white",
+                  fontWeight: 800,
+                  fontSize: "15px",
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+                }}
+              >
+                <Video size={18} />
+                Entrar a la Sala de Telemedicina
+              </button>
+            ) : nextApp && nextApp.status === "confirmada" ? (
+              <button
+                onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel. En cuanto la inicie, este botón se activará automáticamente.")}
+                className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-90 cursor-pointer"
+              >
+                <Clock size={18} />
+                Esperando al Médico
+              </button>
+            ) : (
+              <button
+                onClick={() => onNavigate("appointments")}
+                className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all font-bold text-white shadow-md cursor-pointer"
+                style={{ background: "#00A69D" }}
+              >
+                <Calendar size={18} />
+                {nextApp ? "Ver Mis Citas" : "Agendar Cita Médica"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -100,10 +232,8 @@ export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
           {/* Agendar cita */}
           <button
             onClick={() => onNavigate("appointments")}
-            className="bg-white rounded-2xl p-5 text-left shadow-sm group transition-all anim-fade-in-up"
-            style={{ border: "1px solid #F3F4F6", animationDelay: "120ms" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(32,58,112,0.10)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)")}
+            className="bg-white rounded-2xl p-5 text-left shadow-sm group transition-all cursor-pointer"
+            style={{ border: "1px solid #F3F4F6" }}
           >
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: "#EEF2FF" }}>
               <Calendar size={24} style={{ color: "#203A70" }} />
@@ -118,10 +248,8 @@ export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
           {/* Asistente IA */}
           <button
             onClick={() => onNavigate("ai-assistant")}
-            className="bg-white rounded-2xl p-5 text-left shadow-sm transition-all anim-fade-in-up"
-            style={{ border: "1px solid #F3F4F6", animationDelay: "200ms" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(32,58,112,0.10)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)")}
+            className="bg-white rounded-2xl p-5 text-left shadow-sm transition-all cursor-pointer"
+            style={{ border: "1px solid #F3F4F6" }}
           >
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: "#F0FFFE" }}>
               <MessageSquareHeart size={24} style={{ color: "#00A69D" }} />
@@ -136,18 +264,17 @@ export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
           {/* Mis recetas */}
           <button
             onClick={() => onNavigate("prescriptions")}
-            className="bg-white rounded-2xl p-5 text-left shadow-sm transition-all relative anim-fade-in-up"
-            style={{ border: "1px solid #F3F4F6", animationDelay: "280ms" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(32,58,112,0.10)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)")}
+            className="bg-white rounded-2xl p-5 text-left shadow-sm transition-all relative cursor-pointer"
+            style={{ border: "1px solid #F3F4F6" }}
           >
-            {/* Badge */}
-            <span
-              className="absolute top-4 right-4 text-xs px-2 py-0.5 rounded-full"
-              style={{ background: "#FEE2E2", color: "#EF4444", fontWeight: 700 }}
-            >
-              2 Pendientes
-            </span>
+            {prescriptionsList.length > 0 && (
+              <span
+                className="absolute top-4 right-4 text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 700 }}
+              >
+                {prescriptionsList.length} {prescriptionsList.length === 1 ? "Activa" : "Activas"}
+              </span>
+            )}
 
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: "#FEF3C7" }}>
               <Pill size={24} style={{ color: "#D97706" }} />
@@ -167,27 +294,32 @@ export function PatientHome({ userName, onNavigate }: PatientHomeProps) {
         <h2 className="text-sm mb-3" style={{ color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Actividad reciente
         </h2>
-        <div className="bg-white rounded-2xl shadow-sm divide-y" style={{ border: "1px solid #F3F4F6", borderColor: "#F3F4F6" }}>
-          {[
-            { icon: <Activity size={15} style={{ color: "#00A69D" }} />, title: "Consulta completada", desc: "Teleconsulta con Dra. Ana Torres · Neurología", time: "Hace 2 días", dot: "#00A69D" },
-            { icon: <Pill size={15} style={{ color: "#D97706" }} />, title: "Receta emitida", desc: "Atorvastatina 20mg — Dr. Carlos Mendoza", time: "Hace 3 días", dot: "#D97706" },
-            { icon: <Calendar size={15} style={{ color: "#203A70" }} />, title: "Cita confirmada", desc: "Cardiología · Hoy 15:30 — Dr. Carlos Mendoza", time: "Ayer", dot: "#203A70" },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center gap-4 px-5 py-4">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "#F9FAFB" }}
-              >
-                {item.icon}
+
+        {recentActivities.length > 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm divide-y" style={{ border: "1px solid #F3F4F6" }}>
+            {recentActivities.slice(0, 3).map((item) => (
+              <div key={item.id} className="flex items-center gap-4 px-5 py-4">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "#F9FAFB" }}
+                >
+                  {item.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{item.title}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{item.desc}</p>
+                </div>
+                <span className="text-xs flex-shrink-0" style={{ color: "#9CA3AF" }}>{item.time}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{item.title}</p>
-                <p className="text-xs mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{item.desc}</p>
-              </div>
-              <span className="text-xs flex-shrink-0" style={{ color: "#9CA3AF" }}>{item.time}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm p-8 text-center" style={{ border: "1px solid #F3F4F6" }}>
+            <Activity className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-gray-600">Sin actividad reciente registrada</p>
+            <p className="text-xs text-gray-400 mt-1">Tus consultas finalizadas y recetas emitidas aparecerán automáticamente en esta sección.</p>
+          </div>
+        )}
       </div>
 
     </div>

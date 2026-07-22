@@ -109,9 +109,10 @@ class InventoryItemResponse(InventoryItemBase):
 
 # --- Appointments ---
 class AppointmentCreate(BaseModel):
-    doctor_id: int
+    doctor_id: Optional[int] = None
+    patient_id: Optional[int] = None
     date_time: datetime.datetime
-    type: str  # "Teleconsulta", "Presencial", "Seguimiento"
+    type: str = "Teleconsulta"  # "Teleconsulta", "Presencial", "Seguimiento"
     reason: Optional[str] = None
 
 class AppointmentStatusUpdate(BaseModel):
@@ -127,6 +128,8 @@ class AppointmentResponse(BaseModel):
     reason: Optional[str]
     patient_name: str
     doctor_name: str
+    patient_avatar: Optional[str] = None
+    doctor_avatar: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -209,6 +212,37 @@ class ChatMessageResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+# --- Invitations ---
+class InvitationCreate(BaseModel):
+    patient_id: int
+
+class InvitationResponse(BaseModel):
+    id: int
+    doctor_id: int
+    patient_id: int
+    status: str
+    created_at: datetime.datetime
+    
+    # We will include doctor details for the patient to see
+    doctor_name: Optional[str] = None
+    doctor_avatar: Optional[str] = None
+    doctor_specialty: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class PatientSearchResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    avatar: Optional[str] = None
+    age: Optional[int] = None
+    status: Optional[str] = "none"  # "none", "pending", "accepted"
+
+    class Config:
+        from_attributes = True
+
 class ChatSessionResponse(BaseModel):
     id: int
     title: str
@@ -226,3 +260,4 @@ class ChatbotRequest(BaseModel):
 class ChatbotResponse(BaseModel):
     reply: str
     sources: Optional[List[str]] = None
+    session_title: Optional[str] = None

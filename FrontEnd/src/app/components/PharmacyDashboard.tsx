@@ -133,7 +133,7 @@ function RecetasEntrantes({ userName }: { userName: string }) {
   });
 
   return (
-    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB", minHeight: "100vh" }}>
+    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB" }}>
 
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4 anim-fade-in-up anim-d-0">
@@ -345,7 +345,7 @@ function PedidosView() {
   const filtered = orders.filter((o) => o.status === activeTab);
 
   return (
-    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB", minHeight: "100vh" }}>
+    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB" }}>
 
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4 anim-fade-in-up anim-d-0">

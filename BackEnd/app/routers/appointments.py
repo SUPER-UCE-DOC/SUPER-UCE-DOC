@@ -12,33 +12,52 @@ router = APIRouter(prefix="/api/appointments", tags=["appointments"])
 @router.post("", response_model=schemas.AppointmentResponse, status_code=status.HTTP_201_CREATED)
 def create_appointment(
     appointment_in: schemas.AppointmentCreate,
-    current_user: models.User = Depends(RoleChecker(["patient"])),
+    current_user: models.User = Depends(RoleChecker(["patient", "doctor"])),
     db: Session = Depends(get_db)
 ):
-    # Verify doctor exists
-    doctor = db.query(models.Doctor).filter(models.Doctor.id == appointment_in.doctor_id).first()
-    if not doctor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Médico no encontrado."
+    if current_user.role == "patient":
+        if not appointment_in.doctor_id:
+            raise HTTPException(status_code=400, detail="Debes especificar un médico.")
+        doctor = db.query(models.Doctor).filter(models.Doctor.id == appointment_in.doctor_id).first()
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Médico no encontrado.")
+            
+        new_app = models.Appointment(
+            patient_id=current_user.id,
+            doctor_id=appointment_in.doctor_id,
+            date_time=appointment_in.date_time,
+            status="pendiente",
+            type=appointment_in.type,
+            reason=appointment_in.reason
         )
+        patient_user = current_user
+        doctor_user = doctor.user
+        patient_name = patient_user.full_name
+        doctor_name = doctor_user.full_name
 
-    # Create appointment
-    new_app = models.Appointment(
-        patient_id=current_user.id,
-        doctor_id=appointment_in.doctor_id,
-        date_time=appointment_in.date_time,
-        status="pendiente",
-        type=appointment_in.type,
-        reason=appointment_in.reason
-    )
+    else:  # doctor
+        if not appointment_in.patient_id:
+            raise HTTPException(status_code=400, detail="Debes especificar un paciente.")
+        patient = db.query(models.Patient).filter(models.Patient.id == appointment_in.patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Paciente no encontrado.")
+
+        new_app = models.Appointment(
+            patient_id=appointment_in.patient_id,
+            doctor_id=current_user.id,
+            date_time=appointment_in.date_time,
+            status="confirmada",
+            type=appointment_in.type,
+            reason=appointment_in.reason
+        )
+        patient_user = patient.user
+        doctor_user = current_user
+        patient_name = patient_user.full_name
+        doctor_name = doctor_user.full_name
+
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
-    
-    # Get names for response
-    patient_name = current_user.full_name
-    doctor_name = doctor.user.full_name
 
     return schemas.AppointmentResponse(
         id=new_app.id,
@@ -49,7 +68,9 @@ def create_appointment(
         type=new_app.type,
         reason=new_app.reason,
         patient_name=patient_name,
-        doctor_name=doctor_name
+        doctor_name=doctor_name,
+        patient_avatar=patient_user.avatar,
+        doctor_avatar=doctor_user.avatar
     )
 
 
@@ -73,8 +94,10 @@ def get_my_appointments(
     
     response = []
     for app in appointments:
-        p_name = db.query(models.User).filter(models.User.id == app.patient_id).first().full_name
-        d_name = db.query(models.User).filter(models.User.id == app.doctor_id).first().full_name
+        p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
+        d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
+        p_name = p_user.full_name if p_user else "Paciente"
+        d_name = d_user.full_name if d_user else "Doctor"
         response.append(
             schemas.AppointmentResponse(
                 id=app.id,
@@ -85,7 +108,9 @@ def get_my_appointments(
                 type=app.type,
                 reason=app.reason,
                 patient_name=p_name,
-                doctor_name=d_name
+                doctor_name=d_name,
+                patient_avatar=p_user.avatar if p_user else None,
+                doctor_avatar=d_user.avatar if d_user else None
             )
         )
     return response
@@ -126,6 +151,15 @@ def update_appointment_status(
         if doc:
             if status_update.status == "en_curso":
                 doc.room_state = "en_consulta"
+                try:
+                    from app.routers.realtime import room_presence_store
+                    clean_room = str(app.id)
+                    if clean_room not in room_presence_store:
+                        room_presence_store[clean_room] = {}
+                    if "start_time" not in room_presence_store[clean_room]:
+                        room_presence_store[clean_room]["start_time"] = time.time()
+                except Exception as ex:
+                    print("Error setting start_time:", ex)
             elif status_update.status == "completada":
                 doc.room_state = "libre"
             elif status_update.status == "pendiente":
@@ -134,8 +168,10 @@ def update_appointment_status(
     db.commit()
     db.refresh(app)
     
-    p_name = db.query(models.User).filter(models.User.id == app.patient_id).first().full_name
-    d_name = db.query(models.User).filter(models.User.id == app.doctor_id).first().full_name
+    p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
+    d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
+    p_name = p_user.full_name if p_user else "Paciente"
+    d_name = d_user.full_name if d_user else "Doctor"
     
     return schemas.AppointmentResponse(
         id=app.id,
@@ -146,7 +182,9 @@ def update_appointment_status(
         type=app.type,
         reason=app.reason,
         patient_name=p_name,
-        doctor_name=d_name
+        doctor_name=d_name,
+        patient_avatar=p_user.avatar if p_user else None,
+        doctor_avatar=d_user.avatar if d_user else None
     )
 
 

@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
-  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock
 } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
 import { PatientHome } from "./PatientHome";
 import { SettingsView } from "./SettingsView";
+import { TelemedicinaRoom } from "./TelemedicinaRoom";
 
 const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
 
@@ -44,6 +46,8 @@ const gestureLabels = [
 export function PatientDashboard({ userName, userAvatar, currentView, onNavigate }: PatientDashboardProps) {
   const [pharmacyMedicine, setPharmacyMedicine] = useState<string | null>(null);
   const [lastView, setLastView] = useState(currentView);
+  const [activeCallDoc, setActiveCallDoc] = useState<{ name: string; avatar?: string; id?: number } | null>(null);
+
   if (currentView !== lastView) { setLastView(currentView); setPharmacyMedicine(null); }
 
   const navigate = (v: string) => { onNavigate?.(v); };
@@ -51,266 +55,35 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
   if (pharmacyMedicine) {
     return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
   }
-  if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} />;
-  if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} />;
+  const handleJoinCall = (apt: any) => {
+    setActiveCallDoc({ name: apt.doctor_name || apt.name, avatar: apt.doctor_avatar || apt.avatar, id: apt.id });
+    navigate("teleconsult");
+  };
+
+  if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} />;
+  if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} userAvatar={userAvatar} activeCallDoc={activeCallDoc} onEndCall={() => navigate("appointments")} />;
   if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
-  if (currentView === "appointments") return <CitasView />;
+  if (currentView === "appointments") return <CitasView onJoinCall={handleJoinCall} />;
   if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
   if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
-  return <PatientHome userName={userName} onNavigate={navigate} />;
+  return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} />;
 }
 
-/* ─── SALA DE TELEMEDICINA — ancho completo, sin panel lateral ─── */
-function TelemedicinaSala({ userName }: { userName: string }) {
-  const [inCall, setInCall] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [videoOff, setVideoOff] = useState(false);
-  const [signsMode, setSignsMode] = useState(false);
-  const [subtitlesOn, setSubtitlesOn] = useState(false);
-  const [subtitleIdx, setSubtitleIdx] = useState(0);
-  const [gestureIdx, setGestureIdx] = useState(0);
-  const [elapsedSecs, setElapsedSecs] = useState(0);
-
-  useEffect(() => {
-    if (!inCall) return;
-    const t1 = setInterval(() => setSubtitleIdx((i) => (i + 1) % subtitleLines.length), 4000);
-    const t2 = setInterval(() => setGestureIdx((i) => (i + 1) % gestureLabels.length), 3200);
-    const t3 = setInterval(() => setElapsedSecs((s) => s + 1), 1000);
-    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
-  }, [inCall]);
-
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-
+/* ─── SALA DE TELEMEDICINA — unificada y dinámica ─── */
+function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number } | null; onEndCall?: () => void }) {
   return (
-    <div className="flex flex-col min-h-screen anim-fade-in" style={{ background: "#F9FAFB" }}>
-      <div className="flex flex-col p-6 gap-5">
-
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
-          <div>
-            <h1 style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>
-              Sala de Telemedicina Inclusiva
-            </h1>
-            <p className="text-sm mt-0.5" style={{ color: "#6B7280" }}>
-              Hola <strong>{userName}</strong> · Usa lenguaje de señas frente a la cámara
-            </p>
-          </div>
-          {inCall && (
-            <div
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm"
-              style={{ background: "#10B981", fontWeight: 700 }}
-            >
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse inline-block" />
-              EN CONSULTA · {formatTime(elapsedSecs)}
-            </div>
-          )}
-        </div>
-
-        {/* Botones de acceso rápido — solo cuando no hay llamada */}
-        {!inCall && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { icon: <Video size={26} />, label: "Iniciar Consulta", action: () => setInCall(true), active: true },
-              { icon: <Hand size={26} />, label: signsMode ? "Señas LSE: ON" : "Modo Señas LSE", action: () => setSignsMode(!signsMode), active: signsMode },
-              { icon: <Captions size={26} />, label: subtitlesOn ? "Subtítulos: ON" : "Activar Subtítulos", action: () => setSubtitlesOn(!subtitlesOn), active: subtitlesOn },
-            ].map((btn, i) => (
-              <button
-                key={i}
-                onClick={btn.action}
-                className="flex flex-col items-center justify-center gap-2.5 p-5 rounded-xl transition-all duration-200"
-                style={{
-                  background: btn.active ? "#00A69D" : "white",
-                  color: btn.active ? "white" : "#203A70",
-                  minHeight: "90px",
-                  fontWeight: 700,
-                  fontSize: "15px",
-                  boxShadow: btn.active
-                    ? "0 4px 14px rgba(0,166,157,0.30)"
-                    : "0 1px 4px rgba(0,0,0,0.08)",
-                }}
-              >
-                {btn.icon}
-                {btn.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* VIDEO — 100% ancho, altura máxima */}
-        <div
-          className="relative rounded-xl overflow-hidden w-full"
-          style={{
-            background: "#0d1a2e",
-            minHeight: inCall ? "420px" : "260px",
-          }}
-        >
-          {/* Cámara del paciente */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {videoOff ? (
-              <div className="text-center">
-                <VideoOff size={56} color="rgba(255,255,255,0.3)" />
-                <p className="text-white mt-3" style={{ fontWeight: 600 }}>Cámara desactivada</p>
-              </div>
-            ) : (
-              <div
-                className="w-full h-full flex items-center justify-center relative"
-                style={{ background: "linear-gradient(135deg, #1a2744 0%, #0d1a2e 100%)" }}
-              >
-                <div className="text-center">
-                  <div
-                    className="w-28 h-28 rounded-full flex items-center justify-center text-white mx-auto mb-3"
-                    style={{ background: "#203A70", fontSize: "42px", fontWeight: 800 }}
-                  >
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                  <p className="text-white text-lg" style={{ fontWeight: 600 }}>{userName}</p>
-                  <p className="text-blue-300 text-sm">📷 Tu cámara frontal · Lenguaje de Señas</p>
-                </div>
-
-                {inCall && (
-                  <div
-                    className="absolute top-4 left-4 px-3 py-2 rounded-xl text-sm"
-                    style={{ background: "rgba(0,166,157,0.9)", color: "white", fontWeight: 600 }}
-                  >
-                    {gestureLabels[gestureIdx]}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Badge cámara */}
-          <div
-            className="absolute top-4 right-4 px-3 py-1.5 rounded-xl text-xs"
-            style={{ background: "rgba(0,0,0,0.65)", color: "#00C7C0", fontWeight: 700 }}
-          >
-            📷 TU CÁMARA — Área de señas LSE
-          </div>
-
-          {/* Cámara del médico — pip */}
-          {inCall && (
-            <div
-              className="absolute bottom-4 right-4 rounded-xl overflow-hidden"
-              style={{ width: "148px", height: "104px", background: "#1e3a5f", boxShadow: "0 2px 12px rgba(0,0,0,0.4)", border: "2px solid #00A69D" }}
-            >
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm mb-1" style={{ background: "#00A69D", fontWeight: 700 }}>CM</div>
-                <p className="text-white text-xs" style={{ fontWeight: 600 }}>Dr. Mendoza</p>
-                <p className="text-blue-300 text-xs">● Conectado</p>
-              </div>
-            </div>
-          )}
-
-          {/* Estado sin llamada */}
-          {!inCall && (
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center gap-4"
-              style={{ background: "rgba(13,26,46,0.85)" }}
-            >
-              <Video size={48} color="rgba(255,255,255,0.4)" />
-              <p className="text-white text-lg" style={{ fontWeight: 600 }}>Cámara lista · Sin consulta activa</p>
-              <button
-                onClick={() => setInCall(true)}
-                className="flex items-center gap-3 px-8 py-4 rounded-xl text-white"
-                style={{ background: "#00A69D", fontWeight: 800, fontSize: "18px", boxShadow: "0 4px 16px rgba(0,166,157,0.4)" }}
-              >
-                <Phone size={22} color="white" /> Iniciar Consulta Ahora
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Panel de subtítulos — ancho completo, sin borde duro */}
-        <div
-          className="rounded-xl p-5 w-full"
-          style={{
-            background: "white",
-            boxShadow: inCall ? "0 0 0 2px #00A69D, 0 4px 16px rgba(0,166,157,0.10)" : "0 1px 4px rgba(0,0,0,0.07)",
-            minHeight: "100px",
-          }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Captions size={20} style={{ color: "#00A69D" }} />
-              <span className="text-sm" style={{ color: "#203A70", fontWeight: 700 }}>
-                Subtítulos en Tiempo Real — IA
-              </span>
-              {inCall && (
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 600 }}
-                >
-                  ● Activo
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1 text-xs" style={{ color: "#9CA3AF" }}>
-              <Volume2 size={14} />
-              Español · LSE
-            </div>
-          </div>
-
-          <div
-            className="w-full flex items-center px-4 py-4 rounded-xl"
-            style={{ background: "#F9FAFB", minHeight: "64px" }}
-          >
-            {inCall ? (
-              <p style={{ color: "#111827", fontSize: "20px", fontWeight: 600, lineHeight: 1.5, letterSpacing: "-0.2px" }}>
-                "{subtitleLines[subtitleIdx]}"
-              </p>
-            ) : (
-              <p style={{ color: "#9CA3AF", fontSize: "18px", fontStyle: "italic" }}>
-                Los subtítulos aparecerán aquí durante la consulta...
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Controles de llamada */}
-        {inCall && (
-          <div className="flex items-center justify-center gap-4 py-1">
-            {[
-              {
-                icon: muted ? <MicOff size={24} /> : <Mic size={24} />,
-                label: muted ? "Activar" : "Silencio",
-                action: () => setMuted(!muted),
-                danger: muted,
-              },
-              {
-                icon: <Phone size={26} />,
-                label: "Finalizar",
-                action: () => { setInCall(false); setElapsedSecs(0); },
-                end: true,
-              },
-              {
-                icon: videoOff ? <VideoOff size={24} /> : <Video size={24} />,
-                label: videoOff ? "Activar" : "Cámara",
-                action: () => setVideoOff(!videoOff),
-                danger: videoOff,
-              },
-            ].map((btn, i) => (
-              <button
-                key={i}
-                onClick={btn.action}
-                className="flex flex-col items-center gap-1.5 rounded-xl transition-all"
-                style={{
-                  background: (btn as any).end ? "#EF4444" : (btn as any).danger ? "#FEE2E2" : "white",
-                  color: (btn as any).end ? "white" : (btn as any).danger ? "#EF4444" : "#203A70",
-                  padding: (btn as any).end ? "12px 32px" : "12px 20px",
-                  minWidth: (btn as any).end ? "100px" : "80px",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                }}
-              >
-                {btn.icon}
-                <span className="text-xs" style={{ fontWeight: 600 }}>{btn.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-      </div>
-    </div>
+    <TelemedicinaRoom
+      role="patient"
+      userName={userName || "Paciente"}
+      userAvatar={userAvatar}
+      counterpartName={activeCallDoc?.name || "Dr. Jose Miguel"}
+      counterpartAvatar={activeCallDoc?.avatar}
+      appointmentId={activeCallDoc?.id}
+      onEndCall={() => {
+        if (onEndCall) onEndCall();
+        else window.history.back();
+      }}
+    />
   );
 }
 
@@ -323,14 +96,16 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
     async function loadRx() {
       try {
         const data = await api.getPrescriptions();
-        const formatted = data.map((rx: any) => ({
-          id: rx.id,
-          medicine: rx.medicine,
-          doctor: rx.doctor_name,
-          doses: `${rx.dose} · ${rx.frequency}`,
-          status: rx.status
-        }));
-        setPrescriptionsList(formatted);
+        if (Array.isArray(data)) {
+          const formatted = data.map((rx: any) => ({
+            id: rx.id,
+            medicine: rx.medicine,
+            doctor: rx.doctor_name,
+            doses: `${rx.dose} · ${rx.frequency}`,
+            status: rx.status
+          }));
+          setPrescriptionsList(formatted);
+        }
       } catch (err) {
         console.error("Error cargando recetas:", err);
       } finally {
@@ -394,37 +169,321 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
   );
 }
 
-/* ─── CITAS ─── */
-function CitasView() {
+function formatDateSafe(dateStr?: string, options?: Intl.DateTimeFormatOptions): string {
+  if (!dateStr) return "Fecha pendiente";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString("es-DO", options || { dateStyle: "medium", timeStyle: "short" });
+  } catch (e) {
+    return String(dateStr);
+  }
+}
+
+function getInitialsSafe(name?: string): string {
+  if (!name || !name.trim()) return "DR";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.trim().substring(0, 2).toUpperCase();
+}
+
+function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
+  const [elapsed, setElapsed] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchStart = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.start_time) {
+            const diff = Math.floor(Date.now() / 1000 - data.start_time);
+            setElapsed(Math.max(0, diff));
+          }
+        }
+      } catch (e) {}
+    };
+
+    fetchStart();
+    const interval = setInterval(fetchStart, 1000);
+    return () => clearInterval(interval);
+  }, [roomCode]);
+
+  const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
+  const s = (elapsed % 60).toString().padStart(2, "0");
+
   return (
-    <div className="p-6 space-y-4 anim-fade-in">
-      <h1 className="anim-fade-in-up anim-d-0" style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>Mis Citas Médicas</h1>
-      {[
-        { doctor: "Dr. Carlos Mendoza", specialty: "Cardiología", date: "Hoy 15:30", status: "confirmada", avatar: "CM" },
-        { doctor: "Dra. Ana Torres", specialty: "Neurología", date: "Vie 18 Jul, 10:00", status: "pendiente", avatar: "AT" },
-      ].map((apt, i) => (
-        <div
-          key={i}
-          className="bg-white rounded-xl p-5 flex items-center gap-4 anim-fade-in-up"
-          style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)", animationDelay: `${i * 80}ms` }}
+    <span
+      className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-cyan-200"
+      style={{ background: "#E0F2FE", color: "#0284C7" }}
+    >
+      <span className="w-2 h-2 rounded-full bg-[#0284C7]" />
+      En Curso · {m}:{s}
+    </span>
+  );
+}
+
+/* ─── CITAS ─── */
+function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
+  const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [myDoctors, setMyDoctors] = useState<any[]>([]);
+  const [form, setForm] = useState({ doctor_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadAppointments = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getAppointments();
+      if (Array.isArray(data)) {
+        setAppointmentsList(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAppointments();
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.getAppointments();
+        if (Array.isArray(data)) {
+          setAppointmentsList(data);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleOpenModal = async () => {
+    setShowModal(true);
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await fetch("http://localhost:8000/api/invitations/my-doctors", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyDoctors(data);
+        if (data.length > 0) {
+          setForm(prev => ({ ...prev, doctor_id: data[0].id.toString() }));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateAppointment = async () => {
+    if (!form.doctor_id || !form.date || !form.time || !form.reason.trim()) {
+      alert("Por favor completa la fecha, hora, médico y motivo de consulta.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const dateTimeStr = `${form.date}T${form.time}:00`;
+      await api.createAppointment({
+        doctor_id: parseInt(form.doctor_id),
+        date_time: dateTimeStr,
+        type: form.type,
+        reason: form.reason
+      });
+      setShowModal(false);
+      setForm({ doctor_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
+      loadAppointments();
+    } catch (err: any) {
+      alert("Error agendando cita: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-4 anim-fade-in relative">
+      <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
+        <h1 style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>Mis Citas Médicas</h1>
+        <button
+          onClick={handleOpenModal}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm hover:opacity-90 transition-opacity font-bold shadow-sm"
+          style={{ background: "#00A69D" }}
         >
-          <div className="w-14 h-14 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "#203A70", fontWeight: 800 }}>{apt.avatar}</div>
-          <div className="flex-1">
-            <p style={{ color: "#203A70", fontWeight: 700 }}>{apt.doctor}</p>
-            <p className="text-sm mt-0.5" style={{ color: "#6B7280" }}>{apt.specialty} · {apt.date}</p>
-          </div>
-          <span
-            className="px-3 py-1.5 rounded-xl text-xs"
-            style={{
-              background: apt.status === "confirmada" ? "#DCFCE7" : "#FEF3C7",
-              color: apt.status === "confirmada" ? "#10B981" : "#D97706",
-              fontWeight: 600,
-            }}
-          >
-            {apt.status === "confirmada" ? "✓ Confirmada" : "⏳ Pendiente"}
-          </span>
+          <Plus size={16} /> Solicitar Cita
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8 text-gray-500 text-sm">Cargando mis citas...</div>
+      ) : appointmentsList.length === 0 ? (
+        <div className="text-center py-8 text-gray-500 text-sm bg-white rounded-2xl shadow-sm border border-gray-100">
+          No tienes citas agendadas aún. Haz clic en "Solicitar Cita" para programar una.
         </div>
-      ))}
+      ) : (
+        <div className="space-y-3">
+          {appointmentsList.map((apt, i) => (
+            <div
+              key={apt.id}
+              className="bg-white rounded-xl p-5 flex items-center gap-4 anim-fade-in-up border border-gray-50 shadow-sm flex-wrap sm:flex-nowrap"
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              <div 
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-sm overflow-hidden" 
+                style={{ background: "#203A70" }}
+              >
+                {apt.doctor_avatar && (apt.doctor_avatar.startsWith("http") || apt.doctor_avatar.startsWith("data:")) ? (
+                  <img src={apt.doctor_avatar} alt={apt.doctor_name || "Doctor"} className="w-full h-full object-cover" />
+                ) : (
+                  getInitialsSafe(apt.doctor_name)
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p style={{ color: "#203A70", fontWeight: 700 }}>{apt.doctor_name || "Doctor"}</p>
+                <p className="text-sm mt-0.5" style={{ color: "#6B7280" }}>
+                  {apt.type || "Teleconsulta"} · {formatDateSafe(apt.date_time)}
+                </p>
+                {apt.reason && (
+                  <p className="text-xs mt-1 text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <strong>Motivo:</strong> {apt.reason}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {apt.status === "en_curso" ? (
+                  <>
+                    <LiveElapsedBadge roomCode={apt.id} />
+                    <button
+                      onClick={() => onJoinCall?.(apt)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold transition-opacity hover:opacity-90 shadow-xs"
+                      style={{ background: "#00A69D" }}
+                    >
+                      <Video size={14} /> Unirse a Consulta
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold"
+                      style={{
+                        background: apt.status === "confirmada" ? "#DCFCE7" : apt.status === "completada" ? "#F3F4F6" : apt.status === "pendiente" ? "#FEF3C7" : "#FEE2E2",
+                        color: apt.status === "confirmada" ? "#10B981" : apt.status === "completada" ? "#6B7280" : apt.status === "pendiente" ? "#D97706" : "#EF4444",
+                      }}
+                    >
+                      {apt.status === "confirmada" ? "✓ Confirmada" : apt.status === "completada" ? "✓ Finalizada" : apt.status === "pendiente" ? "⏳ Pendiente" : "✗ Rechazada"}
+                    </span>
+
+                    {apt.status === "confirmada" && (
+                      <button
+                        onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel para iniciar la consulta. Tan pronto la inicie, se activará el botón 'Unirse' para ti.")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-gray-500 text-xs font-semibold bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-colors"
+                        title="Esperando a que el doctor inicie la videollamada"
+                      >
+                        <Clock size={13} /> Esperando Médico
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal Solicitar Cita */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowModal(false)}>
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Solicitar Cita Médica</h3>
+              <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                <Trash2 size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Médico asignado</label>
+                {myDoctors.length === 0 ? (
+                  <div className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                    No tienes médicos vinculados en tu lista. Primero debes aceptar una invitación de tu doctor.
+                  </div>
+                ) : (
+                  <select
+                    value={form.doctor_id}
+                    onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
+                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-[#00A69D]"
+                  >
+                    {myDoctors.map(doc => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.full_name} ({doc.specialty})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Hora</label>
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo de consulta</label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
+                >
+                  <option value="Teleconsulta">Teleconsulta (Videollamada)</option>
+                  <option value="Presencial">Presencial en Consultorio</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo de la consulta</label>
+                <textarea
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  placeholder="Describe tus síntomas o el motivo de la cita (ej. dolor de cabeza continuo)..."
+                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none"
+                />
+              </div>
+
+              <button
+                onClick={handleCreateAppointment}
+                disabled={isSubmitting || myDoctors.length === 0}
+                className="w-full py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md"
+                style={{ background: "#00A69D" }}
+              >
+                {isSubmitting ? "Enviando solicitud..." : "Enviar Solicitud de Cita"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -456,7 +515,11 @@ const TypewriterMessage = ({ text, animate }: { text: string, animate: boolean }
     }, 15);
     return () => clearInterval(interval);
   }, [text, animate]);
-  return <>{displayed}</>;
+  return (
+    <div className="markdown-body space-y-4">
+      <ReactMarkdown>{displayed}</ReactMarkdown>
+    </div>
+  );
 };
 
 function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar?: string }) {
@@ -476,6 +539,35 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   const [msgs, setMsgs] = useState<{ from: string; text: string; isNew?: boolean }[]>([]);
   const [typing, setTyping] = useState(false);
   const msgsEndRef = useRef<HTMLDivElement | null>(null);
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(280);
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = Math.max(200, Math.min(500, e.clientX - 220));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     sessionStorage.setItem("aiActiveSessionId", activeSessionId === null ? "new" : activeSessionId.toString());
@@ -541,7 +633,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   };
 
   const send = async (text?: string) => {
-    if (isSendingRef.current) return;
+    if (isSendingRef.current || typing) return;
     
     const query = (text ?? input).trim();
     if (!query) return;
@@ -572,12 +664,14 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
       setTyping(false);
       setMsgs((p) => [...p, { from: "bot", text: res.reply, isNew: true }]);
       
-      setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: query.slice(0, 30) + (query.length > 30 ? "..." : "") } : s));
+      const updatedTitle = res.session_title || (query.slice(0, 25) + (query.length > 25 ? "..." : ""));
+      setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: updatedTitle } : s));
     } catch (err: any) {
       setTyping(false);
       setMsgs((p) => [...p, { from: "bot", text: "Lo siento, hubo un error de conexión con mi cerebro clínico.", isNew: true }]);
     } finally {
       isSendingRef.current = false;
+      setTyping(false);
     }
   };
 
@@ -604,15 +698,16 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
 
       {/* Sidebar Historial de Chats */}
       <div 
-        className="border-r flex flex-col bg-white transition-all duration-300 overflow-hidden" 
+        className="border-r flex flex-col bg-white overflow-hidden relative select-none" 
         style={{ 
-          width: isSidebarOpen ? "260px" : "0px", 
+          width: isSidebarOpen ? `${sidebarWidth}px` : "0px", 
           opacity: isSidebarOpen ? 1 : 0,
           borderColor: "#F3F4F6",
-          flexShrink: 0
+          flexShrink: 0,
+          transition: isResizing ? "none" : "width 0.3s ease, opacity 0.3s ease"
         }}
       >
-        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: "#F3F4F6", minWidth: "260px" }}>
+        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: "#F3F4F6", minWidth: `${sidebarWidth}px` }}>
           <button 
             onClick={createNewChat}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold transition-all mr-2"
@@ -627,12 +722,13 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             <PanelLeft size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ minWidth: "260px" }}>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ minWidth: `${sidebarWidth}px` }}>
           <p className="text-xs font-bold px-2 py-2" style={{ color: "#9CA3AF" }}>Tus consultas</p>
           {sessions.map(s => (
             <div
               key={s.id}
               onClick={() => setActiveSessionId(s.id)}
+              title={s.title}
               className="group w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left rounded-lg transition-colors cursor-pointer"
               style={{
                 background: activeSessionId === s.id ? "#F3F4F6" : "transparent",
@@ -642,7 +738,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             >
               <div className="flex items-center gap-2 overflow-hidden flex-1">
                 <MessageSquare size={15} style={{ opacity: 0.7, flexShrink: 0 }} />
-                <span className="text-sm truncate">{s.title}</span>
+                <span className="text-sm truncate" title={s.title}>{s.title}</span>
               </div>
               
               <button 
@@ -656,6 +752,16 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           ))}
         </div>
       </div>
+
+      {/* Resize Handle */}
+      {isSidebarOpen && (
+        <div
+          onMouseDown={startResizing}
+          className="w-1.5 h-full cursor-col-resize hover:bg-[#00A69D] active:bg-[#00A69D] transition-colors z-30 flex-shrink-0"
+          style={{ background: isResizing ? "#00A69D" : "transparent" }}
+          title="Arrastra para cambiar el ancho del menú lateral"
+        />
+      )}
 
       {/* Área Principal del Chat */}
       <div className="flex-1 flex flex-col relative bg-[#FCFCFD]">
@@ -676,7 +782,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 w-full z-10 relative modern-scroll pb-40">
+          <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 w-full z-10 relative modern-scroll pb-56">
             <div className="space-y-6" style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
               {msgs.map((m, i) => (
                 <div key={`${activeSessionId}-${i}`} className={`flex gap-4 anim-fade-in-up ${m.from === "user" ? "flex-row-reverse" : ""}`} style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s`, animationFillMode: "both" }}>
@@ -689,7 +795,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                       userName ? userName.charAt(0).toUpperCase() : "U"
                     )}
                   </div>
-                  <div className={`max-w-xl px-6 py-4 text-[15px] ${m.from === 'bot' ? 'glass-panel text-gray-800 rounded-3xl rounded-tl-sm' : 'bg-[#203A70] text-white rounded-3xl rounded-tr-sm shadow-md'}`} style={{ lineHeight: 1.6 }}>
+                  <div className={`text-[15px] ${m.from === 'bot' ? 'w-full max-w-3xl text-gray-800 pt-1.5' : 'max-w-xl px-6 py-4 bg-[#203A70] text-white rounded-3xl rounded-tr-sm shadow-md'}`} style={{ lineHeight: 1.7 }}>
                     {m.from === "bot" ? <TypewriterMessage text={m.text} animate={!!m.isNew} /> : m.text}
                   </div>
                 </div>
@@ -699,9 +805,9 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                   <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden" style={{ background: "transparent", color: "white" }}>
                     <img src={logoIconImg} alt="Bot" className="w-full h-full object-contain" />
                   </div>
-                  <div className="glass-panel px-6 py-5 rounded-3xl rounded-tl-sm flex items-center gap-1.5">
+                  <div className="pt-3 px-2 flex items-center gap-1.5">
                     {[0, 1, 2].map((d) => (
-                      <span key={d} className="w-2.5 h-2.5 rounded-full animate-bounce inline-block" style={{ background: "#00A69D", animationDelay: `${d * 0.15}s` }} />
+                      <span key={d} className="w-2.5 h-2.5 rounded-full animate-bounce inline-block" style={{ background: "#D1D5DB", animationDelay: `${d * 0.15}s` }} />
                     ))}
                   </div>
                 </div>
@@ -709,6 +815,11 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
               <div ref={(el) => { msgsEndRef.current = el; }} />
             </div>
           </div>
+        )}
+
+        {/* Gradient fade para que los mensajes no se corten bruscamente detrás del input */}
+        {!isEmpty && (
+          <div className="absolute bottom-0 left-0 w-full h-48 z-10 pointer-events-none" style={{ background: "linear-gradient(to bottom, rgba(252,252,253,0) 0%, #FCFCFD 60%, #FCFCFD 100%)" }}></div>
         )}
 
         {/* Floating Input Area (Shared between empty and chat state) */}
@@ -724,11 +835,11 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      send();
+                      if (!typing) send();
                     }
                   }}
                   placeholder={isEmpty ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
-                  className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll"
+                  className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60"
                   style={{ fontSize: "16px", minHeight: "72px" }}
                   rows={1}
                   autoFocus
@@ -745,9 +856,9 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                   </div>
                   <button
                     onClick={() => send()}
-                    disabled={!input.trim()}
-                    className="p-3 rounded-full text-white shadow-md transition-all disabled:opacity-40 disabled:scale-95 flex items-center justify-center"
-                    style={{ background: "#203A70" }}
+                    disabled={!input.trim() || typing}
+                    className="p-3 rounded-full text-white shadow-md transition-all disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer"
+                    style={{ background: (!input.trim() || typing) ? "#9CA3AF" : "#203A70" }}
                   >
                     <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />
                   </button>
@@ -761,8 +872,9 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                 {randomSuggestions.map((s, i) => (
                   <button
                     key={i}
-                    onClick={() => send(s.text)}
-                    className="bg-white/90 backdrop-blur-md rounded-full px-3 py-2.5 shadow-sm border border-gray-100/50 hover:bg-white hover:shadow-md transition-all flex items-center justify-center gap-2 group w-full"
+                    onClick={() => !typing && send(s.text)}
+                    disabled={typing}
+                    className="bg-white/90 backdrop-blur-md rounded-full px-3 py-2.5 shadow-sm border border-gray-100/50 hover:bg-white hover:shadow-md transition-all flex items-center justify-center gap-2 group w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ animationDelay: `${i * 100}ms` }}
                   >
                     <span className="text-lg">{s.icon}</span>

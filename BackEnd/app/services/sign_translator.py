@@ -82,24 +82,9 @@ class SignTranslatorService:
             except Exception as e:
                 logger.error(f"Error cargando pesos del modelo LSTM: {e}")
         
-        # 2. Cargar Qwen Local (si se habilita en config)
+        # 2. Cargar LLM Local vía Ollama (si se habilita en config)
         if self.use_local_llm:
-            try:
-                from transformers import AutoModelForCausalLM, AutoTokenizer
-                logger.info(f"Cargando modelo Qwen local: {settings.QWEN_MODEL_NAME}...")
-                self.qwen_tokenizer = AutoTokenizer.from_pretrained(settings.QWEN_MODEL_NAME)
-                self.qwen_model = AutoModelForCausalLM.from_pretrained(
-                    settings.QWEN_MODEL_NAME, 
-                    device_map="auto",
-                    torch_dtype="auto"
-                )
-                logger.info("Modelo Qwen local cargado con éxito.")
-            except ImportError:
-                logger.warning("Librería 'transformers' no encontrada. Fallback a traducción remota/reglas.")
-                self.use_local_llm = False
-            except Exception as e:
-                logger.error(f"Error cargando Qwen local: {e}. Desactivando LLM local.")
-                self.use_local_llm = False
+            logger.info(f"Usando LLM local vía Ollama en: {settings.OLLAMA_BASE_URL} con el modelo {settings.LOCAL_MODEL_NAME}")
 
     def predict_gestures(self, sequence_data: List[List[float]]) -> List[str]:
         """
@@ -139,23 +124,33 @@ class SignTranslatorService:
         if gesture_str in self.rule_based_translations:
             return self.rule_based_translations[gesture_str]
 
-        # 2. Intentar usar Qwen Local si está cargado
-        if self.use_local_llm and self.qwen_model and self.qwen_tokenizer:
+        # 2. Intentar usar LLM Local vía Ollama
+        if self.use_local_llm:
             try:
+                import requests
+                from app.config import settings
+                
                 prompt = (
                     "Eres un asistente médico inteligente para personas sordas.\n"
-                    "Convierte la siguiente secuencia de gestos traducidos del lenguaje de señas en una oración médica gramaticalmente correcta y coherente en español.\n"
+                    "Convierte la siguiente secuencia de gestos traducidos del lenguaje de señas en una oración médica gramaticalmente correcta y coherente en español. No añadas ninguna otra explicación, solo la oración.\n"
                     f"Gestos: {gesture_str}\n"
                     "Oración médica:"
                 )
-                inputs = self.qwen_tokenizer(prompt, return_tensors="pt").to(self.qwen_model.device)
-                outputs = self.qwen_model.generate(**inputs, max_new_tokens=50, temperature=0.3)
-                output_text = self.qwen_tokenizer.decode(outputs[0], skip_special_tokens=True)
-                # Limpiar texto del prompt
-                translation = output_text.replace(prompt, "").strip()
-                return translation
+                
+                payload = {
+                    "model": settings.LOCAL_MODEL_NAME,
+                    "prompt": prompt,
+                    "stream": False
+                }
+                
+                url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+                response = requests.post(url, json=payload, timeout=10)
+                
+                if response.status_code == 200:
+                    translation = response.json()["response"].strip()
+                    return translation
             except Exception as e:
-                logger.error(f"Error usando Qwen local: {e}")
+                logger.error(f"Error usando Ollama local en traductor de señas: {e}")
 
         # 3. Intentar usar la API de Inferencia gratuita de HuggingFace como fallback rápido en la nube
         try:

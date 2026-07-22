@@ -170,3 +170,29 @@ class ChatMessage(Base):
 
     # Relationships
     session = relationship("ChatSession", back_populates="messages")
+
+
+class DoctorPatientInvitation(Base):
+    __tablename__ = "doctor_patient_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    status = Column(String, default="pending")  # "pending", "accepted", "rejected"
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # We could add relationships here, but often manual querying is enough
+    doctor = relationship("Doctor", foreign_keys=[doctor_id])
+    patient = relationship("Patient", foreign_keys=[patient_id])
+
+
+class DoctorPatientLink(Base):
+    __tablename__ = "doctor_patient_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    linked_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    doctor = relationship("Doctor", foreign_keys=[doctor_id])
+    patient = relationship("Patient", foreign_keys=[patient_id])

@@ -1,0 +1,399 @@
+========================================================================
+LISTADO DE MEDICAMENTOS DE USO COMUN EN REPUBLICA DOMINICANA
+Referencia por categoria terapeutica - Base para proyecto/app
+========================================================================
+
+NOTAS IMPORTANTES (leer antes de usar):
+1. Esta NO es una copia del Registro Sanitario oficial de DIGEMAPS. DIGEMAPS
+   (Direccion General de Medicamentos, Alimentos y Productos Sanitarios,
+   digemaps.gob.do) es la autoridad que otorga los registros sanitarios en
+   RD y publica boletines mensuales en PDF con miles de productos
+   registrados por decadas, pero esos boletines solo traen nombre
+   comercial/laboratorio/numero de registro, NO dosis ni indicacion clinica.
+2. Este archivo reune ~270 principios activos de uso amplio/comun en el
+   mercado farmaceutico dominicano y latinoamericano, con informacion
+   farmacologica estandar (dosis, indicacion, presentacion).
+3. Los NOMBRES COMERCIALES listados son referencias generales (marcas
+   ampliamente distribuidas en la region); la disponibilidad exacta y el
+   estatus de registro vigente en RD puede variar por laboratorio/tiempo.
+   Para verificar el registro sanitario de un producto especifico, consulta
+   digemaps.gob.do
+4. Las DOSIS son valores de referencia para adulto promedio (via oral salvo
+   que se indique otra via) y no sustituyen indicacion medica ni el
+   prospecto/ficha tecnica oficial del fabricante. No usar para
+   autoprescripcion.
+5. Formato de cada linea:
+   Generico | Nombres comerciales comunes | Dosis habitual adulto | Indicacion principal | Presentacion | Via
+
+Total aproximado: 270 medicamentos en 44 categorias
+========================================================================
+
+## 1. ANALGESICOS Y ANTIPIRETICOS
+Paracetamol (Acetaminofen) | Tylenol, Dolex, Panadol | 500-1000 mg c/6-8h, max 4 g/dia | Dolor leve-moderado, fiebre | Tab 500 mg, jarabe, gotas, supositorio | Oral/Rectal
+Metamizol (Dipirona) | Novalgina, Neomelubrina | 500-1000 mg c/6-8h | Dolor moderado-severo, fiebre alta | Tab, ampolla, gotas | Oral/IV/IM
+Acido acetilsalicilico (Aspirina) | Aspirina, Bufferin, Ecotrin | 500 mg c/4-6h (dosis analgesica); 81-100 mg/dia (antiagregante) | Dolor, fiebre, prevencion cardiovascular | Tab 100/325/500 mg | Oral
+Tramadol | Tramal, Tridol | 50-100 mg c/6-8h, max 400 mg/dia | Dolor moderado-severo | Cap 50 mg, ampolla, gotas | Oral/IV/IM
+Paracetamol + Tramadol | Zaldiar | 1 tab c/6-8h, max 8 tab/dia | Dolor moderado-severo | Tab combinada | Oral
+Ketorolaco | Toragesic, Dolac | 10 mg c/4-6h oral; 30 mg IM/IV | Dolor agudo moderado-severo (uso corto, max 5 dias) | Tab 10 mg, ampolla | Oral/IM/IV
+Naproxeno sodico | Flanax, Naprosyn | 220-550 mg c/12h | Dolor, inflamacion | Tab 220/550 mg | Oral
+Paracetamol + Codeina | Tylex, Cod-Efferalgan | 1-2 tab c/6h | Dolor moderado | Tab combinada | Oral
+
+## 2. AINES - ANTIINFLAMATORIOS NO ESTEROIDEOS
+Ibuprofeno | Advil, Motrin, Ibupirac | 400-600 mg c/6-8h, max 2.4 g/dia | Dolor, inflamacion, fiebre | Tab 200/400/600 mg, suspension | Oral
+Diclofenaco sodico | Voltaren, Cataflam | 50 mg c/8h, max 150 mg/dia | Dolor e inflamacion musculoesqueletica | Tab, gel topico, ampolla | Oral/Topico/IM
+Meloxicam | Mobic, Movalis | 7.5-15 mg/dia | Artritis, osteoartritis | Tab 7.5/15 mg | Oral
+Piroxicam | Feldene | 20 mg/dia | Artritis reumatoide, osteoartritis | Cap 20 mg, gel | Oral/Topico
+Celecoxib | Celebrex | 100-200 mg c/12-24h | Artritis, dolor inflamatorio (COX-2 selectivo) | Cap 100/200 mg | Oral
+Indometacina | Indocin | 25-50 mg c/8-12h | Artritis, gota, dolor inflamatorio | Cap 25/50 mg | Oral
+Ketoprofeno | Fastum, Profenid | 50-100 mg c/8-12h | Dolor e inflamacion | Cap, gel topico | Oral/Topico
+Nimesulida | Nimalox, Nisulid | 100 mg c/12h | Dolor e inflamacion (uso corto) | Tab 100 mg | Oral
+Etoricoxib | Arcoxia | 60-120 mg/dia | Artritis, gota aguda | Tab 60/90/120 mg | Oral
+Diclofenaco + Misoprostol | Arthrotec | 1 tab c/12h | Artritis con proteccion gastrica | Tab combinada | Oral
+
+## 3. ANALGESICOS OPIOIDES (uso controlado/receta especial)
+Morfina | Morfina | Segun protocolo/titulacion | Dolor severo, oncologico, postoperatorio | Ampolla, tab liberacion controlada | Oral/IV/SC
+Codeina | (habitual en combinados con paracetamol) | 30-60 mg c/4-6h | Dolor leve-moderado, tos | Tab, jarabe | Oral
+Fentanilo | Durogesic (parche) | Segun titulacion, parche c/72h | Dolor cronico severo, oncologico | Parche transdermico, ampolla | Transdermico/IV
+Oxicodona | Oxycontin | Segun titulacion | Dolor moderado-severo | Tab liberacion prolongada | Oral
+Hidrocodona + Paracetamol | Vicodin | 1 tab c/4-6h | Dolor moderado-severo | Tab combinada | Oral
+Buprenorfina | Buprenex | Segun protocolo | Dolor severo, manejo de dependencia opioide | Ampolla, parche, sublingual | Sublingual/Transdermico/IV
+
+## 4. ANTIBIOTICOS - PENICILINAS
+Amoxicilina | Amoxil, Amoxal | 500 mg c/8h u 875 mg c/12h | Infecciones respiratorias, urinarias, ORL | Cap 500 mg, suspension | Oral
+Amoxicilina + Acido clavulanico | Augmentin, Clavulin | 875/125 mg c/12h | Infecciones bacterianas resistentes | Tab, suspension | Oral
+Ampicilina | Ampicilina | 500 mg c/6h | Infecciones bacterianas variadas | Cap, ampolla | Oral/IV/IM
+Penicilina G benzatinica | Benzetacil | 1.2-2.4 millones UI dosis unica/semanal | Faringitis estreptococica, sifilis, profilaxis fiebre reumatica | Ampolla IM | IM
+Penicilina V | Fenoxymethylpenicilina | 500 mg c/6h | Infecciones estreptococicas | Tab | Oral
+Dicloxacilina | Dynapen | 500 mg c/6h | Infecciones por estafilococo | Cap, suspension | Oral
+Piperacilina + Tazobactam | Tazocin | 4.5 g c/6-8h | Infecciones graves hospitalarias | Vial IV | IV
+Oxacilina | Oxacilina | 500 mg-1g c/6h | Infecciones por estafilococo | Vial IV/IM | IV/IM
+
+## 5. ANTIBIOTICOS - CEFALOSPORINAS
+Cefalexina | Keflex | 500 mg c/6-8h | Infecciones de piel, respiratorias, urinarias | Cap, suspension | Oral
+Cefadroxilo | Duricef | 500 mg-1g c/12h | Infecciones de piel y urinarias | Cap, suspension | Oral
+Cefuroxima | Zinnat, Ceftin | 250-500 mg c/12h | Infecciones respiratorias, urinarias | Tab, suspension | Oral
+Ceftriaxona | Rocephin | 1-2 g/dia | Infecciones graves, meningitis, gonorrea | Vial IV/IM | IV/IM
+Cefotaxima | Claforan | 1-2 g c/8h | Infecciones graves hospitalarias | Vial IV | IV
+Cefixima | Suprax | 400 mg/dia | Infecciones respiratorias, urinarias | Tab, suspension | Oral
+Ceftazidima | Fortum | 1-2 g c/8h | Infecciones graves, Pseudomonas | Vial IV | IV
+Cefepime | Maxipime | 1-2 g c/12h | Infecciones nosocomiales graves | Vial IV | IV
+
+## 6. ANTIBIOTICOS - MACROLIDOS
+Azitromicina | Zithromax, Azitrocin | 500 mg dia 1, luego 250 mg/dia (3-5 dias) | Infecciones respiratorias, ETS | Tab, suspension | Oral
+Claritromicina | Klaricid | 500 mg c/12h | Infecciones respiratorias, H. pylori | Tab, suspension | Oral
+Eritromicina | Eritromicina | 500 mg c/6h | Infecciones respiratorias, alternativa en alergia a penicilina | Tab, suspension | Oral
+Clindamicina | Dalacin | 300-450 mg c/6-8h | Infecciones de piel, dentales, anaerobias | Cap, gel topico, ampolla | Oral/Topico/IV
+
+## 7. ANTIBIOTICOS - QUINOLONAS
+Ciprofloxacino | Cipro, Ciproxina | 500 mg c/12h | Infecciones urinarias, gastrointestinales | Tab, suspension, gotas oftalmicas | Oral/IV/Oftalmico
+Levofloxacino | Levaquin, Tavanic | 500-750 mg/dia | Infecciones respiratorias, urinarias | Tab, ampolla | Oral/IV
+Moxifloxacino | Avelox | 400 mg/dia | Infecciones respiratorias | Tab | Oral
+Norfloxacino | Noroxin | 400 mg c/12h | Infecciones urinarias | Tab | Oral
+Ofloxacino | Floxin | 400 mg c/12h | Infecciones urinarias, ETS | Tab, gotas | Oral/Otico
+
+## 8. ANTIBIOTICOS - TETRACICLINAS
+Doxiciclina | Vibramicina | 100 mg c/12h | Infecciones respiratorias, acne, ETS | Cap, tab | Oral
+Tetraciclina | Tetraciclina | 250-500 mg c/6h | Infecciones bacterianas, acne | Cap | Oral
+Minociclina | Minocin | 100 mg c/12h | Acne moderado-severo | Cap | Oral
+
+## 9. ANTIBIOTICOS - AMINOGLUCOSIDOS
+Gentamicina | Garamicina | 3-5 mg/kg/dia | Infecciones graves gramnegativas | Ampolla, crema, gotas oftalmicas | IV/IM/Topico
+Amikacina | Amikin | 15 mg/kg/dia | Infecciones graves resistentes | Vial IV/IM | IV/IM
+Tobramicina | Tobrex | Segun peso/indicacion | Infecciones graves, uso oftalmico | Ampolla, gotas oftalmicas | IV/IM/Oftalmico
+
+## 10. ANTIBIOTICOS - SULFONAMIDAS Y OTROS
+Trimetoprim + Sulfametoxazol | Bactrim, Septra | 800/160 mg c/12h | Infecciones urinarias, respiratorias | Tab, suspension | Oral
+Nitrofurantoina | Macrodantina | 100 mg c/6h | Infecciones urinarias no complicadas | Cap | Oral
+Metronidazol | Flagyl | 500 mg c/8h | Infecciones anaerobias, parasitarias, vaginales | Tab, ovulo, gel, ampolla | Oral/Vaginal/IV
+Vancomicina | Vancocin | 1 g c/12h IV; 125 mg c/6h oral | Infecciones graves por SARM, colitis por C. difficile | Vial IV, capsula oral | IV/Oral
+
+## 11. ANTITUBERCULOSOS
+Isoniazida | Isoniazida | 5 mg/kg/dia (max 300 mg) | Tuberculosis | Tab | Oral
+Rifampicina | Rifadin | 10 mg/kg/dia (max 600 mg) | Tuberculosis, lepra | Cap | Oral
+Pirazinamida | Pirazinamida | 25 mg/kg/dia | Tuberculosis (fase inicial) | Tab | Oral
+Etambutol | Myambutol | 15-20 mg/kg/dia | Tuberculosis | Tab | Oral
+Rifampicina+Isoniazida+Pirazinamida+Etambutol | Rifater/Rimstar (combinado) | Segun peso, esquema DOTS | Tuberculosis (tratamiento acortado) | Tab combinada | Oral
+
+## 12. ANTIVIRALES
+Aciclovir | Zovirax | 400 mg c/8h (herpes); 800 mg 5x/dia (herpes zoster) | Herpes simple, herpes zoster, varicela | Tab, crema, ampolla | Oral/Topico/IV
+Valaciclovir | Valtrex | 500-1000 mg c/12h | Herpes simple, herpes zoster | Tab | Oral
+Oseltamivir | Tamiflu | 75 mg c/12h por 5 dias | Influenza | Cap, suspension | Oral
+Lamivudina | Epivir | 150 mg c/12h | VIH, hepatitis B | Tab | Oral
+Tenofovir | Viread | 300 mg/dia | VIH, hepatitis B | Tab | Oral
+Efavirenz | Sustiva | 600 mg/dia | VIH (terapia antirretroviral) | Tab, cap | Oral
+Zidovudina (AZT) | Retrovir | 300 mg c/12h | VIH | Cap | Oral
+Ribavirina | Rebetol | Segun protocolo | Hepatitis C (combinada) | Cap | Oral
+
+## 13. ANTIFUNGICOS
+Fluconazol | Diflucan | 150 mg dosis unica (candidiasis vaginal); 150-400 mg/dia (sistemica) | Candidiasis, infecciones fungicas sistemicas | Cap, ampolla | Oral/IV
+Itraconazol | Sporanox | 100-200 mg/dia | Micosis cutaneas, onicomicosis | Cap | Oral
+Ketoconazol | Nizoral | 200 mg/dia; topico segun area | Micosis cutaneas, caspa (champu) | Tab, champu, crema | Oral/Topico
+Clotrimazol | Canesten | Aplicacion topica 2-3 veces/dia | Micosis cutaneas, candidiasis vaginal | Crema, ovulo | Topico/Vaginal
+Nistatina | Micostatin | 100,000-500,000 UI c/6-8h | Candidiasis oral, cutanea, vaginal | Suspension, ovulo, crema | Oral/Topico/Vaginal
+Terbinafina | Lamisil | 250 mg/dia (oral); topico 1-2x/dia | Onicomicosis, tinea | Tab, crema | Oral/Topico
+Miconazol | Daktarin | Aplicacion topica 2x/dia | Micosis cutaneas, candidiasis | Crema, ovulo, polvo | Topico/Vaginal
+Anfotericina B | Fungizone | Segun peso/protocolo | Micosis sistemicas graves | Vial IV | IV
+
+## 14. ANTIPARASITARIOS / ANTIHELMINTICOS
+Albendazol | Zentel | 400 mg dosis unica (o segun parasito) | Parasitosis intestinales (helmintos) | Tab, suspension | Oral
+Mebendazol | Vermox | 100 mg c/12h por 3 dias | Parasitosis intestinales | Tab, suspension | Oral
+Metronidazol (antiparasitario) | Flagyl | 500-750 mg c/8h | Amebiasis, giardiasis, tricomoniasis | Tab | Oral
+Ivermectina | Ivexterm | Segun peso, dosis unica | Escabiosis, estrongiloidiasis, piojos | Tab, locion | Oral/Topico
+Praziquantel | Biltricide | Segun peso/indicacion | Teniasis, esquistosomiasis | Tab | Oral
+Pirantel pamoato | Combantrin | 11 mg/kg dosis unica | Oxiuriasis, ascariasis | Suspension, tab | Oral
+Nitazoxanida | Annita | 500 mg c/12h por 3 dias | Giardiasis, amebiasis, diarreas parasitarias | Tab, suspension | Oral
+Permetrina | Nix, Scabisan | Aplicacion topica unica (dejar 8-14h) | Escabiosis, pediculosis | Crema, locion | Topico
+
+## 15. ANTIHIPERTENSIVOS - IECA
+Enalapril | Renitec, Vasotec | 5-20 mg c/12-24h | Hipertension arterial, insuficiencia cardiaca | Tab 5/10/20 mg | Oral
+Captopril | Capoten | 25-50 mg c/8-12h | Hipertension, insuficiencia cardiaca | Tab | Oral
+Lisinopril | Zestril, Prinivil | 10-40 mg/dia | Hipertension, insuficiencia cardiaca | Tab | Oral
+Ramipril | Altace | 2.5-10 mg/dia | Hipertension, proteccion cardiovascular | Tab | Oral
+Perindopril | Coversyl | 4-8 mg/dia | Hipertension | Tab | Oral
+
+## 16. ANTIHIPERTENSIVOS - ARA II
+Losartan | Cozaar | 50-100 mg/dia | Hipertension, nefropatia diabetica | Tab 50/100 mg | Oral
+Valsartan | Diovan | 80-320 mg/dia | Hipertension, insuficiencia cardiaca | Tab | Oral
+Irbesartan | Aprovel | 150-300 mg/dia | Hipertension, nefropatia diabetica | Tab | Oral
+Telmisartan | Micardis | 40-80 mg/dia | Hipertension | Tab | Oral
+Olmesartan | Benicar | 20-40 mg/dia | Hipertension | Tab | Oral
+
+## 17. ANTIHIPERTENSIVOS - BETABLOQUEANTES
+Atenolol | Tenormin | 25-100 mg/dia | Hipertension, angina, arritmias | Tab | Oral
+Metoprolol | Lopresor, Betaloc | 50-200 mg/dia | Hipertension, angina, insuficiencia cardiaca | Tab | Oral
+Propranolol | Inderal | 40-160 mg/dia (dividido) | Hipertension, migraña, temblor, ansiedad | Tab | Oral
+Carvedilol | Coreg | 6.25-25 mg c/12h | Insuficiencia cardiaca, hipertension | Tab | Oral
+Bisoprolol | Concor | 2.5-10 mg/dia | Hipertension, insuficiencia cardiaca | Tab | Oral
+Nebivolol | Nebilet | 5 mg/dia | Hipertension | Tab | Oral
+
+## 18. ANTIHIPERTENSIVOS - CALCIOANTAGONISTAS
+Amlodipino | Norvasc | 5-10 mg/dia | Hipertension, angina | Tab | Oral
+Nifedipino | Adalat | 30-60 mg/dia (liberacion prolongada) | Hipertension, angina | Tab liberacion prolongada | Oral
+Verapamilo | Isoptin | 80-120 mg c/8h | Hipertension, arritmias, angina | Tab, ampolla | Oral/IV
+Diltiazem | Cardizem | 60-120 mg c/8h | Hipertension, angina, arritmias | Tab | Oral
+Felodipino | Plendil | 5-10 mg/dia | Hipertension | Tab | Oral
+
+## 19. DIURETICOS
+Hidroclorotiazida | Hidroclorotiazida | 12.5-25 mg/dia | Hipertension, edema | Tab | Oral
+Furosemida | Lasix | 20-80 mg/dia | Edema, insuficiencia cardiaca, insuficiencia renal | Tab, ampolla | Oral/IV
+Espironolactona | Aldactone | 25-100 mg/dia | Edema, insuficiencia cardiaca, hiperaldosteronismo | Tab | Oral
+Indapamida | Natrilix | 1.5-2.5 mg/dia | Hipertension | Tab | Oral
+Clortalidona | Higroton | 12.5-25 mg/dia | Hipertension | Tab | Oral
+Torasemida | Demadex | 5-20 mg/dia | Edema, insuficiencia cardiaca | Tab | Oral
+
+## 20. CARDIOVASCULARES / ANTIARRITMICOS
+Digoxina | Lanoxin | 0.125-0.25 mg/dia | Insuficiencia cardiaca, fibrilacion auricular | Tab, ampolla | Oral/IV
+Amiodarona | Cordarone | 200 mg/dia (mantenimiento) | Arritmias | Tab, ampolla | Oral/IV
+Isosorbide dinitrato | Isordil | 10-40 mg c/8-12h | Angina de pecho | Tab | Oral
+Isosorbide mononitrato | Imdur | 30-60 mg/dia | Angina, prevencion de angina | Tab | Oral
+Nitroglicerina | Nitrostat | Sublingual segun crisis; parche 0.2-0.8 mg/h | Crisis anginosa | Tab sublingual, parche, ampolla | Sublingual/Transdermico/IV
+Clopidogrel | Plavix | 75 mg/dia | Prevencion de eventos cardiovasculares | Tab | Oral
+Trimetazidina | Vastarel | 20-35 mg c/12h | Angina de pecho (metabolico) | Tab | Oral
+Adenosina | Adenocard | Segun protocolo bolo IV | Taquicardia supraventricular (urgencias) | Ampolla | IV
+
+## 21. ANTICOAGULANTES Y ANTIAGREGANTES
+Warfarina | Coumadin | Segun INR (individualizada) | Prevencion de trombosis, fibrilacion auricular | Tab | Oral
+Heparina sodica | Heparina | Segun protocolo/TPT | Anticoagulacion aguda, profilaxis trombosis | Ampolla | IV/SC
+Enoxaparina | Clexane | 1 mg/kg c/12h (segun indicacion) | Profilaxis y tratamiento de trombosis | Jeringa prellenada SC | SC
+Rivaroxaban | Xarelto | 10-20 mg/dia | Prevencion de trombosis, fibrilacion auricular | Tab | Oral
+Apixaban | Eliquis | 2.5-5 mg c/12h | Prevencion de trombosis, fibrilacion auricular | Tab | Oral
+Acido acetilsalicilico (antiagregante) | Aspirina protect, Ecotrin | 81-100 mg/dia | Prevencion de eventos cardiovasculares | Tab recubierta | Oral
+Clopidogrel (antiagregante) | Plavix | 75 mg/dia | Prevencion secundaria post infarto/ACV | Tab | Oral
+
+## 22. HIPOLIPEMIANTES
+Atorvastatina | Lipitor | 10-80 mg/dia | Colesterol alto, prevencion cardiovascular | Tab | Oral
+Simvastatina | Zocor | 10-40 mg/dia | Colesterol alto | Tab | Oral
+Rosuvastatina | Crestor | 10-40 mg/dia | Colesterol alto | Tab | Oral
+Pravastatina | Pravacol | 10-40 mg/dia | Colesterol alto | Tab | Oral
+Fenofibrato | Lipanthyl | 145-200 mg/dia | Trigliceridos altos | Tab, cap | Oral
+Gemfibrozilo | Lopid | 600 mg c/12h | Trigliceridos altos | Tab | Oral
+Ezetimiba | Zetia | 10 mg/dia | Colesterol alto (combinada con estatina) | Tab | Oral
+
+## 23. ANTIDIABETICOS ORALES
+Metformina | Glucophage | 500-2000 mg/dia (dividido) | Diabetes tipo 2 | Tab | Oral
+Glibenclamida | Daonil, Euglucon | 2.5-15 mg/dia | Diabetes tipo 2 | Tab | Oral
+Glimepirida | Amaryl | 1-8 mg/dia | Diabetes tipo 2 | Tab | Oral
+Gliclazida | Diamicron | 30-120 mg/dia | Diabetes tipo 2 | Tab | Oral
+Sitagliptina | Januvia | 100 mg/dia | Diabetes tipo 2 | Tab | Oral
+Metformina + Sitagliptina | Janumet | 1 tab c/12h | Diabetes tipo 2 | Tab combinada | Oral
+Empagliflozina | Jardiance | 10-25 mg/dia | Diabetes tipo 2, proteccion cardiovascular/renal | Tab | Oral
+Pioglitazona | Actos | 15-45 mg/dia | Diabetes tipo 2 | Tab | Oral
+
+## 24. INSULINAS
+Insulina rapida (regular) | Humulin R, Novolin R | Segun esquema individualizado | Diabetes (control postprandial) | Vial, pluma | SC/IV
+Insulina NPH | Humulin N, Novolin N | Segun esquema individualizado | Diabetes (control basal) | Vial, pluma | SC
+Insulina glargina | Lantus, Toujeo | Segun esquema individualizado | Diabetes (basal 24h) | Pluma precargada | SC
+Insulina lispro | Humalog | Segun esquema individualizado | Diabetes (accion ultrarrapida) | Pluma, vial | SC
+Insulina aspart | NovoRapid | Segun esquema individualizado | Diabetes (accion ultrarrapida) | Pluma, vial | SC
+
+## 25. GASTROINTESTINALES - IBP Y ANTIACIDOS
+Omeprazol | Losec, Omeprazol | 20-40 mg/dia | Gastritis, ulcera, reflujo (ERGE) | Cap 20/40 mg | Oral
+Esomeprazol | Nexium | 20-40 mg/dia | Reflujo, ulcera | Cap, tab | Oral
+Pantoprazol | Pantozol, Protonix | 40 mg/dia | Reflujo, ulcera | Tab, ampolla | Oral/IV
+Lansoprazol | Prevacid | 15-30 mg/dia | Reflujo, ulcera | Cap | Oral
+Ranitidina | Zantac (uso restringido/retirado en varios mercados) | 150 mg c/12h | Reflujo, ulcera (alternativa historica) | Tab | Oral
+Hidroxido de aluminio + Magnesio | Mylanta, Maalox | 10-20 ml segun sintoma | Acidez, indigestion | Suspension, tab masticable | Oral
+Sucralfato | Carafate | 1 g c/6h | Proteccion de mucosa gastrica, ulcera | Tab, suspension | Oral
+
+## 26. ANTIEMETICOS
+Metoclopramida | Reliverán, Plasil | 10 mg c/8h | Nauseas, vomitos, reflujo | Tab, ampolla | Oral/IV/IM
+Ondansetron | Zofran | 4-8 mg c/8h | Nauseas y vomitos (quimioterapia, postoperatorio) | Tab, ampolla | Oral/IV
+Domperidona | Motilium | 10 mg c/8h | Nauseas, vomitos, dispepsia | Tab | Oral
+Dimenhidrinato | Dramamine, Vertigial | 50-100 mg c/6h | Mareo, vertigo, nauseas por movimiento | Tab, ampolla | Oral/IM
+Difenidol | Vontrol | 25-50 mg c/8h | Vertigo, nauseas | Tab | Oral
+
+## 27. LAXANTES Y ANTIDIARREICOS
+Loperamida | Imodium | 4 mg inicial, luego 2 mg por episodio (max 16 mg/dia) | Diarrea aguda | Cap, tab | Oral
+Bisacodilo | Dulcolax | 5-10 mg/dia | Estreñimiento | Tab, supositorio | Oral/Rectal
+Lactulosa | Duphalac | 15-30 ml/dia | Estreñimiento, encefalopatia hepatica | Jarabe | Oral
+Polietilenglicol | MiraLAX | 17 g/dia disuelto en agua | Estreñimiento | Polvo | Oral
+Sales de rehidratacion oral | Suero oral, Pedialyte | Segun perdida de liquidos | Rehidratacion en diarrea/vomito | Sobres para disolver | Oral
+Simeticona | Flatoril, Air-X | 40-125 mg despues de comidas | Gases, distension abdominal | Tab, gotas | Oral
+
+## 28. ANTIHISTAMINICOS
+Loratadina | Clarityne | 10 mg/dia | Rinitis alergica, urticaria | Tab, jarabe | Oral
+Cetirizina | Zyrtec | 10 mg/dia | Rinitis alergica, urticaria | Tab, jarabe | Oral
+Difenhidramina | Benadryl | 25-50 mg c/6-8h | Alergias, insomnio ocasional, reacciones alergicas | Tab, jarabe, ampolla | Oral/IM
+Clorfenamina | Clorotrimeton | 4 mg c/6-8h | Alergias, rinitis | Tab, jarabe | Oral
+Desloratadina | Aerius | 5 mg/dia | Rinitis alergica, urticaria | Tab, jarabe | Oral
+Fexofenadina | Allegra | 120-180 mg/dia | Rinitis alergica, urticaria | Tab | Oral
+Hidroxizina | Atarax | 25 mg c/6-8h | Ansiedad, prurito alergico | Tab, jarabe | Oral
+Ebastina | Ebastel | 10-20 mg/dia | Rinitis alergica, urticaria | Tab | Oral
+
+## 29. RESPIRATORIO - BRONCODILATADORES
+Salbutamol (Albuterol) | Ventolin | 2 inhalaciones c/4-6h segun necesidad | Asma, broncoespasmo, EPOC | Inhalador, nebulizacion, jarabe | Inhalado/Oral
+Budesonida + Formoterol | Symbicort | 1-2 inhalaciones c/12h | Asma, EPOC | Inhalador | Inhalado
+Salmeterol + Fluticasona | Seretide, Advair | 1 inhalacion c/12h | Asma, EPOC | Inhalador | Inhalado
+Ipratropio bromuro | Atrovent | 2 inhalaciones c/6h | EPOC, broncoespasmo | Inhalador, nebulizacion | Inhalado
+Tiotropio | Spiriva | 1 inhalacion/dia | EPOC (mantenimiento) | Inhalador polvo seco | Inhalado
+Montelukast | Singulair | 10 mg/dia (adulto) | Asma, rinitis alergica | Tab | Oral
+Teofilina | Theo-Dur | Segun niveles plasmaticos | Asma, EPOC (uso menos frecuente actualmente) | Tab liberacion prolongada | Oral
+
+## 30. CORTICOSTEROIDES
+Prednisona | Meticorten | 5-60 mg/dia segun indicacion | Inflamacion, alergias severas, autoinmunes | Tab | Oral
+Prednisolona | Predsol | Segun indicacion/peso | Inflamacion, alergias | Tab, jarabe | Oral
+Dexametasona | Decadron | 0.5-9 mg/dia segun indicacion | Inflamacion severa, alergias, edema cerebral | Tab, ampolla | Oral/IV/IM
+Hidrocortisona | Solu-Cortef (IV), crema topica | Segun indicacion | Insuficiencia adrenal, inflamacion, dermatitis | Ampolla, crema | IV/Topico
+Betametasona | Celestone, Diprospan | Segun indicacion | Inflamacion, alergias, dermatitis | Ampolla, crema | IM/Topico
+Beclometasona | Beclosol (inhalado/nasal) | Segun indicacion | Asma, rinitis alergica | Inhalador, spray nasal | Inhalado/Nasal
+Triamcinolona | Kenacort | Segun indicacion | Inflamacion, dermatitis, alergias | Crema, ampolla | Topico/IM
+
+## 31. ANSIOLITICOS Y SEDANTES
+Alprazolam | Xanax, Tafil | 0.25-0.5 mg c/8h | Ansiedad, crisis de panico | Tab | Oral
+Clonazepam | Rivotril | 0.5-2 mg c/12-24h | Ansiedad, convulsiones, panico | Tab, gotas | Oral
+Diazepam | Valium | 2-10 mg c/8-12h | Ansiedad, espasmo muscular, convulsiones | Tab, ampolla | Oral/IV/IM
+Lorazepam | Ativan | 1-2 mg c/8-12h | Ansiedad, insomnio | Tab, ampolla | Oral/IV
+Bromazepam | Lexotan | 1.5-3 mg c/8-12h | Ansiedad | Tab | Oral
+Zolpidem | Ambien, Stilnox | 10 mg antes de dormir | Insomnio (uso corto plazo) | Tab | Oral
+Buspirona | Buspar | 5-10 mg c/8h | Ansiedad generalizada (no benzodiacepina) | Tab | Oral
+
+## 32. ANTIDEPRESIVOS
+Fluoxetina | Prozac | 20-60 mg/dia | Depresion, trastorno obsesivo-compulsivo | Cap | Oral
+Sertralina | Zoloft | 50-200 mg/dia | Depresion, ansiedad | Tab | Oral
+Escitalopram | Lexapro | 10-20 mg/dia | Depresion, ansiedad | Tab | Oral
+Paroxetina | Paxil | 20-50 mg/dia | Depresion, ansiedad | Tab | Oral
+Venlafaxina | Effexor | 75-225 mg/dia | Depresion, ansiedad generalizada | Cap liberacion prolongada | Oral
+Duloxetina | Cymbalta | 30-60 mg/dia | Depresion, dolor neuropatico | Cap | Oral
+Amitriptilina | Elavil | 25-150 mg/dia | Depresion, dolor neuropatico, migraña (profilaxis) | Tab | Oral
+Bupropion | Wellbutrin | 150-300 mg/dia | Depresion, cesacion tabaquica | Tab liberacion prolongada | Oral
+
+## 33. ANTIPSICOTICOS
+Risperidona | Risperdal | 1-6 mg/dia | Esquizofrenia, trastorno bipolar | Tab, solucion | Oral
+Olanzapina | Zyprexa | 5-20 mg/dia | Esquizofrenia, trastorno bipolar | Tab | Oral
+Quetiapina | Seroquel | 150-800 mg/dia | Esquizofrenia, trastorno bipolar, depresion (adyuvante) | Tab | Oral
+Haloperidol | Haldol | 1-15 mg/dia | Esquizofrenia, agitacion psicomotriz | Tab, ampolla, gotas | Oral/IM
+Aripiprazol | Abilify | 10-30 mg/dia | Esquizofrenia, trastorno bipolar | Tab | Oral
+Clorpromazina | Largactil | 25-100 mg c/8h | Psicosis, agitacion, nauseas severas | Tab, ampolla | Oral/IM
+
+## 34. ANTICONVULSIVANTES
+Acido valproico | Depakene, Valcote | 500-1500 mg/dia | Epilepsia, trastorno bipolar, migraña | Tab, jarabe | Oral
+Carbamazepina | Tegretol | 400-1200 mg/dia | Epilepsia, dolor neuropatico, trastorno bipolar | Tab | Oral
+Fenitoina | Epamin, Dilantin | 300-400 mg/dia | Epilepsia (convulsiones tonico-clonicas) | Tab, ampolla | Oral/IV
+Levetiracetam | Keppra | 500-1500 mg c/12h | Epilepsia | Tab | Oral
+Lamotrigina | Lamictal | 100-400 mg/dia (titulacion gradual) | Epilepsia, trastorno bipolar | Tab | Oral
+Gabapentina | Neurontin | 300-1800 mg/dia (dividido) | Dolor neuropatico, epilepsia | Cap | Oral
+Pregabalina | Lyrica | 150-600 mg/dia (dividido) | Dolor neuropatico, fibromialgia, epilepsia | Cap | Oral
+Fenobarbital | Fenobarbital | 100-200 mg/dia | Epilepsia (uso menos frecuente actualmente) | Tab, ampolla | Oral/IM
+
+## 35. RELAJANTES MUSCULARES
+Ciclobenzaprina | Flexeril | 5-10 mg c/8h | Espasmo muscular agudo | Tab | Oral
+Baclofeno | Lioresal | 5-20 mg c/8h | Espasticidad muscular | Tab | Oral
+Tizanidina | Zanaflex | 2-4 mg c/6-8h | Espasticidad, contractura muscular | Tab | Oral
+Orfenadrina | Norflex | 100 mg c/12h | Dolor muscular, espasmo | Tab, ampolla | Oral/IM
+Metocarbamol | Robaxin | 750-1500 mg c/6-8h | Espasmo muscular agudo | Tab, ampolla | Oral/IV
+
+## 36. ANESTESICOS LOCALES
+Lidocaina | Xylocaine | Segun procedimiento | Anestesia local, arritmias (IV) | Ampolla, gel, spray, parche | Local/IV
+Bupivacaina | Marcaine | Segun procedimiento | Anestesia local/regional | Ampolla | Local
+Benzocaina | Anbesol, Orajel | Aplicacion topica segun necesidad | Alivio de dolor bucal/dental local | Gel topico | Topico
+Prilocaina + Lidocaina | EMLA | Aplicacion topica previa a procedimiento | Anestesia topica previa a punciones | Crema | Topico
+
+## 37. VITAMINAS Y SUPLEMENTOS
+Acido folico | Acifol | 0.4-5 mg/dia | Prevencion de anemia, embarazo | Tab | Oral
+Complejo B | Neurobion, Bedoyecta | 1 tab/dia o segun ampolla | Deficiencias de vitaminas del grupo B, neuropatia | Tab, ampolla | Oral/IM
+Vitamina C | Redoxon | 500-1000 mg/dia | Suplemento, resfriados, cicatrizacion | Tab efervescente, masticable | Oral
+Vitamina D3 (Colecalciferol) | Vitalipid, Devirol | 800-2000 UI/dia | Deficiencia de vitamina D, salud osea | Tab, gotas | Oral
+Sulfato ferroso | Ferranin, Fer-In-Sol | 300 mg/dia (segun contenido de hierro elemental) | Anemia ferropenica | Tab, jarabe, gotas | Oral
+Calcio + Vitamina D | Caltrate, Calcimax | 1-2 tab/dia | Osteoporosis, deficiencia de calcio | Tab masticable | Oral
+Multivitaminico | Centrum, Supradyn | 1 tab/dia | Suplemento nutricional general | Tab | Oral
+Vitamina B12 (Cianocobalamina) | Cobalamina | Segun deficiencia | Anemia perniciosa, neuropatia | Ampolla, tab | Oral/IM
+
+## 38. HORMONAS TIROIDEAS
+Levotiroxina | Eutirox, Synthroid | 25-150 mcg/dia (individualizada) | Hipotiroidismo | Tab | Oral
+Metimazol | Tapazol | 5-40 mg/dia | Hipertiroidismo | Tab | Oral
+Propiltiouracilo | PTU | 100-300 mg/dia | Hipertiroidismo (incluye embarazo) | Tab | Oral
+
+## 39. ANTICONCEPTIVOS HORMONALES
+Etinilestradiol + Levonorgestrel | Microgynon, Nordette | 1 tab/dia (ciclo de 21-28 dias) | Anticoncepcion | Tab | Oral
+Etinilestradiol + Drospirenona | Yasmin | 1 tab/dia | Anticoncepcion | Tab | Oral
+Levonorgestrel | Postinor (anticoncepcion de emergencia) | 1.5 mg dosis unica | Anticoncepcion de emergencia | Tab | Oral
+Medroxiprogesterona (inyectable) | Depo-Provera | 150 mg cada 3 meses | Anticoncepcion | Ampolla IM | IM
+Implante de etonogestrel | Implanon, Nexplanon | Insercion subdermica (dura 3 años) | Anticoncepcion de largo plazo | Implante subdermico | Subdermico
+
+## 40. DERMATOLOGICOS TOPICOS
+Clobetasol | Dermovate | Aplicacion 1-2 veces/dia (uso corto) | Dermatitis severa, psoriasis | Crema, ungüento | Topico
+Hidrocortisona topica | Hidrocort crema | Aplicacion 1-2 veces/dia | Dermatitis leve, irritacion cutanea | Crema | Topico
+Peroxido de benzoilo | PanOxyl | Aplicacion 1-2 veces/dia | Acne | Gel, crema | Topico
+Adapaleno | Differin | Aplicacion nocturna | Acne | Gel, crema | Topico
+Tretinoina | Retin-A | Aplicacion nocturna | Acne, fotoenvejecimiento | Crema, gel | Topico
+Mupirocina | Bactroban | Aplicacion 3 veces/dia | Infecciones bacterianas cutaneas | Ungüento | Topico
+Calamina | Locion de calamina | Aplicacion segun necesidad | Irritacion cutanea, prurito, varicela | Locion | Topico
+Oxido de zinc | Desitin | Aplicacion segun necesidad | Dermatitis del pañal, proteccion cutanea | Crema, pasta | Topico
+
+## 41. OFTALMICOS
+Tobramicina oftalmica | Tobrex | 1-2 gotas c/4-6h | Conjuntivitis bacteriana | Gotas, ungüento | Oftalmico
+Cloranfenicol oftalmico | Cloramfenicol colirio | 1-2 gotas c/4-6h | Conjuntivitis bacteriana | Gotas | Oftalmico
+Timolol oftalmico | Timoptic | 1 gota c/12h-24h | Glaucoma | Gotas | Oftalmico
+Latanoprost | Xalatan | 1 gota/noche | Glaucoma | Gotas | Oftalmico
+Lagrimas artificiales | Refresh Tears, Systane | Segun necesidad | Ojo seco, irritacion ocular | Gotas | Oftalmico
+Ketotifeno oftalmico | Zaditen colirio | 1 gota c/12h | Conjuntivitis alergica | Gotas | Oftalmico
+
+## 42. OTICOS
+Ciprofloxacino otico | Cetraxal | 3-4 gotas c/12h | Otitis externa | Gotas | Otico
+Neomicina + Polimixina + Hidrocortisona | Otosporin | 3-4 gotas c/6-8h | Otitis externa con inflamacion | Gotas | Otico
+Carbamida peroxido | Debrox | Segun necesidad | Remocion de cerumen | Gotas | Otico
+
+## 43. ANTIGOTOSOS
+Alopurinol | Zyloprim | 100-300 mg/dia | Gota, hiperuricemia | Tab | Oral
+Colchicina | Colchicina | 0.5-1.2 mg/dia | Crisis aguda de gota | Tab | Oral
+Febuxostat | Uloric | 40-80 mg/dia | Gota, hiperuricemia | Tab | Oral
+
+## 44. UROLOGICOS / PROSTATA
+Tamsulosina | Flomax | 0.4 mg/dia | Hiperplasia prostatica benigna | Cap liberacion prolongada | Oral
+Finasterida | Proscar, Propecia | 1-5 mg/dia (segun indicacion) | Hiperplasia prostatica, alopecia androgenica | Tab | Oral
+Sildenafil | Viagra | 50-100 mg segun necesidad | Disfuncion erectil | Tab | Oral
+Oxibutinina | Ditropan | 5 mg c/8-12h | Vejiga hiperactiva, incontinencia urinaria | Tab | Oral
+
+========================================================================
+FIN DEL LISTADO
+========================================================================
+Fuente de verificacion oficial para registro sanitario vigente en RD:
+DIGEMAPS - Direccion General de Medicamentos, Alimentos y Productos
+Sanitarios - https://digemaps.gob.do (Tel. 809-541-3121)
+
+Recuerda: este archivo es una referencia farmacologica general para tu
+proyecto/app, no un documento medico ni legal. Antes de usarlo en un
+producto real (especialmente si mostrara dosis a usuarios finales),
+conviene validar cada entrada contra una fuente farmaceutica oficial
+(vademecum, ficha tecnica del fabricante, o el registro de DIGEMAPS).
+========================================================================

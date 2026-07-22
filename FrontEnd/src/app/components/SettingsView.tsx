@@ -86,7 +86,10 @@ function ProfileImageUpload({ userName }: { userName: string }) {
         {avatar ? (
           <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
         ) : (
-          userName.charAt(0).toUpperCase()
+          (() => {
+            const parts = userName.trim().split(/\s+/);
+            return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].substring(0, 2).toUpperCase();
+          })()
         )}
       </div>
       <div>
@@ -660,7 +663,7 @@ export function SettingsView({ role, userName }: SettingsViewProps) {
   };
 
   return (
-    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB", minHeight: "100vh" }}>
+    <div className="p-6 space-y-5 anim-fade-in" style={{ background: "#F9FAFB" }}>
 
       {/* Header */}
       <div className="anim-fade-in-up anim-d-0">

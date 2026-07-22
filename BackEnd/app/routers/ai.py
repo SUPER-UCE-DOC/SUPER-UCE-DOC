@@ -160,6 +160,32 @@ def delete_chat_session(session_id: int, current_user: models.User = Depends(get
     db.commit()
     return {"status": "ok", "message": "Sesión eliminada correctamente"}
 
+def generate_smart_title(message: str) -> str:
+    msg_lower = message.lower().strip()
+    
+    if "resumen" in msg_lower and ("cita" in msg_lower or "consulta" in msg_lower):
+        return "Resumen de Cita Médica"
+    if "prepar" in msg_lower or "como me" in msg_lower or "de que va" in msg_lower or "que debo llevar" in msg_lower:
+        return "Preparación de Teleconsulta"
+    if "receta" in msg_lower or "medicament" in msg_lower or "dosis" in msg_lower or "tratamiento" in msg_lower:
+        return "Consulta sobre Medicamentos"
+    if "analitic" in msg_lower or "examen" in msg_lower or "laboratorio" in msg_lower or "resultado" in msg_lower or "sangre" in msg_lower:
+        return "Resultados de Analíticas"
+    if "dengue" in msg_lower or "fiebre" in msg_lower or "sintoma" in msg_lower or "dolor" in msg_lower or "gripe" in msg_lower:
+        return "Consulta de Síntomas"
+    if "horario" in msg_lower or "agendar" in msg_lower or "cita" in msg_lower or "disponib" in msg_lower:
+        return "Gestión de Citas"
+
+    stopwords = {"de", "la", "el", "los", "las", "un", "una", "en", "para", "por", "que", "como", "con", "mi", "mis", "esta", "este", "es", "hacer", "tengo"}
+    words = [w for w in message.strip().split() if w.lower() not in stopwords]
+    if words:
+        clean_title = " ".join(words[:4]).rstrip("?,.!;")
+        if len(clean_title) >= 3:
+            return clean_title.capitalize()
+            
+    clean_raw = message.strip().rstrip("?,.!;")
+    return clean_raw[:30] + ("..." if len(clean_raw) > 30 else "")
+
 @router.post("/chatbot", response_model=schemas.ChatbotResponse)
 def medical_chatbot_query(
     req: schemas.ChatbotRequest,
@@ -168,6 +194,7 @@ def medical_chatbot_query(
 ):
     """Ruta del Chatbot Clínico RAG con soporte para guardado en Base de Datos"""
     chat_history = req.chat_history or []
+    session = None
     
     # Si hay un session_id, guardar la pregunta del usuario y cargar el historial real
     if req.session_id:
@@ -175,9 +202,10 @@ def medical_chatbot_query(
         if not session:
             raise HTTPException(status_code=404, detail="Sesión no encontrada")
             
-        # Si la sesión es nueva (título por defecto) e inyectamos el primer mensaje, actualizamos el título
-        if session.title == "Nueva consulta médica":
-            session.title = req.message[:30] + "..." if len(req.message) > 30 else req.message
+        # Si la sesión es nueva o tiene título por defecto/largo, generamos un título inteligente corto
+        if session.title == "Nueva consulta médica" or not session.title or len(session.title) > 30 or session.title.startswith("Como recomiendas") or session.title.startswith("Resumen de mi"):
+            session.title = generate_smart_title(req.message)
+            db.commit()
             
         # Guardar mensaje del usuario
         user_msg = models.ChatMessage(session_id=req.session_id, role="user", content=req.message)
@@ -188,13 +216,85 @@ def medical_chatbot_query(
         # Solo pasamos mensajes previos, sin incluir el recién agregado (ya que la IA lo recibe como query)
         chat_history = [{"role": m.role, "content": m.content} for m in db_messages[:-1]]
 
+    # Extraer contexto directo de la base de datos para inyectarlo en el LLM (RAG Personalizado)
+    now = datetime.datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    user_context = f"FECHA Y HORA ACTUAL DEL SISTEMA: {now_str}\n"
+    user_context += f"Nombre del paciente: {current_user.full_name}\n\n"
+    
+    if current_user.role == "patient":
+        # 1. Citas futuras y pendientes (Aún no han ocurrido)
+        future_apps = db.query(models.Appointment).filter(
+            models.Appointment.patient_id == current_user.id,
+            models.Appointment.status.in_(["pendiente", "confirmada"]),
+            models.Appointment.date_time >= now
+        ).order_by(models.Appointment.date_time.asc()).all()
+
+        # 2. Consultas pasadas y finalizadas (Ya ocurrieron)
+        past_completed_apps = db.query(models.Appointment).filter(
+            models.Appointment.patient_id == current_user.id,
+            models.Appointment.status == "completada"
+        ).order_by(models.Appointment.date_time.desc()).all()
+
+        user_context += "--- CITAS FUTURAS Y PENDIENTES (AÚN NO HAN OCURRIDO, SON EN EL FUTURO) ---\n"
+        if future_apps:
+            for appt in future_apps:
+                doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
+                doc_name = doc_user.full_name if doc_user else "Doctor"
+                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                st_lbl = "Confirmada (agendada)" if appt.status == "confirmada" else "Pendiente de aprobación"
+                user_context += f"- Cita FUTURA PROGRAMADA #{appt.id}: Fecha: {date_str}, Médico: {doc_name}, Tipo: {appt.type}, Estado: {st_lbl}. Motivo: {appt.reason or 'Sin especificar'}\n"
+        else:
+            user_context += "No hay citas futuras o pendientes agendadas.\n"
+
+        user_context += "\n--- CONSULTAS PASADAS Y FINALIZADAS (YA SE LLEVARON A CABO) ---\n"
+        if past_completed_apps:
+            for appt in past_completed_apps:
+                doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
+                doc_name = doc_user.full_name if doc_user else "Doctor"
+                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                linked_rxs = db.query(models.Prescription).filter(models.Prescription.appointment_id == appt.id).all()
+                rx_str = " | Recetado en esta cita: " + ", ".join([f"{p.medicine} ({p.dose})" for p in linked_rxs]) if linked_rxs else " | Recetado en esta cita: Ninguno"
+                user_context += f"- Consulta REALIZADA el {date_str} con el {doc_name}. Motivo: {appt.reason or 'Sin especificar'}{rx_str}\n"
+        else:
+            user_context += "EL PACIENTE AÚN NO HA TENIDO NINGUNA CONSULTA REALIZADA O FINALIZADA (0 CONSULTAS PASADAS).\n"
+
+        # 3. Resúmenes clínicos detallados de consultas finalizadas
+        histories = db.query(models.ClinicalHistory).filter(
+            models.ClinicalHistory.patient_id == current_user.id
+        ).order_by(models.ClinicalHistory.date.desc()).all()
+        if histories:
+            user_context += "\nRESÚMENES CLÍNICOS DE CONSULTAS FINALIZADAS:\n"
+            for h in histories:
+                doc_user = db.query(models.User).filter(models.User.id == h.doctor_id).first()
+                doc_name = doc_user.full_name if doc_user else "Doctor"
+                h_date = h.date.strftime("%d/%m/%Y a las %I:%M %p")
+                user_context += f"- Consulta realizada el {h_date} con {doc_name}:\n  Resumen Clínico: {h.summary_ia or h.translation_text}\n"
+
+        # 3. Citas rechazadas (SOLO para responder si el usuario pregunta explícitamente por qué fue rechazada)
+        rejected_apps = db.query(models.Appointment).filter(
+            models.Appointment.patient_id == current_user.id,
+            models.Appointment.status == "rechazada"
+        ).all()
+        if rejected_apps:
+            user_context += "\nCITAS RECHAZADAS (OCULTAS - SOLO MENCIONAR SI EL PACIENTE PREGUNTA EXPLÍCITAMENTE POR QUÉ SE RECHAZÓ):\n"
+            for appt in rejected_apps:
+                doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
+                doc_name = doc_user.full_name if doc_user else "Doctor"
+                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                user_context += f"- Cita #{appt.id} del {date_str} con {doc_name}: Rechazada por falta de disponibilidad en la agenda del doctor.\n"
+
     # Llamar al bot (IA)
-    reply, sources = medical_chatbot.ask(req.message, chat_history)
+    reply, sources = medical_chatbot.ask(req.message, chat_history, user_context=user_context)
     
     # Si hay un session_id, guardar la respuesta de la IA
-    if req.session_id:
+    if req.session_id and session:
         bot_msg = models.ChatMessage(session_id=req.session_id, role="assistant", content=reply)
         db.add(bot_msg)
         db.commit()
 
-    return schemas.ChatbotResponse(reply=reply, sources=sources)
+    return schemas.ChatbotResponse(
+        reply=reply, 
+        sources=sources, 
+        session_title=session.title if session else None
+    )

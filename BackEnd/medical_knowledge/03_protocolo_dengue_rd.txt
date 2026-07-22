@@ -1,0 +1,18 @@
+PROTOCOLO NACIONAL PARA EL MANEJO DEL DENGUE - REPÚBLICA DOMINICANA (MINISTERIO DE SALUD PÚBLICA)
+
+1. DEFINICIÓN Y EPIDEMIOLOGÍA:
+El dengue es una enfermedad viral aguda endémica en la República Dominicana, transmitida por el mosquito Aedes aegypti. Todo paciente febril agudo en el país debe ser evaluado como un posible caso de dengue.
+
+2. CLASIFICACIÓN CLÍNICA (REVISIÓN ACTUAL):
+- Dengue sin signos de alarma: Fiebre aguda de 2 a 7 días, acompañada de cefalea, dolor retroocular, mialgias, artralgias y erupción cutánea (rash).
+- Dengue con signos de alarma: Dolor abdominal intenso y continuo, vómitos persistentes, acumulación clínica de líquidos (ascitis, derrame pleural), sangrado de mucosas, letargo, irritabilidad, hepatomegalia >2 cm, y aumento progresivo del hematocrito.
+- Dengue Grave: Choque por extravasación severa de plasma (pulso débil, taquicardia, hipotensión), sangrado grave (hematemesis, melena) o daño orgánico grave (hepatitis, encefalitis, miocarditis).
+
+3. MANEJO CLÍNICO Y TRATAMIENTO:
+- GRUPO A (Atención Primaria - Sin signos de alarma): Reposo absoluto. Hidratación oral abundante (Sales de Rehidratación Oral, jugos naturales sin mucha azúcar, agua). Control térmica con Paracetamol (Acetaminofén). Dosis de Paracetamol adultos: 500 mg a 1000 mg cada 6 horas (máximo 4 g/día). Niños: 10 a 15 mg/kg cada 6 horas.
+- CONTRAINDICACIONES ABSOLUTAS: Prohibido el uso de Aspirina (Ácido Acetilsalicílico), Ibuprofeno, Diclofenaco, Naproxeno o cualquier AINE (Antiinflamatorio No Esteroideo), así como esteroides e inyecciones intramusculares, debido al alto riesgo de sangrado grave y síndrome de Reye.
+- GRUPO B (Atención Hospitalaria - Con signos de alarma): Ingreso inmediato. Hidratación intravenosa con Lactato de Ringer o Solución Salina Normal (0.9%) a 10 ml/kg/hora, ajustando según evolución.
+- GRUPO C (Cuidados Intensivos - Dengue Grave): Resucitación con líquidos intravenosos y manejo de choque en UCI.
+
+4. SEGUIMIENTO:
+Vigilancia estrecha del paciente durante la fase crítica (días 3 a 7), especialmente cuando baja la fiebre, ya que es el momento de mayor riesgo de extravasación de líquidos (choque). Realizar hemograma diario para vigilar plaquetas y hematocrito.

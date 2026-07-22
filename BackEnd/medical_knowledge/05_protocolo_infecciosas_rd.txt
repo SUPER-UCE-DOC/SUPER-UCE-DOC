@@ -1,0 +1,30 @@
+PROTOCOLO NACIONAL PARA EL MANEJO DE ENFERMEDADES INFECCIOSAS - REPÚBLICA DOMINICANA (MINISTERIO DE SALUD PÚBLICA)
+
+1. MALARIA (PALUDISMO):
+- Definición: Enfermedad febril aguda producida por parásitos del género Plasmodium, transmitida por el mosquito Anopheles. En República Dominicana, el principal causante es el Plasmodium falciparum.
+- Diagnóstico: Se basa en la clínica (fiebre intermitente, escalofríos, sudoración, anemia, ictericia) y se confirma mediante Gota Gruesa o Prueba de Diagnóstico Rápido (PDR).
+- Tratamiento de Malaria No Complicada (P. falciparum): El esquema oficial de primera línea en RD es Cloroquina + Primaquina. Cloroquina: 10 mg base/kg el día 1 y día 2, luego 5 mg base/kg el día 3. Primaquina: 0.75 mg base/kg en dosis única el día 1 (como gametocida).
+- Contraindicaciones de Primaquina: Embarazadas, menores de 6 meses y pacientes con deficiencia de glucosa-6-fosfato deshidrogenasa (G6PD).
+- Tratamiento de Malaria Complicada: Artesunato intravenoso o intramuscular como primera línea, seguido de esquema oral completo cuando el paciente tolere la vía oral.
+
+2. LEPTOSPIROSIS:
+- Definición: Enfermedad zoonótica causada por la bacteria Leptospira, frecuentemente asociada a inundaciones, aguas estancadas y contacto con orina de roedores.
+- Fases clínicas: Fase septicémica (aguda con fiebre, mialgias severas especialmente en pantorrillas, inyección conjuntival) y fase inmune (puede presentar meningitis aséptica, ictericia, falla renal - Enfermedad de Weil).
+- Profilaxis post-exposición (brigadistas o personas expuestas a aguas contaminadas): Doxiciclina 200 mg oral una vez por semana durante la exposición (máximo 3 semanas).
+- Tratamiento Leve: Doxiciclina 100 mg oral cada 12 horas por 7 días, o Amoxicilina 500 mg cada 8 horas (en embarazadas y niños).
+- Tratamiento Severo u Hospitalizado: Penicilina G Cristalina 1.5 a 2 millones de unidades IV cada 6 horas, o Ceftriaxona 1g IV cada 24 horas por 7 días.
+
+3. TUBERCULOSIS (TB):
+- Diagnóstico: Paciente sintomático respiratorio (tos y catarro por más de 15 días). Confirmación por Baciloscopia (GeneXpert MTB/RIF) o cultivo.
+- Tratamiento Acortado Estrictamente Supervisado (TAES/DOTS) - Esquema sensible:
+  * Fase intensiva (2 meses): Isoniazida (H), Rifampicina (R), Pirazinamida (Z), Etambutol (E). Administrado de lunes a sábado.
+  * Fase de sostén (4 meses): Isoniazida (H) y Rifampicina (R). Administrado de lunes a sábado.
+- Manejo de contactos: Quimioprofilaxis con Isoniazida por 6 meses para niños menores de 5 años y personas viviendo con VIH que sean contactos de un caso de TB pulmonar.
+
+4. CÓLERA:
+- Definición: Infección intestinal aguda por Vibrio cholerae (O1 u O139) que causa diarrea acuosa profusa ("agua de arroz") y deshidratación rápida.
+- Manejo: El pilar es la rehidratación. 
+  * Plan A (Sin deshidratación): SRO a demanda tras cada evacuación.
+  * Plan B (Deshidratación moderada): SRO 75 ml/kg en 4 horas en la clínica.
+  * Plan C (Deshidratación severa con o sin shock): Rehidratación intravenosa urgente con Lactato de Ringer (100 ml/kg, dividido en 3 a 6 horas según edad).
+- Antibióticos (solo en casos severos para reducir duración): Doxiciclina 300 mg dosis única (adultos) o Azitromicina 1g dosis única. Niños: Azitromicina 20 mg/kg (máx 1g) dosis única.

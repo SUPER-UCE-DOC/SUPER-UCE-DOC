@@ -1,3 +1,8 @@
+# Trigger reload: contexto plataforma
+# Trigger reload 2: fix UCE acronym
+# Trigger reload 3: load new medical protocols (Dengue, CBME)
+# Trigger reload 4: load dense protocols (Infectious, Maternal)
+# Trigger reload 5: load Claude's massive medication list
 import logging
 import os
 import re
@@ -15,8 +20,24 @@ class MedicalRAGChatbot:
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
             "medical_knowledge"
         )
+        self.vector_db_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+            "medical_knowledge_vectors"
+        )
         self.chunks: List[str] = []
         self.sources: List[str] = []
+        
+        # Inicializar ChromaDB (Base Vectorial)
+        try:
+            import chromadb
+            self.chroma_client = chromadb.PersistentClient(path=self.vector_db_dir)
+            self.collection = self.chroma_client.get_or_create_collection(name="medical_knowledge")
+            self.use_vector_db = True
+        except ImportError:
+            logger.error("ChromaDB no está instalado. Usando RAG básico (simple_similarity_search).")
+            self.use_vector_db = False
+            self.chroma_client = None
+            self.collection = None
         
         # Crear la carpeta de conocimiento si no existe
         if not os.path.exists(self.knowledge_dir):
@@ -58,6 +79,7 @@ class MedicalRAGChatbot:
     def load_knowledge(self):
         """
         Lee todos los archivos de texto de la carpeta `medical_knowledge` y los divide en chunks de párrafos.
+        Los inyecta en ChromaDB para búsquedas vectoriales.
         """
         self.chunks = []
         self.sources = []
@@ -65,6 +87,11 @@ class MedicalRAGChatbot:
         if not os.path.exists(self.knowledge_dir):
             return
             
+        new_documents = []
+        new_metadatas = []
+        new_ids = []
+        chunk_idx = 0
+
         for filename in os.listdir(self.knowledge_dir):
             if filename.endswith(".txt"):
                 filepath = os.path.join(self.knowledge_dir, filename)
@@ -75,85 +102,381 @@ class MedicalRAGChatbot:
                     # Dividimos por párrafos o líneas en blanco dobles
                     file_chunks = [c.strip() for c in re.split(r'\n\s*\n', text) if c.strip()]
                     for chunk in file_chunks:
+                        if len(chunk) < 10:
+                            continue # Evitar chunks vacíos o inútiles
                         self.chunks.append(chunk)
                         self.sources.append(filename)
+                        
+                        # Preparar listas para ChromaDB
+                        new_documents.append(chunk)
+                        new_metadatas.append({"source": filename})
+                        new_ids.append(f"{filename}_chunk_{chunk_idx}")
+                        chunk_idx += 1
                 except Exception as e:
                     logger.error(f"Error leyendo {filename}: {e}")
                     
-        logger.info(f"Cargados {len(self.chunks)} bloques de conocimiento médico.")
+        # Inyectar a ChromaDB si está activo
+        if self.use_vector_db and self.collection and new_documents:
+            try:
+                # Borramos la colección para recargar todo en caso de cambios en los .txt
+                self.chroma_client.delete_collection(name="medical_knowledge")
+                self.collection = self.chroma_client.create_collection(name="medical_knowledge")
+                
+                # Insertamos los documentos vectorizados
+                self.collection.add(
+                    documents=new_documents,
+                    metadatas=new_metadatas,
+                    ids=new_ids
+                )
+                logger.info(f"Cargados {len(new_documents)} bloques vectoriales en ChromaDB local.")
+            except Exception as e:
+                logger.error(f"Error cargando vectores en ChromaDB: {e}")
+                
+        logger.info(f"Base de conocimiento lista. Modo: {'Vectorial (ChromaDB)' if self.use_vector_db else 'Texto Simple'}")
 
     def _simple_similarity_search(self, query: str, top_k: int = 3) -> List[Tuple[str, str]]:
         """
         Búsqueda simple por solapamiento de palabras (Heurística/TF-IDF simplificado)
         para cuando no hay internet o API de embeddings activa.
         """
-        query_words = set(re.findall(r'\w+', query.lower()))
+        GENERIC_WORDS = {
+            "de", "la", "que", "el", "en", "y", "a", "los", "del", "se", "las", "por", "un", "para", "con", "no", 
+            "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "este", "sí", "porque", "esta", 
+            "entre", "cuando", "muy", "sin", "sobre", "también", "me", "hasta", "hay", "donde", "quien", "desde", 
+            "todo", "nos", "durante", "todos", "uno", "les", "ni", "contra", "otros", "ese", "eso", "ante", "ellos", 
+            "e", "esto", "mí", "antes", "algunos", "qué", "unos", "yo", "otro", "otras", "otra", "él", "tanto", "esa", 
+            "estos", "mucho", "quienes", "nada", "muchos", "cual", "poco", "ella", "estar", "estas", "algunas", "algo", 
+            "nosotros", "mi", "mis", "tú", "te", "ti", "tu", "tus", "ellas", "nosotras", "cuáles", "son", "cuál", "es",
+            # Palabras genéricas médicas que no deben contar como coincidencia local única
+            "síntomas", "sintomas", "dolor", "cabeza", "tomar", "recomiendas", "medicamento", "medicamentos", 
+            "tratamiento", "paciente", "medico", "médico", "medicina", "salud", "enfermedad", "casos", "atención", 
+            "atencion", "clinica", "clínica", "guia", "guía", "protocolo", "protocolos",
+            "último", "ultimo", "hacer", "saber", "decir", "tener", "tiene", "ver", "esto", "creo", "creó"
+        }
+        query_words = set(re.findall(r'\w+', query.lower())) - GENERIC_WORDS
         if not query_words:
             return []
             
         scored_chunks = []
         for i, chunk in enumerate(self.chunks):
-            chunk_words = re.findall(r'\w+', chunk.lower())
+            chunk_words = set(re.findall(r'\w+', chunk.lower())) - GENERIC_WORDS
             overlap = len(query_words.intersection(chunk_words))
-            # Calcular una puntuación básica
-            score = overlap / (math.log(len(chunk_words) + 1) + 1.0)
-            if score > 0:
+            # Para coincidir localmente debe haber al menos 1 palabra ESPECÍFICA relevante (ej. hipertension, dengue, etc.)
+            if overlap >= 1:
+                score = overlap / (math.log(len(chunk_words) + 1) + 1.0)
                 scored_chunks.append((score, chunk, self.sources[i]))
                 
-        # Ordenar por puntaje descendente
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
         return [(chunk, source) for _, chunk, source in scored_chunks[:top_k]]
+
+    def _web_search(self, query: str, max_results: int = 5) -> Tuple[str, List[str]]:
+        """
+        Búsqueda web profesional usando Tavily API (si está configurada) o DuckDuckGo como fallback.
+        """
+        snippets = []
+        sources = []
+        
+        # Intento 0: Tavily API (Nivel Industria para LLMs)
+        if settings.TAVILY_API_KEY:
+            try:
+                from tavily import TavilyClient
+                logger.info(f"Ejecutando búsqueda web profesional Tavily para: '{query}'")
+                tavily = TavilyClient(api_key=settings.TAVILY_API_KEY)
+                
+                # Heurística para forzar resultados recientes si la query implica novedad
+                search_kwargs = {
+                    "query": query, 
+                    "search_depth": "advanced", 
+                    "max_results": max_results
+                }
+                
+                if any(word in query.lower() for word in ["último", "ultimo", "últimos", "ultimos", "nuevo", "nuevos", "reciente", "recientes", "202"]):
+                    search_kwargs["time_range"] = "year"
+                
+                response = tavily.search(**search_kwargs)
+                results = response.get("results", [])
+                if results:
+                    for r in results:
+                        title = r.get("title", "Fuente Web")
+                        content = r.get("content", "")
+                        if content:
+                            snippets.append(f"[Fuente Web: {title}]\n{content}")
+                            sources.append(title)
+                    if snippets:
+                        context_str = "\n---\n".join(snippets)
+                        return context_str, sources
+            except Exception as e:
+                logger.error(f"Error llamando a Tavily API: {e}")
+
+        # Intento 1: Librería DDGS (Fallback)
+        try:
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
+
+            logger.info(f"Ejecutando búsqueda web DDGS para: '{query}'")
+            with DDGS() as ddgs:
+                results = list(ddgs.text(query, max_results=max_results))
+                if results:
+                    for r in results:
+                        title = r.get("title", "Fuente Web")
+                        body = r.get("body", "")
+                        if body:
+                            snippets.append(f"[Fuente Web: {title}]\n{body}")
+                            sources.append(title)
+        except Exception as e:
+            logger.error(f"Error en librería DDGS: {e}")
+
+        # Intento 2: Fallback directo a html.duckduckgo.com vía HTTP si todo lo demás devolvió 0 resultados
+        if not snippets:
+            try:
+                import html
+                logger.info(f"Ejecutando fallback HTTP directo a DuckDuckGo para: '{query}'")
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+                resp = requests.post(
+                    "https://html.duckduckgo.com/html/",
+                    data={"q": query},
+                    headers=headers,
+                    timeout=6
+                )
+                if resp.status_code == 200:
+                    raw_snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', resp.text, re.DOTALL)
+                    raw_titles = re.findall(r'<a class="result__a[^>]*>(.*?)</a>', resp.text, re.DOTALL)
+                    for i in range(min(len(raw_snippets), max_results)):
+                        clean_title = re.sub(r'<[^>]+>', '', raw_titles[i]).strip() if i < len(raw_titles) else "Fuente Web"
+                        clean_snippet = re.sub(r'<[^>]+>', '', raw_snippets[i]).strip()
+                        clean_snippet = html.unescape(clean_snippet)
+                        clean_title = html.unescape(clean_title)
+                        if clean_snippet:
+                            snippets.append(f"[Fuente Web: {clean_title}]\n{clean_snippet}")
+                            sources.append(clean_title)
+            except Exception as e:
+                logger.error(f"Error en fallback HTTP DuckDuckGo: {e}")
+
+        if snippets:
+            context_str = "\n---\n".join(snippets)
+            return context_str, sources
+
+        return "", []
 
     def retrieve_context(self, query: str, top_k: int = 2) -> Tuple[str, List[str]]:
         """
         Busca los bloques de texto más relevantes en la base de conocimiento local.
+        Si no encuentra nada, realiza una búsqueda web en vivo.
         """
         if not self.chunks:
             self.load_knowledge()
-            
-        if not self.chunks:
-            return "No hay base de conocimiento cargada.", []
 
-        # Intentar búsqueda vectorial gratuita usando API de Embeddings de HuggingFace
+        # 1. Intentar búsqueda Vectorial con ChromaDB
+        if self.use_vector_db and self.collection:
+            try:
+                results = self.collection.query(
+                    query_texts=[query],
+                    n_results=top_k
+                )
+                
+                if results['documents'] and len(results['documents'][0]) > 0:
+                    docs = results['documents'][0]
+                    metadatas = results['metadatas'][0]
+                    distances = results['distances'][0] if 'distances' in results and results['distances'] else []
+                    
+                    # Si la distancia (1 - similitud del coseno) es muy alta (>1.5), podría ser irrelevante
+                    # Pero dejaremos que el modelo RAG lo decida por ahora, o aplicaremos un threshold simple
+                    valid_docs = []
+                    valid_sources = []
+                    
+                    for i, doc in enumerate(docs):
+                        if distances and distances[i] > 1.8:
+                            continue # Ignorar documentos demasiado lejanos
+                        valid_docs.append(f"[Fuente Local Vectorial: {metadatas[i]['source']}]\n{doc}")
+                        valid_sources.append(metadatas[i]['source'])
+                        
+                    if valid_docs:
+                        context_str = "\n---\n".join(valid_docs)
+                        logger.info("Búsqueda vectorial (ChromaDB) realizada exitosamente.")
+                        return context_str, list(set(valid_sources))
+            except Exception as e:
+                logger.error(f"Error en búsqueda vectorial: {e}")
+
+        # 2. Fallback a búsqueda local clásica de texto
         try:
-            # Usaremos una aproximación robusta por solapamiento de palabras
-            # que es 100% offline, confiable y rápida para desarrollo.
             matches = self._simple_similarity_search(query, top_k)
             if matches:
-                context_str = "\n---\n".join([f"[Fuente: {source}]\n{chunk}" for chunk, source in matches])
+                context_str = "\n---\n".join([f"[Fuente Local Texto: {source}]\n{chunk}" for chunk, source in matches])
                 sources = list(set([source for _, source in matches]))
                 return context_str, sources
         except Exception as e:
-            logger.error(f"Error en búsqueda de contexto: {e}")
-            
+            logger.error(f"Error en búsqueda de contexto local por texto: {e}")
+
+        logger.info("No se encontró contexto local. El modelo usará su conocimiento pre-entrenado.")
         return "", []
 
-    def ask(self, query: str, chat_history: Optional[List[dict]] = None) -> Tuple[str, List[str]]:
+    def ask(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "") -> Tuple[str, List[str]]:
+        """
+        Punto de entrada principal.
+        """
+        return self.get_response(query, chat_history, user_context)
+
+    def _contextualize_query(self, query: str, chat_history: List[dict]) -> str:
+        """
+        Lógica Estándar de la Industria (similar a LangChain create_history_aware_retriever).
+        Usa el LLM para reescribir una pregunta de seguimiento en una 'Standalone Query'
+        para que los motores de búsqueda (Tavily/RAG) entiendan el contexto sin ruido.
+        """
+        try:
+            history_text = ""
+            # Tomar los últimos 4 turnos
+            for msg in chat_history[-4:]:
+                role = msg.get("role") or ("user" if msg.get("from") in ["user", "patient"] else "assistant")
+                content = msg.get("content") or msg.get("text", "")
+                history_text += f"{role.capitalize()}: {content}\n"
+            
+            prompt = (
+                "Dado el siguiente historial de chat y la pregunta final del usuario, reformula la pregunta "
+                "para que sea una pregunta independiente (standalone query) comprensible sin el historial.\n"
+                "NO respondas a la pregunta, SOLO devuelve la pregunta reformulada de forma concisa. "
+                "Si ya es independiente, devuélvela tal cual.\n\n"
+                f"Historial:\n{history_text}\n"
+                f"Pregunta Original: {query}\n"
+                "Pregunta Reformulada:"
+            )
+
+            import requests
+            payload = {
+                "model": settings.LOCAL_MODEL_NAME,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": 40,   # Súper rápido, solo queremos 1 oración
+                    "temperature": 0.1   # Muy determinista
+                }
+            }
+            res = requests.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload, timeout=4)
+            if res.status_code == 200:
+                rewritten = res.json().get("response", "").strip()
+                # Limpiar cualquier formato raro
+                rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
+                if rewritten and len(rewritten) > 5:
+                    return rewritten
+        except Exception as e:
+            logger.warning(f"Error al contextualizar query (fallback a original): {e}")
+        
+        return query
+
+    def get_response(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "") -> Tuple[str, List[str]]:
         """
         Consulta al chatbot. Primero recupera el contexto médico local y luego
-        utiliza la API gratuita de Groq o el modelo Qwen para generar la respuesta.
+        utiliza la API gratuita de Groq o el modelo Qwen/Llama para generar la respuesta.
         """
-        context, sources = self.retrieve_context(query)
+        search_query = query
+        is_follow_up = False
+
+        # Determinar si la pregunta es sobre los datos personales del usuario
+        query_lower = query.lower()
+        personal_keywords = [
+            "mis consultas", "mis citas", "mis recetas", "mi historial", 
+            "tengo citas", "tengo consultas", "medicamento recetado", "medicamentos recetados",
+            "mis medicamentos", "tengo algo", "tengo alguna", "citas pendientes", "cita pendiente",
+            "próxima cita", "proxima cita", "tengo cita", "tengo citas", "mi cita", "mis citas",
+            "última cita", "ultima cita", "resumen de mi", "resumen de la"
+        ]
+        is_personal_query = any(phrase in query_lower for phrase in personal_keywords)
+        
+        # Si la pregunta actual es de seguimiento puro, evitamos hacer una nueva búsqueda web que contamine el contexto
+        if chat_history and (len(query) < 40 or any(w in query_lower for w in ["estos", "este", "esta", "ellos", "ambos", "dos", "cual", "cuál"])):
+            is_follow_up = True
+            search_query = self._contextualize_query(query, chat_history)
+            logger.info(f"Query reformulada por LLM para búsqueda: '{search_query}'")
+
+        # Recuperar contexto RAG / Web (Saltamos la búsqueda web si es una pregunta puramente personal sobre la plataforma)
+        if is_personal_query:
+            context, sources = "", ["Base de Datos del Paciente"]
+            logger.info("Consulta personal detectada. Saltando búsqueda web y usando contexto de BD.")
+        else:
+            context, sources = self.retrieve_context(search_query)
+            logger.info(f"--> CONTEXTO FINAL INYECTADO A LA IA:\n{context}\n----------------------------------")
         
         # Si no hay contexto de fuentes, definimos fuentes como la base general
         if not sources:
             sources = ["Base General UCE"]
 
-        # Construir el prompt del chatbot con el contexto médico inyectado (RAG)
+        import datetime
+        current_date = datetime.date.today().strftime("%Y-%m-%d")
+        
         system_prompt = (
-            "Eres el asistente virtual médico oficial de SUPER-UCE DOC. "
-            "Tu misión es responder preguntas de salud de manera clara, amable, empática e inclusiva. "
-            "Responde basándote estrictamente en el siguiente contexto clínico de confianza:\n"
-            "---------------------\n"
-            f"{context}\n"
-            "---------------------\n"
-            "REGLAS:\n"
-            "1. Si la respuesta no se encuentra en el contexto clínico anterior, debes responder con empatía usando tu conocimiento general pero advirtiendo al paciente que es una sugerencia general y que debe consultar con su médico.\n"
-            "2. Nunca inventes datos farmacológicos o dosis que no estén confirmados.\n"
-            "3. Si detectas síntomas de alarma (dolor de pecho fuerte, cefalea severa repentina, mareos con pérdida de conciencia), instruye inmediatamente al usuario a acudir a urgencias o llamar al 911."
+            f"Eres SUPER-UCE DOC, un asistente virtual clínico inteligente, empático y profesional.\n"
+            f"La fecha actual es {current_date}.\n\n"
+            "INFORMACIÓN FUNDAMENTAL DE LA PLATAFORMA SUPER-UCE DOC:\n"
+            "- TELECONSULTAS Y VIDEOLLAMADAS: Se realizan 100% DIRECTAMENTE DENTRO DE ESTA PLATAFORMA (SUPER-UCE DOC). NUNCA digas que se usará llamada telefónica, Zoom, WhatsApp o enlaces externos. El médico y el paciente se conectan directamente en la sala virtual de esta plataforma.\n"
+            "- HISTORIAL Y ANALÍTICAS: Los resultados de laboratorio y expedientes médicos los visualiza el doctor directamente en la plataforma en su panel de control. El paciente no necesita enviarlos por fuera.\n"
+            "- GEOLOCALIZACIÓN Y FARMACIAS: La plataforma cuenta con un mapa interactivo inteligente para geolocalizar farmacias cercanas y consultar disponibilidad de medicamentos recetados.\n"
+            "- CERO CONTRADICCIONES: Mantén coherencia total con tus respuestas previas. Si afirmas que la teleconsulta se realiza por esta plataforma, NUNCA te contradigas en los siguientes mensajes.\n\n"
+            "CONTEXTO DEL USUARIO ACTUAL (DATOS REALES DE LA BASE DE DATOS):\n"
+            f"{user_context}\n"
+            "El usuario con el que hablas es un PACIENTE de la clínica. Tienes acceso a sus datos arriba listados para responder sus dudas personales.\n\n"
+            "INSTRUCCIONES DE COMPORTAMIENTO (CUMPLIMIENTO ESTRICTO):\n"
+            "1. RESPUESTA DIRECTA Y CERO REPETICIÓN: Responde ÚNICAMENTE a lo que el paciente acaba de preguntar en su ÚLTIMO mensaje. ESTÁ ESTRICTAMENTE PROHIBIDO repetir aclaraciones, introducciones, disculpas o saludos de mensajes anteriores del chat. Empieza a responder la pregunta actual desde la primera palabra.\n"
+            "2. CONSULTAS PASADAS VS FUTURAS: Si el paciente pregunta explícitamente por el resumen de su última cita y NO registra consultas pasadas finalizadas, indícaselo brevemente y menciona su próxima cita a futuro. Pero si la pregunta es sobre cómo prepararse, qué hacer o sobre un síntoma, NO menciones que 'no tiene consultas pasadas'. Responde DIRECTAMENTE la preparación o consejo.\n"
+            "3. CITAS RECHAZADAS: NUNCA menciones citas rechazadas de forma espontánea. SOLO si el paciente te pregunta explícitamente por qué fue rechazada una cita, aclara que se debió a falta de disponibilidad o cruce en la agenda del médico.\n"
+            "4. IDENTIDAD Y ORGULLO: ERES SUPER-UCE DOC, asistente virtual clínico creado por estudiantes de la Universidad Central del Este (UCE).\n"
+            "5. ENFOQUE MÉDICO: Si la pregunta no tiene relación con medicina o salud, recházala amablemente.\n"
+            "6. RECOMENDACIÓN DE TRATAMIENTO: Recomienda el tratamiento o medicamento adecuado basado en la consulta, agregando una breve nota para validar con su médico.\n"
+            "7. PROHIBIDO REPETIR INTROS: Prohibido iniciar respuestas con frases fijas repetitivas como 'Aún no tienes consultas...', 'Como asistente clínico', 'Según la base de datos' o 'Sin embargo'. Entra directo al tema.\n"
+            "8. FORMATO: Escribe en párrafos naturales y fluidos. Cero listas con viñetas."
         )
 
-        # 1. Intentar usar la API Gratuita de Groq (Llama-3 8B)
+        def sanitize_reply(text: str) -> str:
+            text = text.strip()
+            text = re.sub(r"^(sin embargo|no obstante|por lo tanto|además|ademas|así que|asi que),\s*", "", text, flags=re.IGNORECASE)
+            if text:
+                text = text[0].upper() + text[1:]
+            return text
+
+        # 1. Intentar usar la API de Ollama Local (Llama-3.1 8B)
+        if settings.USE_LOCAL_LLM:
+            try:
+                # Construir el array de mensajes multi-turn
+                messages = [{"role": "system", "content": system_prompt}]
+                
+                if chat_history:
+                    for msg in chat_history[-6:]:
+                        role = msg.get("role") or ("user" if msg.get("from") in ["user", "patient"] else "assistant")
+                        content = msg.get("content") or msg.get("text", "")
+                        if content:
+                            messages.append({"role": role, "content": content})
+
+                user_message_content = (
+                    f"Pregunta actual del paciente: {query}\n"
+                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta sin repetir introducciones de mensajes anteriores."
+                )
+
+                messages.append({"role": "user", "content": user_message_content})
+                
+                payload = {
+                    "model": settings.LOCAL_MODEL_NAME,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {
+                        "num_predict": 250,
+                        "temperature": 0.2
+                    }
+                }
+                
+                url = f"{settings.OLLAMA_BASE_URL}/api/chat"
+                response = requests.post(url, json=payload, timeout=120)
+                
+                if response.status_code == 200:
+                    resp_json = response.json()
+                    reply = sanitize_reply(resp_json["message"]["content"])
+                    return reply, sources
+            except Exception as e:
+                logger.error(f"Error llamando a Ollama API local: {e}")
+
+        # 2. Intentar usar la API Gratuita de Groq (Fallback)
         if settings.GROQ_API_KEY:
             try:
                 headers = {
@@ -163,15 +486,19 @@ class MedicalRAGChatbot:
                 
                 messages = [{"role": "system", "content": system_prompt}]
                 if chat_history:
-                    # Añadir últimos 4 mensajes del historial para no sobrecargar
                     for msg in chat_history[-4:]:
                         messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-                messages.append({"role": "user", "content": query})
+                
+                user_message_content = (
+                    f"Pregunta actual del paciente: {query}\n"
+                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta sin repetir introducciones de mensajes anteriores."
+                )
+                messages.append({"role": "user", "content": user_message_content})
                 
                 payload = {
                     "model": "llama-3.1-8b-instant",
                     "messages": messages,
-                    "temperature": 0.3,
+                    "temperature": 0.2,
                     "max_tokens": 512
                 }
                 
@@ -184,10 +511,8 @@ class MedicalRAGChatbot:
                 
                 if response.status_code == 200:
                     resp_json = response.json()
-                    reply = resp_json["choices"][0]["message"]["content"].strip()
+                    reply = sanitize_reply(resp_json["choices"][0]["message"]["content"])
                     return reply, sources
-                else:
-                    logger.warning(f"Groq API devolvió código de error {response.status_code}: {response.text}")
             except Exception as e:
                 logger.error(f"Error llamando a Groq API: {e}")
 
@@ -209,9 +534,11 @@ class MedicalRAGChatbot:
                 if isinstance(result, list) and len(result) > 0:
                     text = result[0].get("generated_text", "")
                     clean_reply = text.replace(full_prompt, "").strip()
-                    return clean_reply, sources
+                    return sanitize_reply(clean_reply), sources
         except Exception as e:
             logger.debug(f"HF Chatbot Fallback no disponible: {e}")
+
+
 
         # 3. Fallback Heurístico local (Sin internet y sin API Key)
         reply = (

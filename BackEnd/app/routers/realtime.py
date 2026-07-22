@@ -103,3 +103,87 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             {"action": "peer_disconnected", "message": "Un participante ha abandonado la sala."},
             room_id
         )
+
+# Store room presence in memory
+# room_presence_store = { room_id: { "doctor": timestamp, "patient": timestamp } }
+import time
+room_presence_store: Dict[str, Dict[str, float]] = {}
+
+@router.post("/presence/{room_id}/{role}")
+def update_room_presence(room_id: str, role: str):
+    now = time.time()
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    clean_role = "doctor" if role == "doctor" else "patient"
+    
+    if clean_room not in room_presence_store:
+        room_presence_store[clean_room] = {}
+        
+    room_presence_store[clean_room][clean_role] = now
+    
+    if "start_time" not in room_presence_store[clean_room]:
+        room_presence_store[clean_room]["start_time"] = now
+
+    # Check counterpart presence specifically in THIS room (within last 6 seconds)
+    counterpart = "patient" if clean_role == "doctor" else "doctor"
+    spec_time = room_presence_store[clean_room].get(counterpart, 0)
+    is_connected = (now - spec_time) < 6.0
+    
+    return {
+        "connected": is_connected,
+        "doctor_online": (now - room_presence_store[clean_room].get("doctor", 0)) < 6.0,
+        "patient_online": (now - room_presence_store[clean_room].get("patient", 0)) < 6.0,
+        "start_time": room_presence_store[clean_room].get("start_time", now)
+    }
+
+@router.get("/presence/{room_id}")
+def get_room_presence(room_id: str):
+    now = time.time()
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    room = room_presence_store.get(clean_room, {})
+    doc_time = room.get("doctor", 0)
+    pat_time = room.get("patient", 0)
+    
+    if "start_time" not in room:
+        if clean_room not in room_presence_store:
+            room_presence_store[clean_room] = {}
+        room_presence_store[clean_room]["start_time"] = now
+        room = room_presence_store[clean_room]
+        
+    start_time = room.get("start_time", now)
+    return {
+        "doctor_online": (now - doc_time) < 6.0,
+        "patient_online": (now - pat_time) < 6.0,
+        "connected": ((now - doc_time) < 6.0) and ((now - pat_time) < 6.0),
+        "start_time": start_time
+    }
+
+from pydantic import BaseModel
+
+class LiveCommentPayload(BaseModel):
+    sender: str
+    role: str
+    text: str
+    time: str
+
+room_comments_store: Dict[str, List[dict]] = {}
+
+@router.get("/comments/{room_id}")
+def get_room_comments(room_id: str):
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    return room_comments_store.get(clean_room, [])
+
+@router.post("/comments/{room_id}")
+def post_room_comment(room_id: str, payload: LiveCommentPayload):
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    if clean_room not in room_comments_store:
+        room_comments_store[clean_room] = []
+    
+    msg_dict = {
+        "sender": payload.sender,
+        "role": payload.role,
+        "text": payload.text,
+        "time": payload.time
+    }
+    
+    room_comments_store[clean_room].append(msg_dict)
+    return {"status": "ok", "comments": room_comments_store[clean_room]}

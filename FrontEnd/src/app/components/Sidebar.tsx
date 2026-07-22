@@ -22,19 +22,19 @@ interface SidebarProps {
 const menuByRole: Record<Role, { id: string; label: string; icon: React.ReactNode; badge?: number }[]> = {
   patient: [
     { id: "home", label: "Inicio", icon: <LayoutDashboard size={20} /> },
-    { id: "appointments", label: "Mis Citas", icon: <Calendar size={20} />, badge: 2 },
+    { id: "appointments", label: "Mis Citas", icon: <Calendar size={20} /> },
     { id: "prescriptions", label: "Mis Recetas", icon: <FileText size={20} /> },
     { id: "ai-assistant", label: "Asistente IA", icon: <MessageSquareHeart size={20} /> },
   ],
   doctor: [
     { id: "home", label: "Inicio", icon: <LayoutDashboard size={20} /> },
-    { id: "dashboard", label: "Mi Agenda", icon: <Calendar size={20} />, badge: 2 },
+    { id: "dashboard", label: "Mi Agenda", icon: <Calendar size={20} /> },
     { id: "teleconsult", label: "Telemedicina", icon: <Video size={20} /> },
     { id: "patients", label: "Pacientes", icon: <Users size={20} /> },
     { id: "prescriptions", label: "Recetas", icon: <FileText size={20} /> },
   ],
   pharmacy: [
-    { id: "dashboard", label: "Recetas Entrantes", icon: <FileText size={20} />, badge: 5 },
+    { id: "dashboard", label: "Recetas Entrantes", icon: <FileText size={20} /> },
     { id: "orders", label: "Pedidos", icon: <PackageOpen size={20} /> },
     { id: "inventory", label: "Inventario", icon: <ClipboardList size={20} /> },
     { id: "analytics", label: "Estadísticas", icon: <TrendingUp size={20} /> },
