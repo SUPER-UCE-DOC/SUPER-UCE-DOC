@@ -329,11 +329,11 @@ class MedicalRAGChatbot:
         """
         try:
             history_text = ""
-            # Tomar los últimos 4 turnos
             for msg in chat_history[-4:]:
-                role = msg.get("role") or ("user" if msg.get("from") in ["user", "patient"] else "assistant")
+                role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
                 content = msg.get("content") or msg.get("text", "")
-                history_text += f"{role.capitalize()}: {content}\n"
+                if content.strip():
+                    history_text += f"{role.capitalize()}: {content.strip()}\n"
             
             prompt = (
                 "Dado el siguiente historial de chat y la pregunta final del usuario, reformula la pregunta "
@@ -346,24 +346,35 @@ class MedicalRAGChatbot:
             )
 
             import requests
-            payload = {
-                "model": settings.LOCAL_MODEL_NAME,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "num_predict": 40,   # Súper rápido, solo queremos 1 oración
-                    "temperature": 0.1   # Muy determinista
+            if settings.GROQ_API_KEY and not settings.USE_LOCAL_LLM:
+                headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}", "Content-Type": "application/json"}
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 60
                 }
-            }
-            res = requests.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload, timeout=4)
-            if res.status_code == 200:
-                rewritten = res.json().get("response", "").strip()
-                # Limpiar cualquier formato raro
-                rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
-                if rewritten and len(rewritten) > 5:
-                    return rewritten
+                res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=5)
+                if res.status_code == 200:
+                    rewritten = res.json()["choices"][0]["message"]["content"].strip()
+                    rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
+                    if rewritten and len(rewritten) > 5:
+                        return rewritten
+            elif settings.USE_LOCAL_LLM:
+                payload = {
+                    "model": settings.LOCAL_MODEL_NAME,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"num_predict": 40, "temperature": 0.1}
+                }
+                res = requests.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload, timeout=4)
+                if res.status_code == 200:
+                    rewritten = res.json().get("response", "").strip()
+                    rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
+                    if rewritten and len(rewritten) > 5:
+                        return rewritten
         except Exception as e:
-            logger.warning(f"Error al contextualizar query (fallback a original): {e}")
+            logger.debug(f"Error al contextualizar query (fallback a original): {e}")
         
         return query
 
@@ -406,27 +417,29 @@ class MedicalRAGChatbot:
 
         import datetime
         current_date = datetime.date.today().strftime("%Y-%m-%d")
-        
+
         system_prompt = (
-            f"Eres SUPER-UCE DOC, un asistente virtual clínico inteligente, empático y profesional.\n"
+            f"Eres SUPER-UCE DOC, un asistente virtual clínico inteligente, empático, muy amable y profesional de nivel especialista.\n"
             f"La fecha actual es {current_date}.\n\n"
             "INFORMACIÓN FUNDAMENTAL DE LA PLATAFORMA SUPER-UCE DOC:\n"
             "- TELECONSULTAS Y VIDEOLLAMADAS: Se realizan 100% DIRECTAMENTE DENTRO DE ESTA PLATAFORMA (SUPER-UCE DOC). NUNCA digas que se usará llamada telefónica, Zoom, WhatsApp o enlaces externos. El médico y el paciente se conectan directamente en la sala virtual de esta plataforma.\n"
             "- HISTORIAL Y ANALÍTICAS: Los resultados de laboratorio y expedientes médicos los visualiza el doctor directamente en la plataforma en su panel de control. El paciente no necesita enviarlos por fuera.\n"
             "- GEOLOCALIZACIÓN Y FARMACIAS: La plataforma cuenta con un mapa interactivo inteligente para geolocalizar farmacias cercanas y consultar disponibilidad de medicamentos recetados.\n"
-            "- CERO CONTRADICCIONES: Mantén coherencia total con tus respuestas previas. Si afirmas que la teleconsulta se realiza por esta plataforma, NUNCA te contradigas en los siguientes mensajes.\n\n"
-            "CONTEXTO DEL USUARIO ACTUAL (DATOS REALES DE LA BASE DE DATOS):\n"
+            "- CERO CONTRADICCIONES: Mantén coherencia total con tus respuestas previas.\n\n"
+            "INFORMACIÓN Y GUÍAS MÉDICAS DE REFERENCIA (CONOCIMIENTO RAG Y PROTOCOLOS CLÍNICOS):\n"
+            f"{context if context else 'Utiliza tu conocimiento médico clínico especializado y actualizado para responder con precisión y exhaustividad.'}\n\n"
+            "CONTEXTO DEL USUARIO ACTUAL (DATOS REALES DE LA BASE DE DATOS DEL PACIENTE):\n"
             f"{user_context}\n"
-            "El usuario con el que hablas es un PACIENTE de la clínica. Tienes acceso a sus datos arriba listados para responder sus dudas personales.\n\n"
+            "ACCESO TOTAL A DATOS DEL PACIENTE: Hablas DIRECTAMENTE con el paciente. TIENES ACCESO COMPLETO Y DIRECTO a sus datos listados arriba (citas, recetas, medicamentos e historial). NUNCA digas que 'no tienes acceso al historial médico', 'no tienes acceso a la información personal' ni 'no puedes ver tus recetas'. Si el contexto muestra 0 recetas o 0 citas, responde amablemente que actualmente no registra recetas o citas activas en la plataforma.\n\n"
             "INSTRUCCIONES DE COMPORTAMIENTO (CUMPLIMIENTO ESTRICTO):\n"
-            "1. RESPUESTA DIRECTA Y CERO REPETICIÓN: Responde ÚNICAMENTE a lo que el paciente acaba de preguntar en su ÚLTIMO mensaje. ESTÁ ESTRICTAMENTE PROHIBIDO repetir aclaraciones, introducciones, disculpas o saludos de mensajes anteriores del chat. Empieza a responder la pregunta actual desde la primera palabra.\n"
-            "2. CONSULTAS PASADAS VS FUTURAS: Si el paciente pregunta explícitamente por el resumen de su última cita y NO registra consultas pasadas finalizadas, indícaselo brevemente y menciona su próxima cita a futuro. Pero si la pregunta es sobre cómo prepararse, qué hacer o sobre un síntoma, NO menciones que 'no tiene consultas pasadas'. Responde DIRECTAMENTE la preparación o consejo.\n"
-            "3. CITAS RECHAZADAS: NUNCA menciones citas rechazadas de forma espontánea. SOLO si el paciente te pregunta explícitamente por qué fue rechazada una cita, aclara que se debió a falta de disponibilidad o cruce en la agenda del médico.\n"
-            "4. IDENTIDAD Y ORGULLO: ERES SUPER-UCE DOC, asistente virtual clínico creado por estudiantes de la Universidad Central del Este (UCE).\n"
-            "5. ENFOQUE MÉDICO: Si la pregunta no tiene relación con medicina o salud, recházala amablemente.\n"
-            "6. RECOMENDACIÓN DE TRATAMIENTO: Recomienda el tratamiento o medicamento adecuado basado en la consulta, agregando una breve nota para validar con su médico.\n"
-            "7. PROHIBIDO REPETIR INTROS: Prohibido iniciar respuestas con frases fijas repetitivas como 'Aún no tienes consultas...', 'Como asistente clínico', 'Según la base de datos' o 'Sin embargo'. Entra directo al tema.\n"
-            "8. FORMATO: Escribe en párrafos naturales y fluidos. Cero listas con viñetas."
+            "1. ANÁLISIS MÉDICO EXHAUSTIVO Y ESPECIALIZADO: Para consultas sobre síntomas complejos (ej: mareos ortostáticos, palpitaciones, fatiga postural), debes actuar como un médico especialista de alto nivel. Identifica y prioriza los diagnósticos específicos más probables (ej: POTS / Síndrome de Taquicardia Ortostática Postural, Hipotensión Ortostática, Síncope Vasovagal), explica con claridad sus criterios de diferenciación (como los cambios en la frecuencia cardíaca y presión arterial al ponerse de pie) e indica explícitamente las pruebas diagnósticas específicas recomendadas (ej: Prueba de Mesa Basculante / Tilt Table Test, test activo de ortostatismo de 10 min, electrocardiograma, monitoreo Holter).\n"
+            "2. INTERACCIÓN DIRECTA: Hablas DIRECTAMENTE al paciente en segunda persona ('tienes', 'tus medicamentos'). Queda ESTRICTAMENTE PROHIBIDO escribir 'Respuesta:', 'Guía para responder' o hablar como si le estuvieras enseñando a alguien más cómo responder.\n"
+            "3. TONO CÁLIDO Y ASISTENCIAL: Responde con empatía, amabilidad y fluidez natural. Al responder una duda o confirmar un dato, ofrece una recomendación útil o ayuda relacionada.\n"
+            "4. CERO REPETICIÓN ROBÓTICA: Responde a la pregunta actual sin usar muletillas o frases introductorias fijas repetitivas de turnos anteriores.\n"
+            "5. CONSULTAS PASADAS VS FUTURAS: Si el paciente pregunta por el resumen de su última cita y no tiene consultas finalizadas, indícaselo con amabilidad y ofrece ayuda para prepararse para su próxima consulta o resolver dudas médicas.\n"
+            "6. CITAS RECHAZADAS O CANCELADAS: Las citas rechazadas están canceladas y NUNCA son citas activas ni próximas. Si el paciente pregunta por citas pendientes y no tiene, infórmalo con amabilidad. Si pregunta explícitamente por citas rechazadas, explica con empatía que se debió a falta de disponibilidad en la agenda del médico.\n"
+            "7. IDENTIDAD Y ENFOQUE MÉDICO: Eres SUPER-UCE DOC, asistente virtual clínico creado por estudiantes de la Universidad Central del Este (UCE). Si la consulta no es médica ni de la plataforma, orienta amablemente hacia temas de salud.\n"
+            "8. FORMATO: Escribe en párrafos naturales, cálidos, estructurados y bien redactados."
         )
 
         def sanitize_reply(text: str) -> str:
@@ -439,14 +452,12 @@ class MedicalRAGChatbot:
         # 1. Intentar usar la API de Ollama Local (Llama-3.1 8B)
         if settings.USE_LOCAL_LLM:
             try:
-                # Construir el array de mensajes multi-turn
                 messages = [{"role": "system", "content": system_prompt}]
-                
                 if chat_history:
                     for msg in chat_history[-6:]:
-                        role = msg.get("role") or ("user" if msg.get("from") in ["user", "patient"] else "assistant")
-                        content = msg.get("content") or msg.get("text", "")
-                        if content:
+                        role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
+                        content = msg.get("content") or msg.get("text") or ""
+                        if content.strip():
                             messages.append({"role": role, "content": content})
 
                 user_message_content = (
@@ -461,7 +472,7 @@ class MedicalRAGChatbot:
                     "messages": messages,
                     "stream": False,
                     "options": {
-                        "num_predict": 250,
+                        "num_predict": 500,
                         "temperature": 0.2
                     }
                 }
@@ -476,7 +487,7 @@ class MedicalRAGChatbot:
             except Exception as e:
                 logger.error(f"Error llamando a Ollama API local: {e}")
 
-        # 2. Intentar usar la API Gratuita de Groq (Fallback)
+        # 2. Intentar usar la API Gratuita de Groq (Llama-3.3 70B Versatile)
         if settings.GROQ_API_KEY:
             try:
                 headers = {
@@ -487,32 +498,39 @@ class MedicalRAGChatbot:
                 messages = [{"role": "system", "content": system_prompt}]
                 if chat_history:
                     for msg in chat_history[-4:]:
-                        messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                        role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
+                        content = msg.get("content") or msg.get("text") or ""
+                        if content.strip():
+                            messages.append({"role": role, "content": content})
                 
                 user_message_content = (
                     f"Pregunta actual del paciente: {query}\n"
-                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta sin repetir introducciones de mensajes anteriores."
+                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta con máxima precisión médica, sin frases repetitivas de introducciones anteriores."
                 )
                 messages.append({"role": "user", "content": user_message_content})
                 
                 payload = {
-                    "model": "llama-3.1-8b-instant",
+                    "model": "llama-3.3-70b-versatile",
                     "messages": messages,
                     "temperature": 0.2,
-                    "max_tokens": 512
+                    "max_tokens": 1200
                 }
                 
+                logger.info(f"Llamando a Groq API con modelo llama-3.3-70b-versatile (API Key activa: {settings.GROQ_API_KEY[:8]}...)")
                 response = requests.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=7
+                    timeout=25
                 )
                 
                 if response.status_code == 200:
                     resp_json = response.json()
                     reply = sanitize_reply(resp_json["choices"][0]["message"]["content"])
+                    logger.info("Respuesta obtenida con ÉXITO de Groq Llama-3.3 70B Versatile!")
                     return reply, sources
+                else:
+                    logger.error(f"Groq API devolvió HTTP {response.status_code}: {response.text}")
             except Exception as e:
                 logger.error(f"Error llamando a Groq API: {e}")
 

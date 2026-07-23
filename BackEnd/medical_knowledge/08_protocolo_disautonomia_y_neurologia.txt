@@ -1,0 +1,24 @@
+PROTOCOLO CLÍNICO DE DISAUTONOMÍA Y TRASTORNOS DEL SISTEMA NERVIOSO AUTÓNOMO - SUPER-UCE DOC
+
+1. TRASTORNOS DE INTOLERANCIA ORTOSTÁTICA Y SISTEMA NERVIOSO AUTÓNOMO (SNA):
+- Síndrome de Taquicardia Ortostática Postural (POTS):
+  * Definición: Trastorno autonómico caracterizado por un incremento sostenido de la frecuencia cardíaca de al menos 30 latidos por minuto (lpm) en adultos (o >= 40 lpm en adolescentes) dentro de los primeros 10 minutos de ponerse de pie o durante la prueba de mesa basculante, en ausencia de hipotensión ortostática.
+  * Síntomas principales: Mareo postural, palpitaciones, fatiga extrema, intolerancia al ejercicio, sensación de falta de aire, visión borrosa y neblina mental al estar de pie.
+  * Criterios: Síntomas crónicos (duración mayores a 3-6 meses).
+
+- Hipotensión Ortostática (HO):
+  * Definición: Caída sostenida de la presión arterial sistólica de al menos 20 mmHg o de la presión arterial diastólica de al menos 10 mmHg dentro de los 3 minutos posteriores a ponerse de pie o al inclinarse en la mesa basculante.
+  * Diferenciación: Se caracteriza por el descenso marcado de la presión arterial al adoptar la bipedestación, a diferencia del POTS donde la presión se mantiene o sube levemente mientras la frecuencia cardíaca se eleva bruscamente.
+
+- Síncope Vasovagal / Neurocardiogénico:
+  * Definición: Tipo más común de desmayo, mediado por una respuesta vaga exagerada que causa bradicardia transitoria e hipotensión secundaria a gatillos ortostáticos, estresantes o térmicos.
+
+2. PRUEBAS DIAGNÓSTICAS ESPECÍFICAS RECOMENDADAS:
+- Prueba de Mesa Basculante (Tilt Table Test): Estudio electrofisiológico estándar de oro para evaluar la respuesta autonómica cardiovascular ante cambios posicionales en ángulo de 60-70 grados.
+- Test Activo de Ortostatismo (Active Stand Test de 10 minutos): Medición continua de presión arterial y frecuencia cardíaca en reposo supino (decúbito) y cada minuto durante 10 minutos de pie.
+- Monitorización Holter de 24 horas y Electrocardiograma (ECG): Para descartar arritmias cardíacas estructurales primarias.
+- Pruebas Sudomotoras y Evaluación Autonómica Cuantitativa (QSART): Para medir el funcionamiento de pequeñas fibras nerviosas autonómicas.
+
+3. MANEJO Y TRATAMIENTO:
+- Medidas no farmacológicas: Incremento en la ingesta de agua (2-3 litros/día) y sal (según indicación médica), uso de medias de compresión graduada (20-30 mmHg), ejercicios de maniobras de contrapresión muscular e inclinación progresiva.
+- Evaluación farmacológica de apoyo: Fludrocortisona, Midodrina, Ivabradina o Betabloqueantes a dosis bajas, siempre bajo supervisión estricta del médico cardiólogo o neurólogo.

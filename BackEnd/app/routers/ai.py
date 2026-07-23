@@ -70,7 +70,7 @@ def summarize_consultation(
         try:
             headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
             payload = {
-                "model": "llama-3.1-8b-instant",
+                "model": "llama-3.3-70b-versatile",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2
             }
@@ -223,6 +223,9 @@ def medical_chatbot_query(
     user_context += f"Nombre del paciente: {current_user.full_name}\n\n"
     
     if current_user.role == "patient":
+        user_msg_lower = req.message.lower()
+        asking_about_rejection = any(w in user_msg_lower for w in ["rechaz", "cancel", "por que", "por qué", "motivo del rechazo", "motivo de rechazo", "por que me"])
+
         # 1. Citas futuras y pendientes (Aún no han ocurrido)
         future_apps = db.query(models.Appointment).filter(
             models.Appointment.patient_id == current_user.id,
@@ -245,7 +248,7 @@ def medical_chatbot_query(
                 st_lbl = "Confirmada (agendada)" if appt.status == "confirmada" else "Pendiente de aprobación"
                 user_context += f"- Cita FUTURA PROGRAMADA #{appt.id}: Fecha: {date_str}, Médico: {doc_name}, Tipo: {appt.type}, Estado: {st_lbl}. Motivo: {appt.reason or 'Sin especificar'}\n"
         else:
-            user_context += "No hay citas futuras o pendientes agendadas.\n"
+            user_context += "EL PACIENTE TIENE CERO (0) CITAS FUTURAS O PENDIENTES. NO TIENE NINGUNA CITA PRÓXIMA PROGRAMADA EN EL SISTEMA.\n"
 
         user_context += "\n--- CONSULTAS PASADAS Y FINALIZADAS (YA SE LLEVARON A CABO) ---\n"
         if past_completed_apps:
@@ -271,18 +274,34 @@ def medical_chatbot_query(
                 h_date = h.date.strftime("%d/%m/%Y a las %I:%M %p")
                 user_context += f"- Consulta realizada el {h_date} con {doc_name}:\n  Resumen Clínico: {h.summary_ia or h.translation_text}\n"
 
-        # 3. Citas rechazadas (SOLO para responder si el usuario pregunta explícitamente por qué fue rechazada)
-        rejected_apps = db.query(models.Appointment).filter(
-            models.Appointment.patient_id == current_user.id,
-            models.Appointment.status == "rechazada"
-        ).all()
-        if rejected_apps:
-            user_context += "\nCITAS RECHAZADAS (OCULTAS - SOLO MENCIONAR SI EL PACIENTE PREGUNTA EXPLÍCITAMENTE POR QUÉ SE RECHAZÓ):\n"
-            for appt in rejected_apps:
-                doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
+        # 4. Recetas y Medicamentos asignados al paciente en el sistema
+        all_rxs = db.query(models.Prescription).filter(
+            models.Prescription.patient_id == current_user.id
+        ).order_by(models.Prescription.issued_at.desc()).all()
+
+        user_context += "\n--- RECETAS Y MEDICAMENTOS ASIGNADOS AL PACIENTE EN LA PLATAFORMA ---\n"
+        if all_rxs:
+            for rx in all_rxs:
+                doc_user = db.query(models.User).filter(models.User.id == rx.doctor_id).first()
                 doc_name = doc_user.full_name if doc_user else "Doctor"
-                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
-                user_context += f"- Cita #{appt.id} del {date_str} con {doc_name}: Rechazada por falta de disponibilidad en la agenda del doctor.\n"
+                issued_str = rx.issued_at.strftime("%d/%m/%Y") if rx.issued_at else "Sin fecha"
+                user_context += f"- Medicamento: {rx.medicine} ({rx.dose}), Frecuencia: {rx.frequency}, Estado: {rx.status}, Recetado el {issued_str} por {doc_name} (Receta #{rx.id})\n"
+        else:
+            user_context += "EL PACIENTE CUMPLE CON CERO (0) MEDICAMENTOS O RECETAS REGISTRADAS EN LA PLATAFORMA (NO TIENE MEDICAMENTOS REGISTRADOS).\n"
+
+        # 5. Citas rechazadas (SOLO si el usuario pregunta explícitamente por qué fue rechazada)
+        if asking_about_rejection:
+            rejected_apps = db.query(models.Appointment).filter(
+                models.Appointment.patient_id == current_user.id,
+                models.Appointment.status == "rechazada"
+            ).all()
+            if rejected_apps:
+                user_context += "\nCITAS RECHAZADAS (OCULTAS - SOLO MENCIONAR PORQUE EL PACIENTE PREGUNTÓ EXPLÍCITAMENTE):\n"
+                for appt in rejected_apps:
+                    doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
+                    doc_name = doc_user.full_name if doc_user else "Doctor"
+                    date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                    user_context += f"- Cita #{appt.id} del {date_str} con {doc_name}: RECHAZADA/CANCELADA por falta de disponibilidad en la agenda del doctor.\n"
 
     # Llamar al bot (IA)
     reply, sources = medical_chatbot.ask(req.message, chat_history, user_context=user_context)

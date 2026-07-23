@@ -41,6 +41,12 @@ app.add_middleware(
 # Cargar servicios de IA al arrancar
 @app.on_event("startup")
 def on_startup():
+    from app.config import settings
+    if settings.USE_LOCAL_LLM:
+        logger.info(f"🤖 MODO IA ACTIVO: LOCAL Ollama ({settings.LOCAL_MODEL_NAME}) en {settings.OLLAMA_BASE_URL}")
+    else:
+        logger.info(f"⚡ MODO IA ACTIVO: NUBE Groq Cloud API (Modelo Llama-3.3 70B Versatile)")
+
     logger.info("Cargando base de conocimiento médico RAG...")
     medical_chatbot.load_knowledge()
     
