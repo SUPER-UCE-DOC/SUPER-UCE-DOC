@@ -15,3 +15,7 @@ BackEnd/medical_knowledge_vectors/
 BackEnd/.env
 FrontEnd/.env
 
+# Databases
+*.db
+*.sqlite3
+*.db-journal
