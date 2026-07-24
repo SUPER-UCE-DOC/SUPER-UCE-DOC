@@ -8,11 +8,13 @@ import {
 import { DoctorHome } from "./DoctorHome";
 import { SettingsView } from "./SettingsView";
 import { TelemedicinaRoom } from "./TelemedicinaRoom";
+import { GlobalFloatingCallWidget } from "./GlobalFloatingCallWidget";
 
 type View = string;
 
 interface DoctorDashboardProps {
   userName: string;
+  userAvatar?: string;
   currentView: View;
   onNavigate?: (view: string) => void;
 }
@@ -61,17 +63,73 @@ const aiTranslations = [
   { time: "11:35", gesture: "PRESIÓN + ALTA", translation: "Asocia síntomas con su hipertensión" },
 ];
 
-export function DoctorDashboard({ userName, currentView, onNavigate }: DoctorDashboardProps) {
+export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate }: DoctorDashboardProps) {
   const navigate = (v: string) => onNavigate?.(v);
-  if (currentView === "home") return <DoctorHome userName={userName} onNavigate={navigate} />;
-  if (currentView === "dashboard") return <AgendaView userName={userName} />;
-  if (currentView === "schedule") return <AgendaView userName={userName} />;
-  if (currentView === "patients") return <PatientsView />;
-  if (currentView === "teleconsult") return <TeleconsultaView userName={userName} />;
-  if (currentView === "prescriptions") return <RecetasView />;
-  if (currentView === "ai-assistant") return <TeleconsultaView userName={userName} />;
-  if (currentView === "settings") return <SettingsView role="doctor" userName={userName} />;
-  return <DoctorHome userName={userName} onNavigate={navigate} />;
+
+  const [activeAppointment, setActiveAppointment] = useState<any>(null);
+  const [inCall, setInCall] = useState(false);
+
+  useEffect(() => {
+    const savedActive = localStorage.getItem("doctor_active_teleconsult");
+    if (savedActive) {
+      try {
+        const parsed = JSON.parse(savedActive);
+        if (parsed && parsed.id) {
+          setActiveAppointment(parsed);
+          setInCall(true);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const userExited = localStorage.getItem("doctor_user_left_call") === "true";
+    if (userExited) return;
+
+    api.getAppointments().then((data) => {
+      if (Array.isArray(data)) {
+        const inProgress = data.find((a: any) => a.status === "en_curso");
+        if (inProgress) {
+          setActiveAppointment(inProgress);
+          setInCall(true);
+          localStorage.setItem("doctor_active_teleconsult", JSON.stringify(inProgress));
+        }
+      }
+    }).catch(() => {});
+  }, [currentView]);
+
+  const handleEndCall = () => {
+    localStorage.removeItem("doctor_active_teleconsult");
+    localStorage.setItem("doctor_user_left_call", "true");
+    setInCall(false);
+    setActiveAppointment(null);
+    navigate("home");
+  };
+
+  const renderViewContent = () => {
+    if (currentView === "home") return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
+    if (currentView === "dashboard" || currentView === "schedule") return <AgendaView userName={userName} />;
+    if (currentView === "patients") return <PatientsView />;
+    if (currentView === "teleconsult" || currentView === "ai-assistant") return <TeleconsultaView userName={userName} userAvatar={userAvatar} onEndCall={handleEndCall} />;
+    if (currentView === "prescriptions") return <RecetasView />;
+    if (currentView === "settings") return <SettingsView role="doctor" userName={userName} />;
+    return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
+  };
+
+  return (
+    <>
+      {renderViewContent()}
+      {inCall && currentView !== "teleconsult" && currentView !== "ai-assistant" && (
+        <GlobalFloatingCallWidget
+          role="doctor"
+          counterpartName={activeAppointment?.patient_name || "Rosa Chávez"}
+          counterpartAvatar={activeAppointment?.patient_avatar}
+          appointmentId={activeAppointment?.id || 1}
+          onReturnToCall={() => navigate("teleconsult")}
+        />
+      )}
+    </>
+  );
 }
 
 /* ─── MI AGENDA ─── */
@@ -499,7 +557,7 @@ const waitingPatients = [
 ];
 
 /* ─── TELECONSULTA CON TRADUCTOR IA ─── */
-function TeleconsultaView({ userName }: { userName?: string }) {
+function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: string; userAvatar?: string; onEndCall?: () => void }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePatient, setActivePatient] = useState<string | null>(null);
@@ -510,6 +568,19 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "" });
   const [rxSubmitted, setRxSubmitted] = useState(false);
+  const [doctorAvatar, setDoctorAvatar] = useState<string | undefined>(userAvatar);
+
+  useEffect(() => {
+    if (userAvatar) {
+      setDoctorAvatar(userAvatar);
+      return;
+    }
+    api.getMe().then((me) => {
+      if (me && me.avatar) {
+        setDoctorAvatar(me.avatar);
+      }
+    }).catch(() => {});
+  }, [userAvatar]);
 
   // Modal Agendar Doctor
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -520,6 +591,23 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   const [isScheduling, setIsScheduling] = useState(false);
   const scheduleDropdownRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const userExited = localStorage.getItem("doctor_user_left_call") === "true";
+    if (userExited) return;
+
+    const savedActive = localStorage.getItem("doctor_active_teleconsult");
+    if (savedActive) {
+      try {
+        const parsed = JSON.parse(savedActive);
+        if (parsed && parsed.id) {
+          setActiveAppointment(parsed);
+          setActivePatient(parsed.patient_name);
+          setInCall(true);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
   const selectedPatient = appointmentsList.find((p) => p.patient_name === activePatient) ?? null;
 
   const loadAppointments = async (isBackground = false) => {
@@ -528,6 +616,14 @@ function TeleconsultaView({ userName }: { userName?: string }) {
       const data = await api.getAppointments();
       if (Array.isArray(data)) {
         setAppointmentsList(data);
+        const userExited = localStorage.getItem("doctor_user_left_call") === "true";
+        const inProgress = data.find((a: any) => a.status === "en_curso");
+        if (inProgress && !inCall && !userExited) {
+          setActiveAppointment(inProgress);
+          setActivePatient(inProgress.patient_name);
+          setInCall(true);
+          localStorage.setItem("doctor_active_teleconsult", JSON.stringify(inProgress));
+        }
       }
     } catch (err) {
       console.error("Error al cargar citas:", err);
@@ -617,6 +713,7 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   };
 
   const startCall = async (patient: any) => {
+    localStorage.removeItem("doctor_user_left_call");
     try {
       setActiveAppointment(patient);
       setActivePatient(patient.patient_name);
@@ -632,6 +729,8 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   };
 
   const endCall = async () => {
+    localStorage.removeItem("doctor_active_teleconsult");
+    localStorage.setItem("doctor_user_left_call", "true");
     if (selectedPatient) {
       try {
         const transcript = aiTranslations.map(t => `${t.gesture} -> ${t.translation}`).join("\n");
@@ -646,6 +745,7 @@ function TeleconsultaView({ userName }: { userName?: string }) {
     setElapsedSecs(0);
     setVisibleLines(0);
     loadAppointments();
+    onEndCall?.();
   };
 
   const handleEmitRx = async () => {
@@ -912,7 +1012,8 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   return (
     <TelemedicinaRoom
       role="doctor"
-      userName={userName || "Dr. Jose Miguel"}
+      userName={userName || "Dr. Jose Matos"}
+      userAvatar={doctorAvatar || userAvatar}
       counterpartName={activeAppointment?.patient_name || selectedPatient?.patient_name || activePatient || "Paciente"}
       counterpartAvatar={activeAppointment?.patient_avatar || selectedPatient?.patient_avatar}
       patientId={activeAppointment?.patient_id || selectedPatient?.patient_id || selectedPatient?.id}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, 
   Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2, 
-  User, ShieldCheck, Minimize2, Maximize2, MapPin
+  User, ShieldCheck, Minimize2, Maximize2, MapPin, RefreshCw
 } from "lucide-react";
 import { api, getToken } from "../utils/api";
 
@@ -68,9 +68,142 @@ export function TelemedicinaRoom({
   const [lseMode, setLseMode] = useState(false);
   const [showRxMedSuggestions, setShowRxMedSuggestions] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
-  const [activeTab, setActiveTab] = useState<"chat" | "rx" | "notes">(role === "doctor" ? "chat" : "chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "subtitles" | "rx" | "notes">("chat");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isEndedByDoctor, setIsEndedByDoctor] = useState(false);
+  const [isSwapped, setIsSwapped] = useState(false);
+
+  // Arrastre interactivo y magnetismo a esquinas de ventana flotante (PIP)
+  type CornerPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  const [pipCorner, setPipCorner] = useState<CornerPosition>("bottom-right");
+  const [isDraggingPip, setIsDraggingPip] = useState(false);
+  const [dragDelta, setDragDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const mainContainerRef = useRef<HTMLDivElement | null>(null);
+  const pipRef = useRef<HTMLDivElement | null>(null);
+  const dragStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasDraggedRef = useRef<boolean>(false);
+
+  const cornerStyles: Record<CornerPosition, React.CSSProperties> = {
+    "top-left": { top: "16px", left: "16px", bottom: "auto", right: "auto" },
+    "top-right": { top: "16px", left: "calc(100% - 192px)", bottom: "auto", right: "auto" },
+    "bottom-left": { top: "calc(100% - 136px)", left: "16px", bottom: "auto", right: "auto" },
+    "bottom-right": { top: "calc(100% - 136px)", left: "calc(100% - 192px)", bottom: "auto", right: "auto" }
+  };
+
+  const handleMouseDownPip = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+    hasDraggedRef.current = false;
+    setIsDraggingPip(true);
+    setDragDelta({ x: 0, y: 0 });
+  };
+
+  useEffect(() => {
+    if (!isDraggingPip) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartPosRef.current.x;
+      const dy = e.clientY - dragStartPosRef.current.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        hasDraggedRef.current = true;
+      }
+      setDragDelta({ x: dx, y: dy });
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      setIsDraggingPip(false);
+
+      if (mainContainerRef.current && pipRef.current) {
+        const containerRect = mainContainerRef.current.getBoundingClientRect();
+        const pipRect = pipRef.current.getBoundingClientRect();
+        const pipCenterX = pipRect.left + pipRect.width / 2;
+        const pipCenterY = pipRect.top + pipRect.height / 2;
+
+        const relativeX = pipCenterX - containerRect.left;
+        const relativeY = pipCenterY - containerRect.top;
+
+        const isLeft = relativeX < containerRect.width / 2;
+        const isTop = relativeY < containerRect.height / 2;
+
+        let newCorner: CornerPosition = "bottom-right";
+        if (isLeft && isTop) newCorner = "top-left";
+        else if (!isLeft && isTop) newCorner = "top-right";
+        else if (isLeft && !isTop) newCorner = "bottom-left";
+        else if (!isLeft && !isTop) newCorner = "bottom-right";
+
+        setPipCorner(newCorner);
+      }
+      setDragDelta({ x: 0, y: 0 });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingPip]);
+
+  const handlePipClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!hasDraggedRef.current) {
+      setIsSwapped(!isSwapped);
+    }
+  };
+
+  // Subtítulos y Transcripciones en tiempo real desde FastAPI
+  const [subtitlesList, setSubtitlesList] = useState<{
+    id: number;
+    speaker_name: string;
+    speaker_role: string;
+    speaker_avatar?: string;
+    text: string;
+    timestamp: string;
+  }[]>([]);
+  const subtitlesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const roomCode = appointmentId ? String(appointmentId) : "global";
+    const loadSubtitles = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/realtime/subtitles/${roomCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setSubtitlesList(data);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      const key = `teleconsult_subtitles_${roomCode}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) setSubtitlesList(parsed);
+        } catch (e) {}
+      }
+    };
+
+    loadSubtitles();
+    const interval = setInterval(loadSubtitles, 1000);
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `teleconsult_subtitles_${roomCode}`) {
+        loadSubtitles();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, [appointmentId]);
+
 
   // Auto-exit timer for patient when doctor finishes call
   useEffect(() => {
@@ -112,32 +245,64 @@ export function TelemedicinaRoom({
     return () => clearInterval(timer);
   }, []);
 
-  // 3. Real-Time Room Presence Tracking (Heartbeat & Dynamic Connection)
+  // 3. Real-Time Room Presence & Media State Tracking (FastAPI Heartbeat + Dynamic Sync)
   const [isCounterpartConnected, setIsCounterpartConnected] = useState(false);
+  const [isCounterpartMuted, setIsCounterpartMuted] = useState(false);
+  const [isCounterpartVideoOff, setIsCounterpartVideoOff] = useState(false);
   const [presenceToast, setPresenceToast] = useState<string | null>(null);
   const prevConnectedRef = useRef(false);
 
   useEffect(() => {
+    // Sincronización instantánea de medios locales en LocalStorage
+    const mediaKey = `room_media_${roomCode}_${role}`;
+    localStorage.setItem(mediaKey, JSON.stringify({ muted, videoOff, timestamp: Date.now() }));
+
+    const counterpartRole = role === "doctor" ? "patient" : "doctor";
+    const counterpartMediaKey = `room_media_${roomCode}_${counterpartRole}`;
+
+    const syncCounterpartMediaFromStorage = () => {
+      const rawCounterpartMedia = localStorage.getItem(counterpartMediaKey);
+      if (rawCounterpartMedia) {
+        try {
+          const parsed = JSON.parse(rawCounterpartMedia);
+          if (parsed.videoOff !== undefined) setIsCounterpartVideoOff(Boolean(parsed.videoOff));
+          if (parsed.muted !== undefined) setIsCounterpartMuted(Boolean(parsed.muted));
+        } catch (e) {}
+      }
+    };
+
+    // Sincronización primaria vía REST API de FastAPI (Servidor)
     const updatePresence = async () => {
       try {
         const now = Date.now();
 
-        // 1. Backend REST presence API call (Cross-browser / cross-tab / multi-device support)
+        // 1. Llamada a API REST FastAPI con parámetros actuales de muted y videoOff
         let apiConnected = false;
         try {
-          const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}/${role}`, {
+          const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}/${role}?muted=${muted}&video_off=${videoOff}`, {
             method: "POST"
           });
           if (res.ok) {
             const data = await res.json();
             apiConnected = Boolean(data.connected);
-            if (data.start_time && !startTimeRef.current) {
+            if (data.counterpart_muted !== undefined) {
+              setIsCounterpartMuted(Boolean(data.counterpart_muted));
+            }
+            if (data.counterpart_video_off !== undefined) {
+              setIsCounterpartVideoOff(Boolean(data.counterpart_video_off));
+            }
+            if (data.elapsed_seconds !== undefined) {
+              setElapsedSecs(data.elapsed_seconds);
+            }
+            if (data.start_time) {
               startTimeRef.current = Math.floor(data.start_time * 1000);
             }
           }
         } catch (err) {}
 
-        // 2. LocalStorage presence fallback (Same browser tabs)
+        // 2. Sincronización complementaria mediante LocalStorage
+        syncCounterpartMediaFromStorage();
+
         const presenceKey = `room_presence_${roomCode}`;
         const rawSpecific = localStorage.getItem(presenceKey);
         const currentSpecific = rawSpecific ? JSON.parse(rawSpecific) : {};
@@ -151,7 +316,6 @@ export function TelemedicinaRoom({
         }
         localStorage.setItem(presenceKey, JSON.stringify(currentSpecific));
 
-        const counterpartRole = role === "doctor" ? "patient" : "doctor";
         const specTime = currentSpecific[`${counterpartRole}Time`];
         const specOnline = currentSpecific[counterpartRole] === true && specTime && (now - specTime < 6000);
 
@@ -175,7 +339,7 @@ export function TelemedicinaRoom({
 
         prevConnectedRef.current = isOnline;
 
-        // 3. Real-time call completion sync for patient
+        // 3. Verificación de finalización de cita para el paciente
         if (role === "patient") {
           const statusKey = `room_status_${roomCode}`;
           const rawStatus = localStorage.getItem(statusKey);
@@ -210,12 +374,23 @@ export function TelemedicinaRoom({
     };
 
     updatePresence();
-    const interval = setInterval(updatePresence, 1500);
+    syncCounterpartMediaFromStorage();
+
+    const interval = setInterval(updatePresence, 1000);
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === counterpartMediaKey) {
+        syncCounterpartMediaFromStorage();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener("storage", handleStorageChange);
     };
-  }, [roomCode, role, counterpartName, appointmentId]);
+  }, [roomCode, role, counterpartName, appointmentId, muted, videoOff]);
 
   // Poll & Load Live Comments from Backend REST API + LocalStorage fallback
   const storageKey = appointmentId ? `teleconsult_comments_${appointmentId}` : `teleconsult_comments_demo`;
@@ -349,6 +524,7 @@ export function TelemedicinaRoom({
         localStorage.setItem(statusKey, JSON.stringify({ status: "completada", endedBy: "doctor", endedAt: new Date().toISOString() }));
 
         try {
+          await fetch(`http://localhost:8000/api/realtime/end/${roomCode}`, { method: "POST" });
           await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -360,244 +536,392 @@ export function TelemedicinaRoom({
             })
           });
         } catch (e) {}
+      } else if (role === "patient") {
+        // El paciente abandona explícitamente la teleconsulta
+        try {
+          await fetch(`http://localhost:8000/api/realtime/leave/${roomCode}/patient`, { method: "POST" });
+        } catch (e) {}
       }
     } catch (err) {
-      console.error("Error al finalizar consulta", err);
+      console.error("Error al salir de consulta", err);
     } finally {
       onEndCall();
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0D1A2E] text-white overflow-hidden relative" style={{ minHeight: "calc(100vh - 66px)" }}>
+    <div className="flex flex-col h-full bg-[#F9FAFB] text-gray-800 overflow-hidden relative font-sans" style={{ minHeight: "calc(100vh - 66px)" }}>
       
-      {/* ─── BARRA SUPERIOR DE LA SALA ─── */}
-      <div className="flex items-center justify-between px-6 py-3 bg-[#112239] border-b border-gray-800 flex-wrap gap-2 z-20">
+      {/* ─── BARRA SUPERIOR (ESTILO MÉDICO ESTÁNDAR) ─── */}
+      <div className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-200 flex-wrap gap-3 z-20 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#00A69D] flex-shrink-0" />
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white">Teleconsulta Médica en Vivo</h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#00A69D]/20 text-[#00C7C0] border border-[#00A69D]/40 font-semibold">
+              <h2 className="text-base font-extrabold text-[#203A70] tracking-tight">Teleconsulta Médica en Vivo</h2>
+              <span className="text-xs px-2.5 py-0.5 rounded-md bg-slate-100 text-[#00A69D] font-bold border border-slate-200">
                 SUPER-UCE DOC
               </span>
             </div>
-            <p className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
-              <span>{role === "doctor" ? "Paciente:" : "Médico:"} <strong className="text-gray-200">{counterpartName}</strong></span>
+            <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap mt-0.5">
+              <span>{role === "doctor" ? "Paciente:" : "Médico:"} <strong className="text-[#203A70] font-bold">{counterpartName}</strong></span>
               {role === "patient" && counterpartSpecialty && (
-                <span className="text-[11px] text-[#00C7C0] font-semibold bg-[#00A69D]/20 px-2 py-0.5 rounded-full border border-[#00A69D]/30">
+                <span className="text-xs text-[#00A69D] font-bold bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
                   {counterpartSpecialty}
                 </span>
               )}
-              {appointmentReason && <span className="text-gray-400">· Motivo: {appointmentReason}</span>}
+              {appointmentReason && <span className="text-gray-500">· Motivo: <span className="text-gray-700">{appointmentReason}</span></span>}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold">
-            <Clock size={14} />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gray-100 text-[#203A70] border border-gray-200 text-xs font-bold">
+            <Clock size={14} className="text-[#00A69D]" />
             <span>EN CONSULTA · {formatTime(elapsedSecs)}</span>
           </div>
 
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#203A70] border border-gray-200 transition-colors text-xs font-bold flex items-center gap-2 cursor-pointer"
           >
-            <MessageSquare size={16} />
+            <MessageSquare size={15} className="text-[#00A69D]" />
             <span>{isSidebarOpen ? "Ocultar Panel" : "Ver Chat / Notas"}</span>
           </button>
         </div>
       </div>
 
-      {/* ─── CUERPO PRINCIPAL (VIDEO + SIDEBAR) ─── */}
-      <div className="flex-1 flex overflow-hidden relative">
+      {/* ─── CUERPO PRINCIPAL (VIDEO + SIDEBAR CON ESTILO MÉDICO UNIFICADO) ─── */}
+      <div className="flex-1 flex overflow-hidden relative p-4 gap-4 bg-[#F9FAFB]">
         
         {/* AREA DE VIDEO Y CONTROLES (IZQUIERDA) */}
-        <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto relative">
+        <div className="flex-1 flex flex-col gap-4 overflow-hidden relative">
           
-          {/* GRIDA DE VIDEO */}
-          <div className="flex-1 relative rounded-2xl overflow-hidden bg-[#0A1322] border border-gray-800 flex items-center justify-center min-h-[380px]">
+          {/* VISOR DE VIDEO */}
+          <div ref={mainContainerRef} className="flex-1 relative rounded-2xl overflow-hidden bg-[#111827] border border-gray-200 shadow-md flex items-center justify-center min-h-[380px]">
             
             {/* TOAST NOTIFICACIÓN EN SALA */}
             {presenceToast && (
-              <div className="absolute top-4 z-30 px-4 py-2 rounded-xl bg-[#00A69D] text-white text-xs font-bold shadow-2xl animate-bounce border border-emerald-300">
-                {presenceToast}
+              <div className="absolute top-4 z-30 px-4 py-2 rounded-xl bg-white text-[#203A70] text-xs font-bold shadow-xl border border-gray-200 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-[#00A69D]" />
+                <span>{presenceToast}</span>
               </div>
             )}
 
-            {/* VIDEO PARTICIPANTE REMOTO (GRANDE) */}
-            <div className="w-full h-full flex flex-col items-center justify-center relative bg-gradient-to-br from-[#122238] to-[#0A1322]">
-              {isCounterpartConnected ? (
-                <>
-                  <div className="relative mb-3">
-                    <div className="w-28 h-28 rounded-full bg-[#1E3A5F] border-2 border-[#00A69D] text-white flex items-center justify-center font-bold text-3xl shadow-xl overflow-hidden">
-                      {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
-                        <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
-                      ) : (
-                        getInitials(counterpartName)
-                      )}
+            {/* VIDEO PANTALLA PRINCIPAL (VISTA CENTRAL LIMPIA CON SINCRONIZACIÓN MEDIA EN TIEMPO REAL) */}
+            <div className="w-full h-full flex flex-col items-center justify-center relative bg-[#111827] transition-all duration-300 ease-in-out select-none">
+              {!isSwapped ? (
+                /* MOSTRAR PARTICIPANTE REMOTO EN PANTALLA PRINCIPAL */
+                !isCounterpartConnected ? (
+                  <>
+                    <div className="relative mb-3">
+                      <div className="w-28 h-28 rounded-full bg-slate-800 border border-slate-700 text-slate-400 flex items-center justify-center font-bold text-3xl overflow-hidden opacity-60">
+                        {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                          <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(counterpartName)
+                        )}
+                      </div>
+                      <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-[#111827]" title="Desconectado" />
                     </div>
-                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-[#0A1322]" title="Conectado" />
-                  </div>
 
-                  <h3 className="text-lg font-bold text-white">{counterpartName}</h3>
-                  <p className="text-xs text-cyan-300 font-medium mt-0.5">
-                    {role === "doctor" ? "📷 Cámara del Paciente · En Línea" : "👨‍⚕️ Cámara del Médico · En Línea"}
-                  </p>
-
-                  <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md text-xs font-semibold text-emerald-400 border border-emerald-500/30">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>● EN VIVO · CONECTADO</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="relative mb-3">
-                    <div className="w-28 h-28 rounded-full bg-gray-800/80 border-2 border-amber-500/60 text-gray-300 flex items-center justify-center font-bold text-3xl shadow-xl overflow-hidden">
-                      {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
-                        <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover opacity-50" />
-                      ) : (
-                        getInitials(counterpartName)
-                      )}
+                    <h3 className="text-base font-bold text-white">{counterpartName}</h3>
+                    <span className="text-xs text-amber-400 font-semibold mt-1">Desconectado · En espera</span>
+                  </>
+                ) : isCounterpartVideoOff ? (
+                  /* CÁMARA REMOTA APAGADA: MOSTRAR INTERFAZ CON FOTO DE PERFIL CENTRADA */
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="relative mb-3">
+                      <div className="w-28 h-28 rounded-full bg-slate-800 border border-slate-700/80 text-white flex items-center justify-center font-bold text-3xl overflow-hidden shadow-md">
+                        {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                          <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(counterpartName)
+                        )}
+                      </div>
+                      <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#00A69D] border-2 border-[#111827]" title="Conectado" />
                     </div>
-                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-amber-500 border-2 border-[#0A1322] animate-ping" title="Esperando..." />
-                  </div>
 
-                  <h3 className="text-lg font-bold text-gray-200">{counterpartName}</h3>
-                  <p className="text-xs text-amber-300 font-medium mt-1 animate-pulse">
-                    {role === "doctor"
-                      ? "⏳ Esperando a que el paciente se una a la videollamada..."
-                      : "⏳ El médico ha salido temporalmente de la consulta. Esperando a que vuelva a conectarse..."}
-                  </p>
-
-                  <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md text-xs font-semibold text-amber-400 border border-amber-500/30">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>⏳ SALA DE ESPERA EN VIVO</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* VIDEO PROPIO (PIP - ABAJO A LA DERECHA) */}
-            <div className="absolute bottom-4 right-4 w-40 h-28 rounded-xl overflow-hidden bg-[#162C4A] border-2 border-[#00A69D] shadow-2xl flex flex-col items-center justify-center z-10">
-              {videoOff ? (
-                <div className="flex flex-col items-center text-gray-400">
-                  <VideoOff size={24} />
-                  <span className="text-[10px] mt-1 font-semibold">Cámara OFF</span>
-                </div>
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-[#1A3356]">
-                  <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-sm mb-1 overflow-hidden">
-                    {userAvatar && (userAvatar.startsWith("http") || userAvatar.startsWith("data:")) ? (
-                      <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
-                    ) : (
-                      getInitials(userName)
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <span>{counterpartName}</span>
+                    </h3>
+                    {isCounterpartMuted && (
+                      <span className="text-xs text-red-400 font-bold mt-1">Micrófono Desactivado</span>
                     )}
                   </div>
-                  <span className="text-xs text-white font-bold truncate max-w-[120px]">{userName} (Tú)</span>
-                  {muted && <span className="text-[9px] text-red-400 font-bold">Mic silenciado</span>}
-                </div>
+                ) : (
+                  /* CÁMARA REMOTA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center">
+                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${
+                      pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
+                    }`}>
+                      <span>{counterpartName}</span>
+                      {isCounterpartMuted ? (
+                        <MicOff size={13} className="text-red-400" title="Micrófono Desactivado" />
+                      ) : (
+                        <Mic size={13} className="text-white/80" title="Micrófono Activo" />
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* MOSTRAR TU PROPIA CÁMARA EN PANTALLA PRINCIPAL CUANDO SE INTERCAMBIA DESDE EL DIV PIP */
+                videoOff ? (
+                  /* CÁMARA APAGADA: MOSTRAR INTERFAZ CON FOTO DE PERFIL CENTRADA */
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="relative mb-3">
+                      <div className="w-28 h-28 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-3xl overflow-hidden shadow-lg border border-white/20">
+                        {userAvatar && (userAvatar.startsWith("http") || userAvatar.startsWith("data:")) ? (
+                          <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(userName)
+                        )}
+                      </div>
+                      <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-slate-500 border-2 border-[#111827]" title="Cámara Desactivada" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">{userName} (Tú)</h3>
+                    {muted && <span className="text-xs text-red-400 font-bold mt-1">Micrófono Desactivado</span>}
+                  </div>
+                ) : (
+                  /* CÁMARA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center">
+                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${
+                      pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
+                    }`}>
+                      <span>{userName} (Tú)</span>
+                      {muted ? (
+                        <MicOff size={13} className="text-red-400" title="Micrófono Desactivado" />
+                      ) : (
+                        <Mic size={13} className="text-white/80" title="Micrófono Activo" />
+                      )}
+                    </div>
+                  </div>
+                )
               )}
             </div>
 
-            {/* AREA DE SUBTÍTULOS / LSE (EN BLANCO PARA IA FUTURA) */}
-            {subtitlesOn && (
-              <div className="absolute bottom-4 left-4 right-48 px-4 py-2.5 rounded-xl bg-black/75 backdrop-blur-md border border-gray-700 text-center z-10 transition-all">
-                <p className="text-xs text-gray-300 font-medium">
-                  {lseMode ? "🤟 Modo Lenguaje de Señas LSE Activo · Escuchando cámara frontal..." : "💬 Subtítulos en Tiempo Real · Escuchando audio de consulta..."}
-                </p>
+            {/* RECUADRO PIP PEQUEÑO CON ARRASTRE FLUIDO Y MAGNETISMO A ESQUINAS */}
+            <div 
+              ref={pipRef}
+              onMouseDown={handleMouseDownPip}
+              onClick={handlePipClick}
+              style={{
+                ...cornerStyles[pipCorner],
+                transform: isDraggingPip
+                  ? `translate3d(${dragDelta.x}px, ${dragDelta.y}px, 0px)`
+                  : "translate3d(0px, 0px, 0px)",
+                transition: isDraggingPip
+                  ? "none"
+                  : "top 350ms cubic-bezier(0.16, 1, 0.3, 1), left 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1)",
+                zIndex: isDraggingPip ? 50 : 20
+              }}
+              className={`absolute w-44 h-30 rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center select-none cursor-grab active:cursor-grabbing ${
+                isDraggingPip ? "scale-105 border-[#00C7C0]" : "hover:scale-105"
+              } ${
+                (isSwapped && !isCounterpartConnected) 
+                  ? "border-amber-500 hover:ring-2 hover:ring-amber-500" 
+                  : "border-[#00A69D] hover:ring-2 hover:ring-[#00A69D]"
+              }`}
+              title="Arrastra a cualquier esquina o haz clic para intercambiar pantalla"
+            >
+              {/* ÍCONO DE INTERCAMBIAR FLOTANTE (SOLO VISIBLE EN HOVER / CLICK) */}
+              <div className="absolute top-2 right-2 p-1.5 bg-black/70 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center justify-center shadow-md">
+                <RefreshCw size={13} className={isSwapped && !isCounterpartConnected ? "text-amber-400" : "text-[#00C7C0]"} />
               </div>
-            )}
+
+              {!isSwapped ? (
+                /* PIP MUESTRA CÁMARA PROPIA */
+                videoOff ? (
+                  /* CÁMARA APAGADA: MOSTRAR FOTO DE PERFIL EN PIP */
+                  <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+                    <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs mb-1 overflow-hidden shadow-md border border-slate-700/60">
+                      {userAvatar && (userAvatar.startsWith("http") || userAvatar.startsWith("data:")) ? (
+                        <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+                      ) : (
+                        getInitials(userName)
+                      )}
+                    </div>
+                    <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName}</span>
+                    {muted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+                  </div>
+                ) : (
+                  /* CÁMARA PRENDIDA EN PIP: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2">
+                    <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
+                      <span className="truncate">{userName} (Tú)</span>
+                      {muted ? (
+                        <MicOff size={11} className="text-red-400 flex-shrink-0" title="Micrófono Desactivado" />
+                      ) : (
+                        <Mic size={11} className="text-white/80 flex-shrink-0" title="Micrófono Activo" />
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* PIP MUESTRA CÁMARA DEL INTERLOCUTOR AL ESTAR INTERCAMBIADO */
+                !isCounterpartConnected ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+                    <div className="relative mb-1">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60 opacity-60">
+                        {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                          <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(counterpartName)
+                        )}
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-amber-500" title="Desconectado" />
+                    </div>
+                    <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+                    <span className="text-[10px] text-amber-400 font-semibold mt-0.5">Desconectado</span>
+                  </div>
+                ) : isCounterpartVideoOff ? (
+                  /* PIP CÁMARA DEL INTERLOCUTOR APAGADA */
+                  <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+                    <div className="relative mb-1">
+                      <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60">
+                        {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                          <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(counterpartName)
+                        )}
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-[#00A69D]" title="Conectado" />
+                    </div>
+                    <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+                    {isCounterpartMuted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+                  </div>
+                ) : (
+                  /* PIP CÁMARA DEL INTERLOCUTOR PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2">
+                    <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
+                      <span className="truncate">{counterpartName}</span>
+                      {isCounterpartMuted ? (
+                        <MicOff size={11} className="text-red-400 flex-shrink-0" title="Micrófono Desactivado" />
+                      ) : (
+                        <Mic size={11} className="text-white/80 flex-shrink-0" title="Micrófono Activo" />
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+
           </div>
 
-          {/* BARRA DE CONTROLES INFERIOR */}
-          <div className="flex items-center justify-center gap-3 py-2 px-4 bg-[#112239] rounded-2xl border border-gray-800 flex-wrap">
+          {/* BARRA DE CONTROLES INFERIOR (BOTONES REDONDEADOS CON ESTILO MÉDICO ESTÁNDAR) */}
+          <div className="flex items-center justify-center gap-3 py-3 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm flex-wrap">
             <button
               onClick={() => setMuted(!muted)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                muted ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-gray-800 text-gray-200 hover:bg-gray-700"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                muted 
+                  ? "bg-red-50 text-red-600 border border-red-200" 
+                  : "bg-gray-100 hover:bg-gray-200 text-[#203A70] border border-gray-200"
               }`}
-              title={muted ? "Activar micrófono" : "Silenciar micrófono"}
+              title={muted ? "Activar micrófono" : "Desactivar micrófono"}
             >
-              {muted ? <MicOff size={20} /> : <Mic size={20} />}
-              <span className="text-[11px] font-semibold">{muted ? "Silenciado" : "Mic"}</span>
+              {muted ? <MicOff size={16} /> : <Mic size={16} />}
+              <span>{muted ? "Micrófono Desactivado" : "Micrófono Activo"}</span>
             </button>
 
             <button
               onClick={() => setVideoOff(!videoOff)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                videoOff ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-gray-800 text-gray-200 hover:bg-gray-700"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                videoOff 
+                  ? "bg-red-50 text-red-600 border border-red-200" 
+                  : "bg-gray-100 hover:bg-gray-200 text-[#203A70] border border-gray-200"
               }`}
               title={videoOff ? "Activar cámara" : "Desactivar cámara"}
             >
-              {videoOff ? <VideoOff size={20} /> : <Video size={20} />}
-              <span className="text-[11px] font-semibold">{videoOff ? "Sin Cámara" : "Cámara"}</span>
+              {videoOff ? <VideoOff size={16} /> : <Video size={16} />}
+              <span>{videoOff ? "Cámara Desactivada" : "Cámara Activa"}</span>
             </button>
 
             <button
-              onClick={() => setSubtitlesOn(!subtitlesOn)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                subtitlesOn ? "bg-[#00A69D]/20 text-[#00C7C0] border border-[#00A69D]/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              onClick={() => setActiveTab("subtitles")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "subtitles" 
+                  ? "bg-[#00A69D] text-white shadow-xs" 
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200"
               }`}
             >
-              <Captions size={20} />
-              <span className="text-[11px] font-semibold">Subtítulos</span>
+              <Captions size={16} />
+              <span>Subtítulos Clínicos</span>
             </button>
 
             <button
               onClick={() => setLseMode(!lseMode)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                lseMode ? "bg-[#00A69D]/20 text-[#00C7C0] border border-[#00A69D]/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                lseMode 
+                  ? "bg-[#00A69D] text-white shadow-xs" 
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200"
               }`}
             >
-              <Hand size={20} />
-              <span className="text-[11px] font-semibold">Modo LSE</span>
+              <Hand size={16} />
+              <span>Traductor LSE</span>
             </button>
+
+            <div className="h-5 w-px bg-gray-200 mx-1" />
 
             <button
               onClick={handleFinishCall}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-all shadow-lg ml-4"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs transition-all shadow-sm cursor-pointer ml-2"
             >
-              <PhoneOff size={18} />
-              <span>{role === "doctor" ? "Finalizar Consulta" : "Salir de la Sala"}</span>
+              <PhoneOff size={16} />
+              <span>{role === "doctor" ? "Finalizar Teleconsulta" : "Salir de Teleconsulta"}</span>
             </button>
           </div>
 
         </div>
 
-        {/* SIDEBAR PANEL (CHAT / RECETA / NOTAS) */}
+        {/* SIDEBAR PANEL (CHAT / SUBTÍTULOS / RECETA / NOTAS - ESTILO TARJETAS MÉDICAS UNIFICADAS) */}
         {isSidebarOpen && (
-          <div className="w-80 sm:w-96 bg-[#112239] border-l border-gray-800 flex flex-col flex-shrink-0 z-20">
+          <div className="w-80 sm:w-96 bg-white border border-gray-200 rounded-2xl flex flex-col flex-shrink-0 z-20 overflow-hidden shadow-sm">
             
             {/* TABS NAVEGACIÓN */}
-            <div className="flex border-b border-gray-800 bg-[#0E1B2E]">
+            <div className="flex border-b border-gray-200 bg-gray-50/80 p-1.5 gap-1 overflow-x-auto">
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-                  activeTab === "chat" ? "border-[#00A69D] text-[#00C7C0] bg-[#112239]" : "border-transparent text-gray-400 hover:text-gray-200"
+                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === "chat" 
+                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                    : "text-gray-500 hover:text-[#203A70]"
                 }`}
               >
-                <MessageSquare size={15} /> Chat / Notas ({chatMessages.length})
+                <MessageSquare size={14} /> Chat ({chatMessages.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab("subtitles")}
+                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === "subtitles" 
+                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                    : "text-gray-500 hover:text-[#203A70]"
+                }`}
+              >
+                <Captions size={14} /> Subtítulos ({subtitlesList.length})
               </button>
 
               {role === "doctor" && (
                 <>
                   <button
                     onClick={() => setActiveTab("rx")}
-                    className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-                      activeTab === "rx" ? "border-[#00A69D] text-[#00C7C0] bg-[#112239]" : "border-transparent text-gray-400 hover:text-gray-200"
+                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      activeTab === "rx" 
+                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                        : "text-gray-500 hover:text-[#203A70]"
                     }`}
                   >
-                    <Pill size={15} /> Receta Médica
+                    <Pill size={14} /> Receta
                   </button>
                   <button
                     onClick={() => setActiveTab("notes")}
-                    className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-                      activeTab === "notes" ? "border-[#00A69D] text-[#00C7C0] bg-[#112239]" : "border-transparent text-gray-400 hover:text-gray-200"
+                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      activeTab === "notes" 
+                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                        : "text-gray-500 hover:text-[#203A70]"
                     }`}
                   >
-                    <FileText size={15} /> Resumen
+                    <FileText size={14} /> Resumen
                   </button>
                 </>
               )}
@@ -605,11 +929,11 @@ export function TelemedicinaRoom({
 
             {/* CONTENIDO TAB 1: CHAT INTERACTIVO */}
             {activeTab === "chat" && (
-              <div className="flex-1 flex flex-col p-4 overflow-hidden">
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              <div className="flex-1 flex flex-col p-4 overflow-hidden bg-white">
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 modern-scroll">
                   {chatMessages.length === 0 ? (
-                    <div className="text-center py-10 text-gray-500 text-xs">
-                      No hay mensajes en esta teleconsulta.<br/>Escribe un comentario abajo para interactuar en vivo.
+                    <div className="text-center py-12 px-4 text-gray-400 text-xs">
+                      No hay mensajes en esta teleconsulta.<br/>Escribe un mensaje abajo para interactuar en vivo.
                     </div>
                   ) : (
                     chatMessages.map((msg, idx) => (
@@ -617,15 +941,15 @@ export function TelemedicinaRoom({
                         key={idx}
                         className={`flex flex-col ${msg.sender === userName ? "items-end" : "items-start"}`}
                       >
-                        <div className="flex items-center gap-1 text-[10px] text-gray-400 mb-0.5">
-                          <span className="font-semibold">{msg.sender}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-0.5">
+                          <span className="font-bold text-gray-700">{msg.sender}</span>
                           <span>· {msg.time}</span>
                         </div>
                         <div
-                          className={`p-2.5 rounded-2xl text-xs max-w-[85%] ${
+                          className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed ${
                             msg.sender === userName
-                              ? "bg-[#00A69D] text-white rounded-tr-none"
-                              : "bg-[#1E3A5F] text-gray-100 rounded-tl-none border border-gray-700"
+                              ? "bg-[#00A69D] text-white rounded-tr-xs shadow-xs font-medium"
+                              : "bg-gray-100 text-gray-800 rounded-tl-xs border border-gray-200 shadow-xs font-medium"
                           }`}
                         >
                           {msg.text}
@@ -637,40 +961,93 @@ export function TelemedicinaRoom({
                 </div>
 
                 {/* CAMPO DE ENVÍO CHAT */}
-                <div className="mt-3 pt-3 border-t border-gray-800 flex gap-2">
+                <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2">
                   <input
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                     placeholder="Escribe un comentario en vivo..."
-                    className="flex-1 px-3 py-2 rounded-xl bg-[#0A1322] border border-gray-700 text-xs text-white outline-none focus:border-[#00A69D]"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:border-[#00A69D] focus:bg-white transition-all placeholder:text-gray-400"
                   />
                   <button
                     onClick={handleSendMessage}
-                    className="p-2 rounded-xl bg-[#00A69D] hover:opacity-90 text-white transition-opacity flex items-center justify-center"
+                    className="p-2.5 rounded-xl bg-[#00A69D] hover:bg-[#008C84] text-white transition-all shadow-xs flex items-center justify-center cursor-pointer"
                   >
-                    <Send size={16} />
+                    <Send size={15} />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* CONTENIDO TAB 2: RECETA MÉDICA RÁPIDA (DOCTOR) */}
+            {/* CONTENIDO TAB 2: SUBTÍTULOS / TRANCRIPCIÓN EN TIEMPO REAL */}
+            {activeTab === "subtitles" && (
+              <div className="flex-1 flex flex-col p-4 overflow-hidden bg-white">
+                <div className="flex items-center justify-between gap-2 text-xs text-[#203A70] font-bold bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Captions size={16} className="text-[#00A69D]" /> Subtítulos Clínicos en Tiempo Real
+                  </div>
+                  <span className="text-[10px] bg-[#00A69D]/10 text-[#00A69D] px-2 py-0.5 rounded-full font-bold">
+                    IA Speech-to-Text
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 modern-scroll">
+                  {subtitlesList.length === 0 ? (
+                    <div className="text-[#6B7280] text-xs text-center py-12 px-4 space-y-2">
+                      <Captions size={28} className="mx-auto text-gray-300 mb-1" />
+                      <p className="font-bold text-gray-700">Esperando transcripción en tiempo real...</p>
+                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                        Las transcripciones automáticas de voz aparecerán aquí en cuadros estructurados con la foto de perfil, rol y la hora exacta (hora, minuto y segundo) en que habla cada participante.
+                      </p>
+                    </div>
+                  ) : (
+                    subtitlesList.map((sub) => (
+                      <div key={sub.id} className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 shadow-2xs space-y-2 anim-fade-in-up">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs overflow-hidden flex-shrink-0">
+                              {sub.speaker_avatar && (sub.speaker_avatar.startsWith("http") || sub.speaker_avatar.startsWith("data:")) ? (
+                                <img src={sub.speaker_avatar} alt={sub.speaker_name} className="w-full h-full object-cover" />
+                              ) : (
+                                getInitials(sub.speaker_name)
+                              )}
+                            </div>
+                            <div className="truncate">
+                              <span className="font-bold text-xs text-[#203A70] block truncate">{sub.speaker_name}</span>
+                              <span className="text-[10px] text-gray-400 capitalize block">{sub.speaker_role === "doctor" ? "Médico Especialista" : "Paciente"}</span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono text-gray-400 font-semibold bg-white px-2 py-0.5 rounded-md border border-gray-200 flex-shrink-0">
+                            {sub.timestamp}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-800 leading-relaxed font-normal bg-white p-2.5 rounded-lg border border-gray-100">
+                          {sub.text}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={subtitlesEndRef} />
+                </div>
+              </div>
+            )}
+
+            {/* CONTENIDO TAB 3: RECETA MÉDICA RÁPIDA (DOCTOR) */}
             {activeTab === "rx" && role === "doctor" && (
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                <div className="flex items-center gap-2 text-xs text-[#00C7C0] font-bold">
-                  <Pill size={16} /> Emisión de Receta Digital Rápida
+              <div className="flex-1 p-4 overflow-y-auto space-y-3.5 modern-scroll bg-white">
+                <div className="flex items-center gap-2 text-xs text-[#203A70] font-bold bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  <Pill size={15} className="text-[#00A69D]" /> Emisión de Receta Digital Rápida
                 </div>
 
                 {rxSubmitted ? (
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center space-y-2">
-                    <CheckCircle2 size={24} className="mx-auto" />
-                    <p className="font-bold">¡Receta emitida exitosamente!</p>
-                    <p className="text-[11px] text-gray-300">El paciente ya puede visualizar su receta en su panel y buscar farmacias cercanas.</p>
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs text-center space-y-2">
+                    <CheckCircle2 size={24} className="mx-auto text-emerald-600" />
+                    <p className="font-bold text-[#203A70]">¡Receta emitida exitosamente!</p>
+                    <p className="text-[11px] text-gray-600">El paciente ya puede visualizar su receta en su portal médico.</p>
                     <button
                       onClick={() => setRxSubmitted(false)}
-                      className="mt-2 text-xs underline text-[#00C7C0]"
+                      className="mt-1 text-xs underline font-bold text-[#00A69D] hover:text-[#008C84] cursor-pointer"
                     >
                       Emitir otra receta
                     </button>
@@ -678,7 +1055,7 @@ export function TelemedicinaRoom({
                 ) : (
                   <form onSubmit={handleEmitPrescription} className="space-y-3 text-xs">
                     <div className="relative">
-                      <label className="block text-gray-300 font-semibold mb-1">Medicamento</label>
+                      <label className="block text-gray-700 font-bold mb-1">Medicamento</label>
                       <input
                         type="text"
                         value={rxForm.medicine}
@@ -689,12 +1066,12 @@ export function TelemedicinaRoom({
                           setShowRxMedSuggestions(true);
                         }}
                         placeholder="Ej: Losartán 50mg, Omeprazol 20mg..."
-                        className="w-full px-3 py-2 rounded-xl bg-[#0A1322] border border-gray-700 text-white outline-none focus:border-[#00A69D]"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:border-[#00A69D] focus:bg-white transition-all placeholder:text-gray-400"
                         required
                       />
 
                       {showRxMedSuggestions && rxForm.medicine.trim().length > 0 && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-[#0A1322] border-2 border-[#00A69D] rounded-xl shadow-2xl max-h-48 overflow-y-auto divide-y divide-gray-800 z-50">
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto divide-y divide-gray-100 z-50 modern-scroll">
                           {ragMedicines
                             .filter((m) => m.name.toLowerCase().includes(rxForm.medicine.toLowerCase().trim()))
                             .map((sug) => (
@@ -711,10 +1088,10 @@ export function TelemedicinaRoom({
                                   });
                                   setShowRxMedSuggestions(false);
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-gray-800 text-xs flex items-center justify-between text-gray-200 transition-colors cursor-pointer"
+                                className="w-full text-left px-3.5 py-2.5 hover:bg-gray-50 text-xs flex items-center justify-between text-gray-700 transition-colors cursor-pointer"
                               >
-                                <span className="font-bold text-white flex items-center gap-1.5">
-                                  <Pill size={13} className="text-[#00C7C0]" /> {sug.name}
+                                <span className="font-bold text-[#203A70] flex items-center gap-2">
+                                  <Pill size={13} className="text-[#00A69D]" /> {sug.name}
                                 </span>
                               </button>
                             ))}
@@ -723,33 +1100,33 @@ export function TelemedicinaRoom({
                     </div>
 
                     <div>
-                      <label className="block text-gray-300 font-semibold mb-1">Dosis</label>
+                      <label className="block text-gray-700 font-bold mb-1">Dosis</label>
                       <input
                         type="text"
                         value={rxForm.dose}
                         onChange={(e) => setRxForm({ ...rxForm, dose: e.target.value })}
                         placeholder="Ej: 500mg, 1 comprimido"
-                        className="w-full px-3 py-2 rounded-xl bg-[#0A1322] border border-gray-700 text-white outline-none focus:border-[#00A69D]"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:border-[#00A69D] focus:bg-white transition-all placeholder:text-gray-400"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-gray-300 font-semibold mb-1">Frecuencia / Duración</label>
+                      <label className="block text-gray-700 font-bold mb-1">Frecuencia / Duración</label>
                       <input
                         type="text"
                         value={rxForm.frequency}
                         onChange={(e) => setRxForm({ ...rxForm, frequency: e.target.value })}
                         placeholder="Ej: Cada 8 horas por 7 días"
-                        className="w-full px-3 py-2 rounded-xl bg-[#0A1322] border border-gray-700 text-white outline-none focus:border-[#00A69D]"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:border-[#00A69D] focus:bg-white transition-all placeholder:text-gray-400"
                       />
                     </div>
 
                     <button
                       type="submit"
                       disabled={isEmittingRx}
-                      className="w-full py-2.5 rounded-xl bg-[#00A69D] hover:opacity-90 text-white font-bold transition-opacity flex items-center justify-center gap-2 shadow-md mt-2"
+                      className="w-full py-3 rounded-xl bg-[#00A69D] hover:bg-[#008C84] text-white font-bold text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer mt-2"
                     >
-                      <Pill size={16} />
+                      <Pill size={15} />
                       <span>{isEmittingRx ? "Emitiendo..." : "Emitir Receta"}</span>
                     </button>
                   </form>
@@ -759,19 +1136,19 @@ export function TelemedicinaRoom({
 
             {/* CONTENIDO TAB 3: RESUMEN CLÍNICO (DOCTOR) */}
             {activeTab === "notes" && role === "doctor" && (
-              <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                <div className="flex items-center gap-2 text-xs text-[#00C7C0] font-bold">
-                  <FileText size={16} /> Resumen de Historia Clínica
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 modern-scroll bg-white">
+                <div className="flex items-center gap-2 text-xs text-[#203A70] font-bold bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  <FileText size={15} className="text-[#00A69D]" /> Resumen de Historia Clínica
                 </div>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-gray-500 leading-relaxed">
                   Escribe las observaciones principales de la consulta. Al finalizar la cita, se guardarán automáticamente en el expediente del paciente.
                 </p>
 
                 <textarea
                   value={clinicalNotes}
                   onChange={(e) => setClinicalNotes(e.target.value)}
-                  placeholder="Ej: Paciente acude a revisión de analíticas. Se observa presión controlada..."
-                  className="w-full h-40 p-3 rounded-xl bg-[#0A1322] border border-gray-700 text-xs text-white outline-none focus:border-[#00A69D] resize-none"
+                  placeholder="Ej: Paciente acude a revisión de analíticas. Se observa presión arterial controlada..."
+                  className="w-full h-44 p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:border-[#00A69D] focus:bg-white resize-none transition-all placeholder:text-gray-400"
                 />
               </div>
             )}
@@ -783,22 +1160,23 @@ export function TelemedicinaRoom({
 
       {/* ─── MODAL TELECONSULTA FINALIZADA POR EL MÉDICO ─── */}
       {isEndedByDoctor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md anim-fade-in p-4">
-          <div className="bg-[#112239] border border-emerald-500/40 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl anim-scale-in">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 animate-bounce">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
               <CheckCircle2 size={36} />
             </div>
-            <h3 className="text-xl font-bold text-white mb-1">Teleconsulta Finalizada</h3>
-            <p className="text-sm text-gray-300 mb-4">
-              El médico ha concluido el encuentro clínico. Las notas y recetas médicas han sido procesadas y guardadas en tu expediente.
+            <h3 className="text-xl font-extrabold text-[#203A70] mb-1.5">Teleconsulta Finalizada</h3>
+            <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              El médico ha concluido la consulta clínica. Las notas y recetas médicas han sido guardadas en tu expediente.
             </p>
-            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden mb-3">
-              <div className="bg-[#00C7C0] h-full animate-pulse" style={{ width: "100%" }} />
+            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mb-3">
+              <div className="bg-[#00A69D] h-full" style={{ width: "100%" }} />
             </div>
-            <p className="text-xs text-gray-400">Redirigiendo a tu portal médico...</p>
+            <p className="text-xs text-gray-400 font-medium">Redirigiendo a tu portal médico...</p>
           </div>
         </div>
       )}
     </div>
   );
 }
+

@@ -104,58 +104,109 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             room_id
         )
 
-# Store room presence in memory
-# room_presence_store = { room_id: { "doctor": timestamp, "patient": timestamp } }
+# Gestor de Sesiones de Teleconsulta Persistente en Backend (FastAPI)
+# Mantiene el tiempo de llamada (start_time/elapsed_seconds), presencia y estado de medios
 import time
-room_presence_store: Dict[str, Dict[str, float]] = {}
+
+room_sessions_store: Dict[str, dict] = {}
+room_media_store: Dict[str, Dict[str, dict]] = {}
+
+def get_or_create_session(room_id: str) -> dict:
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    now = time.time()
+    
+    if clean_room == "global" and len(room_sessions_store) > 0:
+        active_sessions = [s for k, s in room_sessions_store.items() if k != "global" and s.get("status") == "active"]
+        if active_sessions:
+            return active_sessions[-1]
+
+    if clean_room not in room_sessions_store:
+        room_sessions_store[clean_room] = {
+            "room_id": clean_room,
+            "start_time": now,
+            "status": "active",
+            "doctor_time": 0.0,
+            "patient_time": 0.0
+        }
+    return room_sessions_store[clean_room]
 
 @router.post("/presence/{room_id}/{role}")
-def update_room_presence(room_id: str, role: str):
+def update_room_presence(room_id: str, role: str, muted: bool = False, video_off: bool = False):
     now = time.time()
-    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     clean_role = "doctor" if role == "doctor" else "patient"
     
-    if clean_room not in room_presence_store:
-        room_presence_store[clean_room] = {}
-        
-    room_presence_store[clean_room][clean_role] = now
+    session = get_or_create_session(clean_room)
     
-    if "start_time" not in room_presence_store[clean_room]:
-        room_presence_store[clean_room]["start_time"] = now
-
-    # Check counterpart presence specifically in THIS room (within last 6 seconds)
+    # Actualizar marca de tiempo según el rol
+    if clean_role == "doctor":
+        session["doctor_time"] = now
+    else:
+        session["patient_time"] = now
+        
+    if clean_room not in room_media_store:
+        room_media_store[clean_room] = {}
+        
+    room_media_store[clean_room][clean_role] = {
+        "muted": muted,
+        "videoOff": video_off,
+        "updated_at": now
+    }
+    
+    # Verificar conexión del interlocutor (últimos 6 segundos)
     counterpart = "patient" if clean_role == "doctor" else "doctor"
-    spec_time = room_presence_store[clean_room].get(counterpart, 0)
+    spec_time = session.get(f"{counterpart}_time", 0)
     is_connected = (now - spec_time) < 6.0
+    
+    counterpart_media = room_media_store[clean_room].get(counterpart, {"muted": False, "videoOff": False})
+    elapsed_seconds = int(now - session["start_time"])
     
     return {
         "connected": is_connected,
-        "doctor_online": (now - room_presence_store[clean_room].get("doctor", 0)) < 6.0,
-        "patient_online": (now - room_presence_store[clean_room].get("patient", 0)) < 6.0,
-        "start_time": room_presence_store[clean_room].get("start_time", now)
+        "doctor_online": (now - session.get("doctor_time", 0)) < 6.0,
+        "patient_online": (now - session.get("patient_time", 0)) < 6.0,
+        "start_time": session["start_time"],
+        "elapsed_seconds": max(0, elapsed_seconds),
+        "status": session.get("status", "active"),
+        "counterpart_muted": counterpart_media.get("muted", False),
+        "counterpart_video_off": counterpart_media.get("videoOff", False)
     }
 
 @router.get("/presence/{room_id}")
 def get_room_presence(room_id: str):
     now = time.time()
-    clean_room = room_id if room_id and room_id != "undefined" else "global"
-    room = room_presence_store.get(clean_room, {})
-    doc_time = room.get("doctor", 0)
-    pat_time = room.get("patient", 0)
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    session = get_or_create_session(clean_room)
     
-    if "start_time" not in room:
-        if clean_room not in room_presence_store:
-            room_presence_store[clean_room] = {}
-        room_presence_store[clean_room]["start_time"] = now
-        room = room_presence_store[clean_room]
-        
-    start_time = room.get("start_time", now)
+    doc_time = session.get("doctor_time", 0)
+    pat_time = session.get("patient_time", 0)
+    elapsed_seconds = int(now - session["start_time"])
+    
     return {
         "doctor_online": (now - doc_time) < 6.0,
         "patient_online": (now - pat_time) < 6.0,
         "connected": ((now - doc_time) < 6.0) and ((now - pat_time) < 6.0),
-        "start_time": start_time
+        "start_time": session["start_time"],
+        "elapsed_seconds": max(0, elapsed_seconds),
+        "status": session.get("status", "active")
     }
+
+@router.post("/leave/{room_id}/{role}")
+def leave_room_presence(room_id: str, role: str):
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    clean_role = "doctor" if role == "doctor" else "patient"
+    session = get_or_create_session(clean_room)
+    session[f"{clean_role}_time"] = 0
+    return {"status": "ok", "message": f"{clean_role} abandonó la sala '{clean_room}'"}
+
+@router.post("/end/{room_id}")
+def end_room_session(room_id: str):
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    session = get_or_create_session(clean_room)
+    session["status"] = "ended"
+    session["doctor_time"] = 0
+    session["patient_time"] = 0
+    return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
 
 from pydantic import BaseModel
 
@@ -187,3 +238,38 @@ def post_room_comment(room_id: str, payload: LiveCommentPayload):
     
     room_comments_store[clean_room].append(msg_dict)
     return {"status": "ok", "comments": room_comments_store[clean_room]}
+
+
+from typing import Optional
+
+class SubtitlePayload(BaseModel):
+    speaker_name: str
+    speaker_role: str
+    speaker_avatar: Optional[str] = None
+    text: str
+    timestamp: str  # Formato HH:MM:SS (Hora, minuto y segundo)
+
+room_subtitles_store: Dict[str, List[dict]] = {}
+
+@router.get("/subtitles/{room_id}")
+def get_room_subtitles(room_id: str):
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    return room_subtitles_store.get(clean_room, [])
+
+@router.post("/subtitles/{room_id}")
+def post_room_subtitle(room_id: str, payload: SubtitlePayload):
+    clean_room = room_id if room_id and room_id != "undefined" else "global"
+    if clean_room not in room_subtitles_store:
+        room_subtitles_store[clean_room] = []
+    
+    sub_dict = {
+        "id": len(room_subtitles_store[clean_room]) + 1,
+        "speaker_name": payload.speaker_name,
+        "speaker_role": payload.speaker_role,
+        "speaker_avatar": payload.speaker_avatar,
+        "text": payload.text,
+        "timestamp": payload.timestamp
+    }
+    
+    room_subtitles_store[clean_room].append(sub_dict)
+    return {"status": "ok", "subtitles": room_subtitles_store[clean_room]}

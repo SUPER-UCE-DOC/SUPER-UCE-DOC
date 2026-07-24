@@ -160,6 +160,16 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("doctor_active_teleconsult");
+    localStorage.removeItem("patient_active_teleconsult");
+    localStorage.setItem("doctor_user_left_call", "true");
+    localStorage.setItem("patient_user_left_call", "true");
+
+    try {
+      fetch("http://localhost:8000/api/realtime/leave/global/patient", { method: "POST" });
+      fetch("http://localhost:8000/api/realtime/leave/global/doctor", { method: "POST" });
+    } catch (e) {}
+
     setUser(null);
     setPreselectedRole(undefined);
     setCurrentView("");
@@ -195,7 +205,7 @@ export default function App() {
       case "patient":
         return <PatientDashboard userName={user.name} userAvatar={user.avatar} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
       case "doctor":
-        return <DoctorDashboard userName={user.name} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
+        return <DoctorDashboard userName={user.name} userAvatar={user.avatar} currentView={currentView} onNavigate={(v) => setCurrentView(v)} />;
       case "pharmacy":
         return <PharmacyDashboard userName={user.name} currentView={currentView} />;
     }

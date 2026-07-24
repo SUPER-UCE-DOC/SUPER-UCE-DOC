@@ -6,6 +6,7 @@ interface PatientHomeProps {
   userName: string;
   onNavigate: (view: string) => void;
   onJoinCall?: (apt: any) => void;
+  inCall?: boolean;
 }
 
 function LiveHomeBadge({ roomCode }: { roomCode: number }) {
@@ -52,7 +53,7 @@ function formatDateSafe(dateStr?: string) {
   }
 }
 
-export function PatientHome({ userName, onNavigate, onJoinCall }: PatientHomeProps) {
+export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: PatientHomeProps) {
   const firstName = (userName || "Paciente").split(" ")[0];
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [prescriptionsList, setPrescriptionsList] = useState<any[]>([]);
@@ -203,7 +204,9 @@ export function PatientHome({ userName, onNavigate, onJoinCall }: PatientHomePro
                 }}
               >
                 <Video size={18} />
-                Entrar a la Sala de Telemedicina
+                {inCall || !!localStorage.getItem("patient_active_teleconsult")
+                  ? "Volver a la Sala de Telemedicina"
+                  : "Entrar a la Sala de Telemedicina"}
               </button>
             ) : nextApp && nextApp.status === "confirmada" ? (
               <button

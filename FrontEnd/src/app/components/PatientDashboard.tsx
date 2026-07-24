@@ -9,6 +9,7 @@ import { FarmaciasMapaView } from "./FarmaciasMapaView";
 import { PatientHome } from "./PatientHome";
 import { SettingsView } from "./SettingsView";
 import { TelemedicinaRoom } from "./TelemedicinaRoom";
+import { GlobalFloatingCallWidget } from "./GlobalFloatingCallWidget";
 
 const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
 
@@ -46,45 +47,129 @@ const gestureLabels = [
 export function PatientDashboard({ userName, userAvatar, currentView, onNavigate }: PatientDashboardProps) {
   const [pharmacyMedicine, setPharmacyMedicine] = useState<string | null>(null);
   const [lastView, setLastView] = useState(currentView);
-  const [activeCallDoc, setActiveCallDoc] = useState<{ name: string; avatar?: string; id?: number } | null>(null);
+  const [activeCallDoc, setActiveCallDoc] = useState<{ name: string; avatar?: string; id?: number; specialty?: string } | null>(null);
+  const [inCall, setInCall] = useState(false);
 
   if (currentView !== lastView) { setLastView(currentView); setPharmacyMedicine(null); }
 
   const navigate = (v: string) => { onNavigate?.(v); };
 
-  if (pharmacyMedicine) {
-    return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
-  }
+  useEffect(() => {
+    const savedActive = localStorage.getItem("patient_active_teleconsult");
+    if (savedActive) {
+      try {
+        const parsed = JSON.parse(savedActive);
+        if (parsed) {
+          setActiveCallDoc(parsed);
+          setInCall(true);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const userExited = localStorage.getItem("patient_user_left_call") === "true";
+    if (userExited) return;
+
+    api.getAppointments().then((apts) => {
+      if (Array.isArray(apts) && apts.length > 0) {
+        const active = apts.find((a: any) => a.status === "en_curso");
+        if (active) {
+          const docData = {
+            id: active.id,
+            name: active.doctor_name || "Dr. Jose Matos",
+            avatar: active.doctor_avatar,
+            specialty: active.doctor_specialty || "Cardiología Clínica"
+          };
+          setActiveCallDoc(docData);
+          setInCall(true);
+          localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
+        }
+      }
+    }).catch(() => {});
+  }, [currentView]);
+
   const handleJoinCall = (apt: any) => {
-    setActiveCallDoc({
-      name: apt.doctor_name || apt.name,
+    localStorage.removeItem("patient_user_left_call");
+    const docData = {
+      name: apt.doctor_name || apt.name || "Dr. Jose Matos",
       avatar: apt.doctor_avatar || apt.avatar,
-      id: apt.id,
-      specialty: apt.doctor_specialty || apt.specialty
-    });
+      id: apt.id || 1,
+      specialty: apt.doctor_specialty || apt.specialty || "Cardiología Clínica"
+    };
+    setActiveCallDoc(docData);
+    setInCall(true);
+    localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
     navigate("teleconsult");
   };
 
-  if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} />;
-  if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} userAvatar={userAvatar} activeCallDoc={activeCallDoc} onEndCall={() => navigate("appointments")} />;
-  if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
-  if (currentView === "appointments") return <CitasView onJoinCall={handleJoinCall} />;
-  if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
-  if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
-  return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} />;
+  const handleEndCall = () => {
+    localStorage.setItem("patient_user_left_call", "true");
+    localStorage.removeItem("patient_active_teleconsult");
+    setInCall(false);
+    setActiveCallDoc(null);
+    navigate("appointments");
+  };
+
+  const renderViewContent = () => {
+    if (pharmacyMedicine) return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
+    if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} userAvatar={userAvatar} activeCallDoc={activeCallDoc} onEndCall={handleEndCall} />;
+    if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
+    if (currentView === "appointments") return <CitasView onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
+    if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
+    return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
+  };
+
+  return (
+    <>
+      {renderViewContent()}
+      {inCall && currentView !== "teleconsult" && (
+        <GlobalFloatingCallWidget
+          role="patient"
+          counterpartName={activeCallDoc?.name || "Dr. Jose Matos"}
+          counterpartAvatar={activeCallDoc?.avatar}
+          counterpartSpecialty={activeCallDoc?.specialty || "Cardiología Clínica"}
+          appointmentId={activeCallDoc?.id || 1}
+          onReturnToCall={() => navigate("teleconsult")}
+        />
+      )}
+    </>
+  );
 }
 
 /* ─── SALA DE TELEMEDICINA — unificada y dinámica ─── */
 function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: () => void }) {
+  const [resolvedDoc, setResolvedDoc] = useState<any>(activeCallDoc);
+
+  useEffect(() => {
+    if (!resolvedDoc || !resolvedDoc.id) {
+      api.getAppointments().then((apts) => {
+        if (Array.isArray(apts) && apts.length > 0) {
+          const active = apts.find((a: any) => a.status === "en_curso" || a.status === "confirmada" || a.status === "pendiente") || apts[0];
+          if (active) {
+            setResolvedDoc({
+              id: active.id,
+              name: active.doctor_name || "Dr. Jose Matos",
+              avatar: active.doctor_avatar,
+              specialty: active.doctor_specialty
+            });
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [activeCallDoc]);
+
   return (
     <TelemedicinaRoom
       role="patient"
       userName={userName || "Paciente"}
       userAvatar={userAvatar}
-      counterpartName={activeCallDoc?.name || "Dr. Jose Miguel"}
-      counterpartAvatar={activeCallDoc?.avatar}
-      counterpartSpecialty={activeCallDoc?.specialty}
-      appointmentId={activeCallDoc?.id}
+      counterpartName={resolvedDoc?.name || activeCallDoc?.name || "Dr. Jose Matos"}
+      counterpartAvatar={resolvedDoc?.avatar || activeCallDoc?.avatar}
+      counterpartSpecialty={resolvedDoc?.specialty || activeCallDoc?.specialty}
+      appointmentId={resolvedDoc?.id || activeCallDoc?.id}
       onEndCall={() => {
         if (onEndCall) onEndCall();
         else window.history.back();
@@ -232,7 +317,7 @@ function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
 }
 
 /* ─── CITAS ─── */
-function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
+function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; inCall?: boolean }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -319,8 +404,8 @@ function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
         <h1 style={{ color: "#203A70", fontSize: "22px", fontWeight: 800 }}>Mis Citas Médicas</h1>
         <button
           onClick={handleOpenModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm hover:opacity-90 transition-opacity font-bold shadow-sm"
-          style={{ background: "#00A69D" }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
+          style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
         >
           <Plus size={16} /> Solicitar Cita
         </button>
@@ -374,10 +459,10 @@ function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
                     <LiveElapsedBadge roomCode={apt.id} />
                     <button
                       onClick={() => onJoinCall?.(apt)}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold transition-opacity hover:opacity-90 shadow-xs"
-                      style={{ background: "#00A69D" }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
+                      style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
                     >
-                      <Video size={14} /> Unirse a Consulta
+                      <Video size={15} /> {inCall ? "Volver a la Consulta" : "Unirse a Consulta"}
                     </button>
                   </>
                 ) : (
@@ -395,10 +480,10 @@ function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
                     {apt.status === "confirmada" && (
                       <button
                         onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel para iniciar la consulta. Tan pronto la inicie, se activará el botón 'Unirse' para ti.")}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-gray-500 text-xs font-semibold bg-gray-100 border border-gray-200 hover:bg-gray-200 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[#203A70] text-xs font-bold bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-all duration-200 active:scale-95 cursor-pointer shadow-xs"
                         title="Esperando a que el doctor inicie la videollamada"
                       >
-                        <Clock size={13} /> Esperando Médico
+                        <Clock size={14} className="text-[#00A69D]" /> Esperando Médico
                       </button>
                     )}
                   </>

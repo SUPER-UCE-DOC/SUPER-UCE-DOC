@@ -5,6 +5,7 @@ import { api } from "../utils/api";
 interface DoctorHomeProps {
   userName: string;
   onNavigate: (view: string) => void;
+  inCall?: boolean;
 }
 
 const notifications = [
@@ -22,7 +23,7 @@ function getAvatarInitials(name?: string): string {
   return parts[0].substring(0, 2).toUpperCase();
 }
 
-export function DoctorHome({ userName, onNavigate }: DoctorHomeProps) {
+export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,7 +191,9 @@ export function DoctorHome({ userName, onNavigate }: DoctorHomeProps) {
                   onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#00A69D")}
                 >
                   <Video size={18} />
-                  Entrar a Sala de Telemedicina
+                  {inCall || nextPatient?.status === "en_curso" || !!localStorage.getItem("doctor_active_teleconsult")
+                    ? "Volver a Sala de Telemedicina"
+                    : "Entrar a Sala de Telemedicina"}
                 </button>
               </div>
             </div>
