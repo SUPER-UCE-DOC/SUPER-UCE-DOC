@@ -42,6 +42,9 @@ class Doctor(Base):
 
     id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     specialty = Column(String, nullable=False)
+    exequatur = Column(String, nullable=True)  # Número de Exequátur oficial de Salud Pública
+    id_card = Column(String, nullable=True)    # Cédula de Identidad / DNI
+    phone = Column(String, nullable=True)      # Teléfono de contacto clínico
     room_state = Column(String, default="libre")  # "libre", "esperando", "en_consulta"
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
@@ -58,6 +61,9 @@ class Pharmacy(Base):
 
     id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     business_name = Column(String, nullable=False)
+    rnc = Column(String, nullable=True)             # Registro Nacional de Contribuyente (RNC)
+    health_license = Column(String, nullable=True)  # Licencia Sanitaria de Habilitación MISPAS
+    pharmacist_name = Column(String, nullable=True) # Farmacéutico Regente Titular
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
     address = Column(String, nullable=False)

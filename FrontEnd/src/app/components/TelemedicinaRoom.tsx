@@ -4,7 +4,7 @@ import {
   Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2, 
   User, ShieldCheck, Minimize2, Maximize2, MapPin
 } from "lucide-react";
-import { api } from "../utils/api";
+import { api, getToken } from "../utils/api";
 
 interface TelemedicinaRoomProps {
   role: "doctor" | "patient";
@@ -12,11 +12,41 @@ interface TelemedicinaRoomProps {
   userAvatar?: string;
   counterpartName: string;
   counterpartAvatar?: string;
+  counterpartSpecialty?: string;
+  patientId?: number;
   appointmentId?: number;
   appointmentReason?: string;
   onEndCall: () => void;
   onEmitRxSuccess?: () => void;
 }
+
+const ragMedicines = [
+  { name: "Losartán 50mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 30 días" },
+  { name: "Losartán 25mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 30 días" },
+  { name: "Atorvastatina 20mg", defaultDose: "1 comprimido en la noche", defaultFreq: "Por 30 días" },
+  { name: "Metformina 500mg", defaultDose: "1 comprimido con las comidas", defaultFreq: "Por 30 días" },
+  { name: "Metformina 850mg", defaultDose: "1 comprimido dos veces al día", defaultFreq: "Por 30 días" },
+  { name: "Omeprazol 20mg", defaultDose: "1 cápsula en ayunas", defaultFreq: "Por 14 días" },
+  { name: "Paracetamol 500mg (Acetaminofén)", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Según dolor/fiebre (max 5 días)" },
+  { name: "Amoxicilina 500mg", defaultDose: "1 cápsula cada 8 horas", defaultFreq: "Por 7 días" },
+  { name: "Amoxicilina + Ác. Clavulánico 875mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 7 días" },
+  { name: "Azitromicina 500mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 3 días" },
+  { name: "Ciprofloxacino 500mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 7 días" },
+  { name: "Ibuprofeno 400mg", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Por 5 días" },
+  { name: "Ibuprofeno 600mg", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Por 5 días" },
+  { name: "Diclofenaco 50mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 5 días" },
+  { name: "Enalapril 20mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 30 días" },
+  { name: "Amlodipino 5mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Amlodipino 10mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Atenolol 50mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Hidroclorotiazida 25mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Glibenclamida 5mg", defaultDose: "1 comprimido antes del desayuno", defaultFreq: "Por 30 días" },
+  { name: "Sertralina 50mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Furosemida 40mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Ácido Fólico 5mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Loratadina 10mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 10 días" },
+  { name: "Sales de Rehidratación Oral (SRO)", defaultDose: "1 sobre disuelto en 1L de agua", defaultFreq: "Tomar a voluntad tras cada deposición" },
+];
 
 export function TelemedicinaRoom({
   role,
@@ -24,6 +54,8 @@ export function TelemedicinaRoom({
   userAvatar,
   counterpartName,
   counterpartAvatar,
+  counterpartSpecialty,
+  patientId,
   appointmentId,
   appointmentReason,
   onEndCall,
@@ -34,9 +66,21 @@ export function TelemedicinaRoom({
   const [videoOff, setVideoOff] = useState(false);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [lseMode, setLseMode] = useState(false);
+  const [showRxMedSuggestions, setShowRxMedSuggestions] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [activeTab, setActiveTab] = useState<"chat" | "rx" | "notes">(role === "doctor" ? "chat" : "chat");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isEndedByDoctor, setIsEndedByDoctor] = useState(false);
+
+  // Auto-exit timer for patient when doctor finishes call
+  useEffect(() => {
+    if (isEndedByDoctor) {
+      const timer = setTimeout(() => {
+        onEndCall();
+      }, 2800);
+      return () => clearTimeout(timer);
+    }
+  }, [isEndedByDoctor, onEndCall]);
 
   // In-Call Live Chat / Comments
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string; time: string; role: string }[]>([]);
@@ -130,6 +174,36 @@ export function TelemedicinaRoom({
         }
 
         prevConnectedRef.current = isOnline;
+
+        // 3. Real-time call completion sync for patient
+        if (role === "patient") {
+          const statusKey = `room_status_${roomCode}`;
+          const rawStatus = localStorage.getItem(statusKey);
+          if (rawStatus) {
+            try {
+              const parsedStatus = JSON.parse(rawStatus);
+              if (parsedStatus.status === "completada" || parsedStatus.status === "ended") {
+                setIsEndedByDoctor(true);
+              }
+            } catch (e) {}
+          }
+
+          if (appointmentId) {
+            try {
+              const token = getToken();
+              const res = await fetch(`http://localhost:8000/api/appointments`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (res.ok) {
+                const apts = await res.json();
+                const myApt = apts.find((a: any) => a.id === appointmentId);
+                if (myApt && myApt.status === "completada") {
+                  setIsEndedByDoctor(true);
+                }
+              }
+            } catch (e) {}
+          }
+        }
       } catch (e) {
         console.error("Error actualizando presencia", e);
       }
@@ -141,7 +215,7 @@ export function TelemedicinaRoom({
     return () => {
       clearInterval(interval);
     };
-  }, [roomCode, role, counterpartName]);
+  }, [roomCode, role, counterpartName, appointmentId]);
 
   // Poll & Load Live Comments from Backend REST API + LocalStorage fallback
   const storageKey = appointmentId ? `teleconsult_comments_${appointmentId}` : `teleconsult_comments_demo`;
@@ -157,6 +231,12 @@ export function TelemedicinaRoom({
           const data = await res.json();
           if (Array.isArray(data)) {
             setChatMessages(data);
+            if (role === "patient") {
+              const finishedSignal = data.some((m: any) => m.text === "__ROOM_FINISHED_BY_DOCTOR__");
+              if (finishedSignal) {
+                setIsEndedByDoctor(true);
+              }
+            }
             return;
           }
         }
@@ -165,7 +245,14 @@ export function TelemedicinaRoom({
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
-          setChatMessages(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          setChatMessages(parsed);
+          if (role === "patient" && Array.isArray(parsed)) {
+            const finishedSignal = parsed.some((m: any) => m.text === "__ROOM_FINISHED_BY_DOCTOR__");
+            if (finishedSignal) {
+              setIsEndedByDoctor(true);
+            }
+          }
         } else {
           setChatMessages([]);
         }
@@ -175,7 +262,7 @@ export function TelemedicinaRoom({
     loadComments();
     const interval = setInterval(loadComments, 1500);
     return () => clearInterval(interval);
-  }, [roomCode, storageKey]);
+  }, [roomCode, storageKey, role]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -232,7 +319,7 @@ export function TelemedicinaRoom({
     try {
       setIsEmittingRx(true);
       await api.createPrescription({
-        patient_id: appointmentId || 1, // Fallback if general
+        patient_id: patientId || 0,
         appointment_id: appointmentId,
         medicine: rxForm.medicine.trim(),
         dose: rxForm.dose.trim() || "1 comprimido",
@@ -256,6 +343,23 @@ export function TelemedicinaRoom({
           await api.summarizeConsultation(appointmentId, clinicalNotes.trim());
         }
         await api.updateAppointmentStatus(appointmentId, "completada");
+
+        // Broadcast room completion locally & via realtime channel
+        const statusKey = `room_status_${roomCode}`;
+        localStorage.setItem(statusKey, JSON.stringify({ status: "completada", endedBy: "doctor", endedAt: new Date().toISOString() }));
+
+        try {
+          await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sender: "SISTEMA",
+              text: "__ROOM_FINISHED_BY_DOCTOR__",
+              time: new Date().toLocaleTimeString("es-DO"),
+              role: "system"
+            })
+          });
+        } catch (e) {}
       }
     } catch (err) {
       console.error("Error al finalizar consulta", err);
@@ -278,9 +382,14 @@ export function TelemedicinaRoom({
                 SUPER-UCE DOC
               </span>
             </div>
-            <p className="text-xs text-gray-400">
-              {role === "doctor" ? "Paciente:" : "Médico:"} <strong className="text-gray-200">{counterpartName}</strong>
-              {appointmentReason && <span className="ml-2 text-gray-400">· Motivo: {appointmentReason}</span>}
+            <p className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+              <span>{role === "doctor" ? "Paciente:" : "Médico:"} <strong className="text-gray-200">{counterpartName}</strong></span>
+              {role === "patient" && counterpartSpecialty && (
+                <span className="text-[11px] text-[#00C7C0] font-semibold bg-[#00A69D]/20 px-2 py-0.5 rounded-full border border-[#00A69D]/30">
+                  {counterpartSpecialty}
+                </span>
+              )}
+              {appointmentReason && <span className="text-gray-400">· Motivo: {appointmentReason}</span>}
             </p>
           </div>
         </div>
@@ -568,16 +677,49 @@ export function TelemedicinaRoom({
                   </div>
                 ) : (
                   <form onSubmit={handleEmitPrescription} className="space-y-3 text-xs">
-                    <div>
+                    <div className="relative">
                       <label className="block text-gray-300 font-semibold mb-1">Medicamento</label>
                       <input
                         type="text"
                         value={rxForm.medicine}
-                        onChange={(e) => setRxForm({ ...rxForm, medicine: e.target.value })}
-                        placeholder="Ej: Losartán, Acetaminofén, Amoxicilina"
+                        onFocus={() => setShowRxMedSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowRxMedSuggestions(false), 150)}
+                        onChange={(e) => {
+                          setRxForm({ ...rxForm, medicine: e.target.value });
+                          setShowRxMedSuggestions(true);
+                        }}
+                        placeholder="Ej: Losartán 50mg, Omeprazol 20mg..."
                         className="w-full px-3 py-2 rounded-xl bg-[#0A1322] border border-gray-700 text-white outline-none focus:border-[#00A69D]"
                         required
                       />
+
+                      {showRxMedSuggestions && rxForm.medicine.trim().length > 0 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-[#0A1322] border-2 border-[#00A69D] rounded-xl shadow-2xl max-h-48 overflow-y-auto divide-y divide-gray-800 z-50">
+                          {ragMedicines
+                            .filter((m) => m.name.toLowerCase().includes(rxForm.medicine.toLowerCase().trim()))
+                            .map((sug) => (
+                              <button
+                                key={sug.name}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setRxForm({
+                                    ...rxForm,
+                                    medicine: sug.name,
+                                    dose: rxForm.dose || sug.defaultDose,
+                                    frequency: rxForm.frequency || sug.defaultFreq,
+                                  });
+                                  setShowRxMedSuggestions(false);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-800 text-xs flex items-center justify-between text-gray-200 transition-colors cursor-pointer"
+                              >
+                                <span className="font-bold text-white flex items-center gap-1.5">
+                                  <Pill size={13} className="text-[#00C7C0]" /> {sug.name}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -638,6 +780,25 @@ export function TelemedicinaRoom({
         )}
 
       </div>
+
+      {/* ─── MODAL TELECONSULTA FINALIZADA POR EL MÉDICO ─── */}
+      {isEndedByDoctor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md anim-fade-in p-4">
+          <div className="bg-[#112239] border border-emerald-500/40 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl anim-scale-in">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/40 animate-bounce">
+              <CheckCircle2 size={36} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-1">Teleconsulta Finalizada</h3>
+            <p className="text-sm text-gray-300 mb-4">
+              El médico ha concluido el encuentro clínico. Las notas y recetas médicas han sido procesadas y guardadas en tu expediente.
+            </p>
+            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden mb-3">
+              <div className="bg-[#00C7C0] h-full animate-pulse" style={{ width: "100%" }} />
+            </div>
+            <p className="text-xs text-gray-400">Redirigiendo a tu portal médico...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

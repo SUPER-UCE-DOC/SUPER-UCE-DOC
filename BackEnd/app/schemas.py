@@ -6,6 +6,7 @@ from typing import List, Optional
 class Token(BaseModel):
     access_token: str
     token_type: str
+    is_new: Optional[bool] = False
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -15,6 +16,19 @@ class TokenData(BaseModel):
 class GoogleLoginRequest(BaseModel):
     token: str
     role: str
+    is_creation_step: Optional[bool] = False
+    full_name: Optional[str] = None
+    specialty: Optional[str] = None
+    exequatur: Optional[str] = None
+    id_card: Optional[str] = None
+    age: Optional[int] = None
+    condition: Optional[str] = None
+    business_name: Optional[str] = None
+    rnc: Optional[str] = None
+    health_license: Optional[str] = None
+    pharmacist_name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
 
 
 # --- User Schemas ---
@@ -29,7 +43,12 @@ class UserCreate(UserBase):
     age: Optional[int] = None
     condition: Optional[str] = None
     specialty: Optional[str] = None
+    exequatur: Optional[str] = None
+    id_card: Optional[str] = None
     business_name: Optional[str] = None
+    rnc: Optional[str] = None
+    health_license: Optional[str] = None
+    pharmacist_name: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
     lat: float = 18.46
@@ -128,6 +147,7 @@ class AppointmentResponse(BaseModel):
     reason: Optional[str]
     patient_name: str
     doctor_name: str
+    doctor_specialty: Optional[str] = None
     patient_avatar: Optional[str] = None
     doctor_avatar: Optional[str] = None
 

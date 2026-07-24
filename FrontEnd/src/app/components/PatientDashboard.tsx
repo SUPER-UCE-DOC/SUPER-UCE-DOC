@@ -56,7 +56,12 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
     return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
   }
   const handleJoinCall = (apt: any) => {
-    setActiveCallDoc({ name: apt.doctor_name || apt.name, avatar: apt.doctor_avatar || apt.avatar, id: apt.id });
+    setActiveCallDoc({
+      name: apt.doctor_name || apt.name,
+      avatar: apt.doctor_avatar || apt.avatar,
+      id: apt.id,
+      specialty: apt.doctor_specialty || apt.specialty
+    });
     navigate("teleconsult");
   };
 
@@ -70,7 +75,7 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
 }
 
 /* ─── SALA DE TELEMEDICINA — unificada y dinámica ─── */
-function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number } | null; onEndCall?: () => void }) {
+function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: () => void }) {
   return (
     <TelemedicinaRoom
       role="patient"
@@ -78,6 +83,7 @@ function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { 
       userAvatar={userAvatar}
       counterpartName={activeCallDoc?.name || "Dr. Jose Miguel"}
       counterpartAvatar={activeCallDoc?.avatar}
+      counterpartSpecialty={activeCallDoc?.specialty}
       appointmentId={activeCallDoc?.id}
       onEndCall={() => {
         if (onEndCall) onEndCall();
@@ -345,7 +351,14 @@ function CitasView({ onJoinCall }: { onJoinCall?: (apt: any) => void }) {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p style={{ color: "#203A70", fontWeight: 700 }}>{apt.doctor_name || "Doctor"}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p style={{ color: "#203A70", fontWeight: 700 }}>{apt.doctor_name || "Doctor"}</p>
+                  {(apt.doctor_specialty || apt.specialty) && (
+                    <span className="text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                      {apt.doctor_specialty || apt.specialty}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm mt-0.5" style={{ color: "#6B7280" }}>
                   {apt.type || "Teleconsulta"} · {formatDateSafe(apt.date_time)}
                 </p>

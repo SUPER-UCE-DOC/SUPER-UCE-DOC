@@ -243,7 +243,9 @@ def medical_chatbot_query(
         if future_apps:
             for appt in future_apps:
                 doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
-                doc_name = doc_user.full_name if doc_user else "Doctor"
+                doc_prof = db.query(models.Doctor).filter(models.Doctor.id == appt.doctor_id).first()
+                doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
+                doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
                 date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
                 st_lbl = "Confirmada (agendada)" if appt.status == "confirmada" else "Pendiente de aprobación"
                 user_context += f"- Cita FUTURA PROGRAMADA #{appt.id}: Fecha: {date_str}, Médico: {doc_name}, Tipo: {appt.type}, Estado: {st_lbl}. Motivo: {appt.reason or 'Sin especificar'}\n"
@@ -254,7 +256,9 @@ def medical_chatbot_query(
         if past_completed_apps:
             for appt in past_completed_apps:
                 doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
-                doc_name = doc_user.full_name if doc_user else "Doctor"
+                doc_prof = db.query(models.Doctor).filter(models.Doctor.id == appt.doctor_id).first()
+                doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
+                doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
                 date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
                 linked_rxs = db.query(models.Prescription).filter(models.Prescription.appointment_id == appt.id).all()
                 rx_str = " | Recetado en esta cita: " + ", ".join([f"{p.medicine} ({p.dose})" for p in linked_rxs]) if linked_rxs else " | Recetado en esta cita: Ninguno"
@@ -270,7 +274,9 @@ def medical_chatbot_query(
             user_context += "\nRESÚMENES CLÍNICOS DE CONSULTAS FINALIZADAS:\n"
             for h in histories:
                 doc_user = db.query(models.User).filter(models.User.id == h.doctor_id).first()
-                doc_name = doc_user.full_name if doc_user else "Doctor"
+                doc_prof = db.query(models.Doctor).filter(models.Doctor.id == h.doctor_id).first()
+                doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
+                doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
                 h_date = h.date.strftime("%d/%m/%Y a las %I:%M %p")
                 user_context += f"- Consulta realizada el {h_date} con {doc_name}:\n  Resumen Clínico: {h.summary_ia or h.translation_text}\n"
 
@@ -279,15 +285,26 @@ def medical_chatbot_query(
             models.Prescription.patient_id == current_user.id
         ).order_by(models.Prescription.issued_at.desc()).all()
 
-        user_context += "\n--- RECETAS Y MEDICAMENTOS ASIGNADOS AL PACIENTE EN LA PLATAFORMA ---\n"
+        user_context += "\n--- RECETAS Y MEDICAMENTOS DEL PACIENTE EN LA PLATAFORMA ---\n"
         if all_rxs:
             for rx in all_rxs:
                 doc_user = db.query(models.User).filter(models.User.id == rx.doctor_id).first()
-                doc_name = doc_user.full_name if doc_user else "Doctor"
+                doc_prof = db.query(models.Doctor).filter(models.Doctor.id == rx.doctor_id).first()
+                doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
+                doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
                 issued_str = rx.issued_at.strftime("%d/%m/%Y") if rx.issued_at else "Sin fecha"
-                user_context += f"- Medicamento: {rx.medicine} ({rx.dose}), Frecuencia: {rx.frequency}, Estado: {rx.status}, Recetado el {issued_str} por {doc_name} (Receta #{rx.id})\n"
+                
+                is_expired = (rx.expires_at and now > rx.expires_at)
+                if rx.status == "despachada":
+                    st_desc = "DESPACHADA Y VENCIDA (El paciente YA la consiguió / retiró en la farmacia. YA NO ESTÁ ACTIVA ni vigente para volver a reclamar)."
+                elif rx.status == "vencida" or is_expired:
+                    st_desc = "VENCIDA (Expiró el plazo de validez. YA NO ESTÁ ACTIVA)."
+                else:
+                    st_desc = "ACTIVA Y VIGENTE (Pendiente de ser despachada/retirada en farmacia)."
+
+                user_context += f"- Receta #{rx.id}: Medicamento {rx.medicine} ({rx.dose}), Frecuencia: {rx.frequency}. Estado actual: {st_desc}. Emitida el {issued_str} por {doc_name}.\n"
         else:
-            user_context += "EL PACIENTE CUMPLE CON CERO (0) MEDICAMENTOS O RECETAS REGISTRADAS EN LA PLATAFORMA (NO TIENE MEDICAMENTOS REGISTRADOS).\n"
+            user_context += "EL PACIENTE TIENE CERO (0) RECETAS O MEDICAMENTOS REGISTRADOS EN LA PLATAFORMA.\n"
 
         # 5. Citas rechazadas (SOLO si el usuario pregunta explícitamente por qué fue rechazada)
         if asking_about_rejection:
@@ -299,7 +316,9 @@ def medical_chatbot_query(
                 user_context += "\nCITAS RECHAZADAS (OCULTAS - SOLO MENCIONAR PORQUE EL PACIENTE PREGUNTÓ EXPLÍCITAMENTE):\n"
                 for appt in rejected_apps:
                     doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
-                    doc_name = doc_user.full_name if doc_user else "Doctor"
+                    doc_prof = db.query(models.Doctor).filter(models.Doctor.id == appt.doctor_id).first()
+                    doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
+                    doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
                     date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
                     user_context += f"- Cita #{appt.id} del {date_str} con {doc_name}: RECHAZADA/CANCELADA por falta de disponibilidad en la agenda del doctor.\n"
 

@@ -3,7 +3,7 @@ import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, Send, CheckCircle,
   Calendar, Users, Stethoscope, FileText, Clock, AlertCircle,
-  ChevronRight, Plus, Search, Brain, Zap, X
+  ChevronRight, Plus, Search, Brain, Zap, X, Pill
 } from "lucide-react";
 import { DoctorHome } from "./DoctorHome";
 import { SettingsView } from "./SettingsView";
@@ -915,6 +915,7 @@ function TeleconsultaView({ userName }: { userName?: string }) {
       userName={userName || "Dr. Jose Miguel"}
       counterpartName={activeAppointment?.patient_name || selectedPatient?.patient_name || activePatient || "Paciente"}
       counterpartAvatar={activeAppointment?.patient_avatar || selectedPatient?.patient_avatar}
+      patientId={activeAppointment?.patient_id || selectedPatient?.patient_id || selectedPatient?.id}
       appointmentId={activeAppointment?.id || selectedPatient?.id}
       appointmentReason={activeAppointment?.reason || selectedPatient?.reason}
       onEndCall={endCall}
@@ -925,15 +926,48 @@ function TeleconsultaView({ userName }: { userName?: string }) {
   );
 }
 
+const ragMedicines = [
+  { name: "Losartán 50mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 30 días" },
+  { name: "Losartán 25mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 30 días" },
+  { name: "Atorvastatina 20mg", defaultDose: "1 comprimido en la noche", defaultFreq: "Por 30 días" },
+  { name: "Metformina 500mg", defaultDose: "1 comprimido con las comidas", defaultFreq: "Por 30 días" },
+  { name: "Metformina 850mg", defaultDose: "1 comprimido dos veces al día", defaultFreq: "Por 30 días" },
+  { name: "Omeprazol 20mg", defaultDose: "1 cápsula en ayunas", defaultFreq: "Por 14 días" },
+  { name: "Paracetamol 500mg (Acetaminofén)", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Según dolor/fiebre (max 5 días)" },
+  { name: "Amoxicilina 500mg", defaultDose: "1 cápsula cada 8 horas", defaultFreq: "Por 7 días" },
+  { name: "Amoxicilina + Ác. Clavulánico 875mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 7 días" },
+  { name: "Azitromicina 500mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 3 días" },
+  { name: "Ciprofloxacino 500mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 7 días" },
+  { name: "Ibuprofeno 400mg", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Por 5 días" },
+  { name: "Ibuprofeno 600mg", defaultDose: "1 comprimido cada 8 horas", defaultFreq: "Por 5 días" },
+  { name: "Diclofenaco 50mg", defaultDose: "1 comprimido cada 12 horas", defaultFreq: "Por 5 días" },
+  { name: "Enalapril 20mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 30 días" },
+  { name: "Amlodipino 5mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Amlodipino 10mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Atenolol 50mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Hidroclorotiazida 25mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Glibenclamida 5mg", defaultDose: "1 comprimido antes del desayuno", defaultFreq: "Por 30 días" },
+  { name: "Sertralina 50mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Furosemida 40mg", defaultDose: "1 comprimido en la mañana", defaultFreq: "Por 30 días" },
+  { name: "Ácido Fólico 5mg", defaultDose: "1 comprimido al día", defaultFreq: "Por 30 días" },
+  { name: "Loratadina 10mg", defaultDose: "1 comprimido cada 24 horas", defaultFreq: "Por 10 días" },
+  { name: "Sales de Rehidratación Oral (SRO)", defaultDose: "1 sobre disuelto en 1L de agua", defaultFreq: "Tomar a voluntad tras cada deposición" },
+];
+
 /* ─── RECETAS ─── */
 function RecetasView() {
   const [form, setForm] = useState({ patient: "", medicine: "", dose: "", frequency: "" });
   const [myPatients, setMyPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showMedSuggestions, setShowMedSuggestions] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const medSuggestions = ragMedicines.filter((m) =>
+    m.name.toLowerCase().includes(form.medicine.toLowerCase().trim())
+  );
 
   useEffect(() => {
     async function loadPatients() {
@@ -1075,16 +1109,50 @@ function RecetasView() {
               )}
             </div>
 
-            {/* Medicamento */}
-            <div>
+            {/* Medicamento con Autocompletado */}
+            <div className="relative">
               <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Medicamento</label>
               <input
                 value={form.medicine}
-                onChange={(e) => setForm({ ...form, medicine: e.target.value })}
-                placeholder="Ej: Atorvastatina 20mg"
+                onFocus={() => setShowMedSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowMedSuggestions(false), 150)}
+                onChange={(e) => {
+                  setForm({ ...form, medicine: e.target.value });
+                  setShowMedSuggestions(true);
+                }}
+                placeholder="Ej: Atorvastatina 20mg, Losartán 50mg..."
                 className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
                 style={{ borderColor: "#E5E7EB" }}
               />
+
+              {showMedSuggestions && form.medicine.trim().length > 0 && medSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-[#00A69D] rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-gray-100 z-50">
+                  {medSuggestions.map((sug) => (
+                    <button
+                      key={sug.name}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setForm({
+                          ...form,
+                          medicine: sug.name,
+                          dose: form.dose || sug.defaultDose,
+                          frequency: form.frequency || sug.defaultFreq,
+                        });
+                        setShowMedSuggestions(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-xs flex items-center justify-between text-gray-700 transition-colors cursor-pointer"
+                    >
+                      <span className="font-bold text-[#203A70] flex items-center gap-2">
+                        <Pill size={14} className="text-[#00A69D]" /> {sug.name}
+                      </span>
+                      <span className="text-[11px] font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                        {sug.defaultDose}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Dosis */}

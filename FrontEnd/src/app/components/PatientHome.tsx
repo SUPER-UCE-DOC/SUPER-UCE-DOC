@@ -153,8 +153,13 @@ export function PatientHome({ userName, onNavigate, onJoinCall }: PatientHomePro
 
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <h2 className="text-white" style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1.3 }}>
-                {nextApp ? (nextApp.doctor_name || "Doctor Especialista") : "No tienes citas agendadas"}
+              <h2 className="text-white flex items-center gap-2 flex-wrap" style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1.3 }}>
+                <span>{nextApp ? (nextApp.doctor_name || "Doctor Especialista") : "No tienes citas agendadas"}</span>
+                {nextApp && (nextApp.doctor_specialty || nextApp.specialty) && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-400/20 text-teal-200 border border-teal-300/30 font-semibold">
+                    {nextApp.doctor_specialty || nextApp.specialty}
+                  </span>
+                )}
               </h2>
               <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "14px", marginTop: "2px" }}>
                 {nextApp ? `${nextApp.type || "Teleconsulta"} · ${nextApp.reason || "Consulta General"}` : "Solicita una teleconsulta médica cuando lo necesites"}

@@ -58,6 +58,8 @@ def create_appointment(
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+    doc_profile = db.query(models.Doctor).filter(models.Doctor.id == doctor_user.id).first() if doctor_user else None
+    doc_spec = doc_profile.specialty if doc_profile else "Medicina General"
 
     return schemas.AppointmentResponse(
         id=new_app.id,
@@ -69,6 +71,7 @@ def create_appointment(
         reason=new_app.reason,
         patient_name=patient_name,
         doctor_name=doctor_name,
+        doctor_specialty=doc_spec,
         patient_avatar=patient_user.avatar,
         doctor_avatar=doctor_user.avatar
     )
@@ -96,8 +99,10 @@ def get_my_appointments(
     for app in appointments:
         p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
         d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
+        d_prof = db.query(models.Doctor).filter(models.Doctor.id == app.doctor_id).first()
         p_name = p_user.full_name if p_user else "Paciente"
         d_name = d_user.full_name if d_user else "Doctor"
+        d_spec = d_prof.specialty if d_prof else "Medicina General"
         response.append(
             schemas.AppointmentResponse(
                 id=app.id,
@@ -109,6 +114,7 @@ def get_my_appointments(
                 reason=app.reason,
                 patient_name=p_name,
                 doctor_name=d_name,
+                doctor_specialty=d_spec,
                 patient_avatar=p_user.avatar if p_user else None,
                 doctor_avatar=d_user.avatar if d_user else None
             )
@@ -170,8 +176,10 @@ def update_appointment_status(
     
     p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
     d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
+    d_prof = db.query(models.Doctor).filter(models.Doctor.id == app.doctor_id).first()
     p_name = p_user.full_name if p_user else "Paciente"
     d_name = d_user.full_name if d_user else "Doctor"
+    d_spec = d_prof.specialty if d_prof else "Medicina General"
     
     return schemas.AppointmentResponse(
         id=app.id,
@@ -183,6 +191,7 @@ def update_appointment_status(
         reason=app.reason,
         patient_name=p_name,
         doctor_name=d_name,
+        doctor_specialty=d_spec,
         patient_avatar=p_user.avatar if p_user else None,
         doctor_avatar=d_user.avatar if d_user else None
     )
@@ -205,9 +214,13 @@ def get_waiting_room(
         models.Appointment.status.in_(["pendiente", "en_curso"])
     ).order_by(models.Appointment.date_time.asc()).all()
     
+    d_prof = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
+    d_spec = d_prof.specialty if d_prof else "Medicina General"
+
     response = []
     for app in appointments:
-        p_name = db.query(models.User).filter(models.User.id == app.patient_id).first().full_name
+        p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
+        p_name = p_user.full_name if p_user else "Paciente"
         d_name = current_user.full_name
         response.append(
             schemas.AppointmentResponse(
@@ -219,7 +232,10 @@ def get_waiting_room(
                 type=app.type,
                 reason=app.reason,
                 patient_name=p_name,
-                doctor_name=d_name
+                doctor_name=d_name,
+                doctor_specialty=d_spec,
+                patient_avatar=p_user.avatar if p_user else None,
+                doctor_avatar=current_user.avatar
             )
         )
     return response

@@ -73,7 +73,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta cuenta ya está registrada. Por favor, ingresa una dirección de correo electrónico diferente"
+            detail="La dirección de correo electrónico especificada ya se encuentra registrada en la plataforma."
         )
     
     # Hash password
@@ -105,6 +105,9 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         new_doctor = models.Doctor(
             id=new_user.id,
             specialty=user_in.specialty if user_in.specialty else "Medicina General",
+            exequatur=user_in.exequatur if user_in.exequatur else "Pendiente",
+            id_card=user_in.id_card if user_in.id_card else "000-0000000-0",
+            phone=user_in.phone if user_in.phone else "809-529-0000",
             room_state="libre",
             lat=user_in.lat,
             lon=user_in.lon
@@ -114,9 +117,12 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         new_pharmacy = models.Pharmacy(
             id=new_user.id,
             business_name=user_in.business_name if user_in.business_name else user_in.full_name,
+            rnc=user_in.rnc if user_in.rnc else "1-00-00000-0",
+            health_license=user_in.health_license if user_in.health_license else "MISPAS-PEND",
+            pharmacist_name=user_in.pharmacist_name if user_in.pharmacist_name else user_in.full_name,
             lat=user_in.lat,
             lon=user_in.lon,
-            address=user_in.address if user_in.address else "Dirección no especificada",
+            address=user_in.address if user_in.address else "San Pedro de Macorís, RD",
             phone=user_in.phone if user_in.phone else "809-529-0000"
         )
         db.add(new_pharmacy)
@@ -126,7 +132,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Rol '{user_in.role}' no es válido."
+            detail=f"El rol '{user_in.role}' especificado no es válido."
         )
 
     db.commit()
@@ -137,19 +143,28 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     
-    # 1. Validar correo y contraseña PRIMERO (evita enumeración de roles con contraseñas falsas)
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # 1. Validar si la cuenta existe
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="La dirección de correo electrónico ingresada no está registrada en la plataforma. Seleccione la pestaña 'Registrarse' para crear su cuenta.",
+        )
+        
+    # 2. Validar contraseña
+    if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrectos.",
+            detail="La contraseña ingresada es incorrecta. Por favor, verifique sus datos e intente nuevamente.",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    # 2. Una vez demostrada la identidad, validar que está entrando a su portal correspondiente
+    # 3. Validar coincidencia de rol
     if form_data.client_id and user.role != form_data.client_id:
+        role_names = {"patient": "Paciente", "doctor": "Médico", "pharmacy": "Farmacia"}
+        role_label = role_names.get(user.role, user.role)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Esta cuenta pertenece a otro rol. Por favor, inicia sesión con la cuenta correcta."
+            detail=f"Esta dirección de correo electrónico ya se encuentra registrada bajo el rol de '{role_label}'. Por favor, seleccione ese perfil para iniciar sesión."
         )
     
     # Generate token
@@ -189,6 +204,9 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
         if doc:
             profile_data = {
                 "specialty": doc.specialty,
+                "exequatur": doc.exequatur,
+                "id_card": doc.id_card,
+                "phone": doc.phone,
                 "room_state": doc.room_state,
                 "lat": doc.lat,
                 "lon": doc.lon
@@ -198,6 +216,9 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
         if ph:
             profile_data = {
                 "business_name": ph.business_name,
+                "rnc": ph.rnc,
+                "health_license": ph.health_license,
+                "pharmacist_name": ph.pharmacist_name,
                 "address": ph.address,
                 "phone": ph.phone,
                 "lat": ph.lat,
@@ -215,80 +236,133 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
 
 
 def verify_google_token(token: str) -> dict:
-    url = f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={token}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # 1. Try access_token userinfo
+    url_userinfo = f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={token}"
     try:
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url_userinfo, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as response:
             if response.status == 200:
                 return json.loads(response.read().decode("utf-8"))
     except Exception as e:
-        print(f"Error validating Google token: {e}")
+        print(f"Userinfo Google token validation failed: {e}")
+
+    # 2. Try id_token tokeninfo
+    url_tokeninfo = f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
+    try:
+        req = urllib.request.Request(url_tokeninfo, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                return json.loads(response.read().decode("utf-8"))
+    except Exception as e:
+        print(f"Tokeninfo Google token validation failed: {e}")
+
     return None
 
 
 @router.post("/google", response_model=schemas.Token)
 def login_google(req_data: schemas.GoogleLoginRequest, db: Session = Depends(get_db)):
+    if req_data.role != "patient":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La autenticación a través de proveedores externos está disponible únicamente para cuentas de Pacientes. Los perfiles profesionales (Médicos y Farmacias) deben registrarse e ingresar con sus credenciales institucionales."
+        )
+
     user_info = verify_google_token(req_data.token)
     if not user_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de Google no válido o expirado."
+            detail="La sesión de autenticación ha expirado o no es válida. Por favor, intente nuevamente."
         )
     
     email = user_info.get("email")
-    full_name = user_info.get("name") or email.split("@")[0]
-    
-    # Check if user already exists
-    user = db.query(models.User).filter(models.User.email == email).first()
-    
-    if not user:
-        # Create a new user with randomized password
-        random_pwd = get_password_hash(datetime.datetime.utcnow().isoformat() + email)
-        user = models.User(
-            email=email,
-            hashed_password=random_pwd,
-            role=req_data.role,
-            full_name=full_name
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo obtener la dirección de correo electrónico vinculada a la sesión."
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    role_names = {"patient": "Paciente", "doctor": "Médico", "pharmacy": "Farmacia"}
+
+    avatar_url = user_info.get("picture")
+
+    # CASO 1: El usuario YA EXISTE en la base de datos
+    if user:
+        if user.role != req_data.role:
+            role_label = role_names.get(user.role, user.role)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Esta dirección de correo electrónico ya se encuentra registrada bajo el rol de '{role_label}'. Por favor, seleccione ese perfil para iniciar sesión."
+            )
         
-        # Create role profile
-        if req_data.role == "patient":
-            new_patient = models.Patient(
-                id=user.id,
-                age=30,
-                condition="General",
-                avatar=full_name[:2].upper(),
-                lat=18.463,
-                lon=-69.304
-            )
-            db.add(new_patient)
-        elif req_data.role == "doctor":
-            new_doctor = models.Doctor(
-                id=user.id,
-                specialty="Medicina General",
-                room_state="libre",
-                lat=18.463,
-                lon=-69.304
-            )
-            db.add(new_doctor)
-        elif req_data.role == "pharmacy":
-            new_pharmacy = models.Pharmacy(
-                id=user.id,
-                business_name=full_name,
-                lat=18.463,
-                lon=-69.304,
-                address="San Pedro de Macorís, RD",
-                phone="809-529-0000"
-            )
-            db.add(new_pharmacy)
-        
-        db.commit()
+        if avatar_url and user.avatar != avatar_url:
+            user.avatar = avatar_url
+            db.commit()
+
+        access_token = create_access_token(data={"sub": user.email, "role": user.role})
+        return {"access_token": access_token, "token_type": "bearer", "is_new": False}
+
+    # CASO 2: El usuario NO EXISTE en la base de datos
+    # Si la petición era solo para consultar/iniciar sesión sin paso de creación completado
+    if not req_data.is_creation_step:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ACCOUNT_NOT_FOUND"
+        )
+
+    # Si es el paso de creación (is_creation_step = True), registramos al usuario
+    full_name = req_data.full_name if req_data.full_name and req_data.full_name.strip() else (user_info.get("name") or email.split("@")[0])
+    random_pwd = get_password_hash(datetime.datetime.utcnow().isoformat() + email)
     
-    # Generate application JWT
-    access_token = create_access_token(
-        data={"sub": user.email, "role": user.role}
+    new_user = models.User(
+        email=email,
+        hashed_password=random_pwd,
+        role=req_data.role,
+        full_name=full_name,
+        avatar=avatar_url
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    if req_data.role == "patient":
+        new_patient = models.Patient(
+            id=new_user.id,
+            age=req_data.age if req_data.age is not None else 30,
+            condition=req_data.condition if req_data.condition else "General",
+            avatar=user_info.get("picture") or full_name[:2].upper(),
+            lat=18.463,
+            lon=-69.304
+        )
+        db.add(new_patient)
+    elif req_data.role == "doctor":
+        new_doctor = models.Doctor(
+            id=new_user.id,
+            specialty=req_data.specialty if req_data.specialty else "Medicina General",
+            exequatur=req_data.exequatur if req_data.exequatur else "Pendiente",
+            id_card=req_data.id_card if req_data.id_card else "000-0000000-0",
+            phone=req_data.phone if req_data.phone else "809-529-0000",
+            room_state="libre",
+            lat=18.463,
+            lon=-69.304
+        )
+        db.add(new_doctor)
+    elif req_data.role == "pharmacy":
+        new_pharmacy = models.Pharmacy(
+            id=new_user.id,
+            business_name=req_data.business_name if req_data.business_name else full_name,
+            rnc=req_data.rnc if req_data.rnc else "1-00-00000-0",
+            health_license=req_data.health_license if req_data.health_license else "MISPAS-PEND",
+            pharmacist_name=req_data.pharmacist_name if req_data.pharmacist_name else full_name,
+            lat=18.463,
+            lon=-69.304,
+            address=req_data.address if req_data.address else "San Pedro de Macorís, RD",
+            phone=req_data.phone if req_data.phone else "809-529-0000"
+        )
+        db.add(new_pharmacy)
+    
+    db.commit()
+    
+    access_token = create_access_token(data={"sub": new_user.email, "role": new_user.role})
+    return {"access_token": access_token, "token_type": "bearer", "is_new": True}

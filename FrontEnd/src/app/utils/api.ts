@@ -62,10 +62,28 @@ export const api = {
     return data;
   },
 
-  async loginWithGoogle(token: string, role: string): Promise<{ access_token: string; token_type: string }> {
+  async loginWithGoogle(
+    token: string,
+    role: string,
+    extraData?: {
+      is_creation_step?: boolean;
+      full_name?: string;
+      specialty?: string;
+      exequatur?: string;
+      id_card?: string;
+      age?: number;
+      condition?: string;
+      business_name?: string;
+      rnc?: string;
+      health_license?: string;
+      pharmacist_name?: string;
+      address?: string;
+      phone?: string;
+    }
+  ): Promise<{ access_token: string; token_type: string; is_new?: boolean }> {
     const data = await request("/api/auth/google", {
       method: "POST",
-      body: JSON.stringify({ token, role }),
+      body: JSON.stringify({ token, role, ...extraData }),
     });
     setToken(data.access_token);
     return data;
@@ -170,6 +188,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ status }),
     });
+  },
+
+  async getPharmacyStats(): Promise<any> {
+    return request("/api/pharmacies/stats");
   },
 
   // --- Inteligencia Artificial ---

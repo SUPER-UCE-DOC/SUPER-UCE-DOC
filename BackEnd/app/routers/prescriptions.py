@@ -16,12 +16,19 @@ def create_prescription(
     current_user: models.User = Depends(RoleChecker(["doctor"])),
     db: Session = Depends(get_db)
 ):
-    # Verify patient exists
+    # Verify patient exists (or resolve from appointment_id)
     patient = db.query(models.Patient).filter(models.Patient.id == prescription_in.patient_id).first()
+    if not patient and prescription_in.appointment_id:
+        app = db.query(models.Appointment).filter(models.Appointment.id == prescription_in.appointment_id).first()
+        if app:
+            patient = db.query(models.Patient).filter(models.Patient.id == app.patient_id).first()
+            if patient:
+                prescription_in.patient_id = app.patient_id
+
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paciente no encontrado."
+            detail="No se encontró el expediente del paciente activo para emitir esta receta."
         )
 
     # Calculate expiration date

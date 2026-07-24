@@ -15,6 +15,7 @@ interface User {
   role: Role;
   name: string;
   avatar?: string;
+  specialty?: string;
 }
 
 const topbarLabels: Record<Role, string> = {
@@ -122,7 +123,7 @@ export default function App() {
     const fetchUser = () => {
       if (token) {
         api.getMe().then(userData => {
-          setUser({ role: userData.role, name: userData.full_name, avatar: userData.avatar });
+          setUser({ role: userData.role, name: userData.full_name, avatar: userData.avatar, specialty: userData.profile?.specialty });
           if (!sessionStorage.getItem("currentView")) {
             setCurrentView(userData.role === "pharmacy" ? "dashboard" : "home");
           }
@@ -147,9 +148,15 @@ export default function App() {
   };
 
   const handleLogin = (role: Role, name: string, avatar?: string) => {
-    setUser({ role, name, avatar });
-    setCurrentView(role === "pharmacy" ? "dashboard" : "home");
-    setScreen("app");
+    api.getMe().then(userData => {
+      setUser({ role, name, avatar, specialty: userData.profile?.specialty });
+      setCurrentView(role === "pharmacy" ? "dashboard" : "home");
+      setScreen("app");
+    }).catch(() => {
+      setUser({ role, name, avatar });
+      setCurrentView(role === "pharmacy" ? "dashboard" : "home");
+      setScreen("app");
+    });
   };
 
   const handleLogout = () => {
@@ -212,25 +219,6 @@ export default function App() {
         >
           <div />
           <div className="flex items-center gap-3">
-            <div
-              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border"
-              style={{ borderColor: "#E5E7EB", background: "#F9FAFB" }}
-            >
-              <Search size={14} style={{ color: "#9CA3AF" }} />
-              <input
-                placeholder="Buscar..."
-                className="text-sm outline-none bg-transparent w-40"
-                style={{ color: "#374151" }}
-              />
-            </div>
-
-            <button
-              className="w-9 h-9 rounded-xl flex items-center justify-center border"
-              style={{ borderColor: "#E5E7EB" }}
-            >
-              <HelpCircle size={18} style={{ color: "#6B7280" }} />
-            </button>
-
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -323,8 +311,8 @@ export default function App() {
                 <div className="text-sm" style={{ color: "#203A70", fontWeight: 600, lineHeight: 1.2 }}>
                   {user.name}
                 </div>
-                <div className="text-xs" style={{ color: "#9CA3AF", lineHeight: 1.2, textTransform: "capitalize" }}>
-                  {user.role === "doctor" ? "Médico" : user.role === "pharmacy" ? "Farmacia" : "Paciente"}
+                <div className="text-xs font-semibold" style={{ color: user.role === "doctor" ? "#00A69D" : "#9CA3AF", lineHeight: 1.2 }}>
+                  {user.role === "doctor" ? (user.specialty || "Médico Especialista") : user.role === "pharmacy" ? "Farmacia" : "Paciente"}
                 </div>
               </div>
             </div>

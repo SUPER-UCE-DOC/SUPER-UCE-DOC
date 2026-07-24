@@ -109,12 +109,18 @@ def get_nearby_pharmacies(
                     "has_stock": False
                 })
 
-    # Si se especificó un medicamento, verificar stock
+    # Si se especificó un medicamento, verificar stock inteligente
     for ph_info in nearby_pharmacies:
         if medicine:
+            clean_query = medicine.strip().lower()
+            main_token = clean_query.split()[0] if clean_query else clean_query
+
             inv = db.query(models.PharmacyInventory).filter(
                 models.PharmacyInventory.pharmacy_id == ph_info["id"],
-                models.PharmacyInventory.medicine.ilike(f"%{medicine}%")
+                or_(
+                    models.PharmacyInventory.medicine.ilike(f"%{clean_query}%"),
+                    models.PharmacyInventory.medicine.ilike(f"%{main_token}%")
+                )
             ).first()
             ph_info["has_stock"] = (inv is not None and inv.stock > 0)
         else:
@@ -243,3 +249,48 @@ def update_order_status(
     db.commit()
     db.refresh(order)
     return order
+
+
+@router.get("/stats")
+def get_pharmacy_stats(
+    current_user: models.User = Depends(RoleChecker(["pharmacy"])),
+    db: Session = Depends(get_db)
+):
+    # 1. Total Inversión en Pedidos a Proveedores
+    orders = db.query(models.SupplierOrder).filter(models.SupplierOrder.pharmacy_id == current_user.id).all()
+    total_spent = sum(o.total for o in orders)
+    
+    # 2. Total Recetas Despachadas
+    dispatched_prescriptions = db.query(models.Prescription).filter(
+        models.Prescription.status == "despachada"
+    ).count()
+
+    # 3. Total Productos e Ítems en Inventario
+    inventory_items = db.query(models.PharmacyInventory).filter(models.PharmacyInventory.pharmacy_id == current_user.id).all()
+    total_inventory_products = len(inventory_items)
+    total_stock_units = sum(i.stock for i in inventory_items)
+    low_stock_count = sum(1 for i in inventory_items if i.stock < 100)
+    out_of_stock_count = sum(1 for i in inventory_items if i.stock == 0)
+
+    # 4. Flujo de actividad por día de la semana
+    days_map = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+    days_counts = {d: 0 for d in days_map}
+
+    for order in orders:
+        if hasattr(order, "created_at") and order.created_at:
+            w = order.created_at.weekday()
+            if 0 <= w <= 6:
+                days_counts[days_map[w]] += 1
+
+    weekly_flow = [{"day": d, "value": days_counts[d]} for d in days_map]
+
+    return {
+        "total_spent": total_spent,
+        "dispatched_prescriptions": dispatched_prescriptions,
+        "total_inventory_products": total_inventory_products,
+        "total_stock_units": total_stock_units,
+        "low_stock_count": low_stock_count,
+        "out_of_stock_count": out_of_stock_count,
+        "total_orders_count": len(orders),
+        "weekly_flow": weekly_flow
+    }
