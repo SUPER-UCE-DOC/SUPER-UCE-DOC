@@ -7,10 +7,16 @@ import logging
 import os
 import re
 import math
+import threading
 from typing import List, Tuple, Dict, Optional
 import requests
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services.memory_manager import memory_manager
+from app.services.knowledge_extraction_service import knowledge_extraction_service
+from app.services.patient_memory_service import patient_memory_service
+from app.services.conversation_service import conversation_service
 
 logger = logging.getLogger(__name__)
 
@@ -315,133 +321,126 @@ class MedicalRAGChatbot:
         logger.info("No se encontró contexto local. El modelo usará su conocimiento pre-entrenado.")
         return "", []
 
-    def ask(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "") -> Tuple[str, List[str]]:
+    def ask(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "", attached_doc_ids: Optional[List[str]] = None, db: Session = None, session_id: int = None, patient_id: int = None) -> Tuple[str, List[str]]:
         """
         Punto de entrada principal.
         """
-        return self.get_response(query, chat_history, user_context)
+        return self.get_response(query, chat_history, user_context, attached_doc_ids, db, session_id, patient_id)
 
-    def _contextualize_query(self, query: str, chat_history: List[dict]) -> str:
+    def _reformulate_query(self, query: str, chat_history: List[dict]) -> str:
         """
-        Lógica Estándar de la Industria (similar a LangChain create_history_aware_retriever).
-        Usa el LLM para reescribir una pregunta de seguimiento en una 'Standalone Query'
-        para que los motores de búsqueda (Tavily/RAG) entiendan el contexto sin ruido.
+        Usa Gemini 2.5 Flash para reescribir consultas ambiguas basándose en el historial de chat,
+        creando una consulta autónoma perfecta para búsqueda vectorial.
         """
-        try:
-            history_text = ""
-            for msg in chat_history[-4:]:
-                role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
-                content = msg.get("content") or msg.get("text", "")
-                if content.strip():
-                    history_text += f"{role.capitalize()}: {content.strip()}\n"
+        if not chat_history:
+            return query
             
-            prompt = (
-                "Dado el siguiente historial de chat y la pregunta final del usuario, reformula la pregunta "
-                "para que sea una pregunta independiente (standalone query) comprensible sin el historial.\n"
-                "NO respondas a la pregunta, SOLO devuelve la pregunta reformulada de forma concisa. "
-                "Si ya es independiente, devuélvela tal cual.\n\n"
-                f"Historial:\n{history_text}\n"
-                f"Pregunta Original: {query}\n"
-                "Pregunta Reformulada:"
-            )
-
+        try:
             import requests
-            if settings.GROQ_API_KEY and not settings.USE_LOCAL_LLM:
-                headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}", "Content-Type": "application/json"}
-                payload = {
-                    "model": "llama-3.3-70b-versatile",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1,
-                    "max_tokens": 60
-                }
-                res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=5)
-                if res.status_code == 200:
-                    rewritten = res.json()["choices"][0]["message"]["content"].strip()
-                    rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
-                    if rewritten and len(rewritten) > 5:
-                        return rewritten
-            elif settings.USE_LOCAL_LLM:
-                payload = {
-                    "model": settings.LOCAL_MODEL_NAME,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"num_predict": 40, "temperature": 0.1}
-                }
-                res = requests.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload, timeout=4)
-                if res.status_code == 200:
-                    rewritten = res.json().get("response", "").strip()
-                    rewritten = rewritten.replace('"', '').replace('Pregunta Reformulada:', '').strip()
-                    if rewritten and len(rewritten) > 5:
-                        return rewritten
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            history_text = "\n".join([f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-4:]])
+            prompt = (
+                "Dada la siguiente historia de conversación y una nueva pregunta del usuario, "
+                "reescribe la nueva pregunta para que sea una consulta de búsqueda completamente "
+                "autónoma y específica. Si la pregunta original ya es específica o cambia de tema, "
+                "déjala igual. NO respondas a la pregunta, solo devuelve la consulta reescrita.\n\n"
+                f"Historial:\n{history_text}\n\n"
+                f"Pregunta original: {query}\n"
+                "Consulta reescrita:"
+            )
+            
+            payload = {
+                "model": "google/gemini-2.5-flash",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "max_tokens": 100
+            }
+            
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=8)
+            if res.status_code == 200:
+                reformulated = res.json()["choices"][0]["message"]["content"].strip().strip('"\'')
+                logger.info(f"[Query Reformulation] Original: '{query}' -> Reformulada: '{reformulated}'")
+                return reformulated
         except Exception as e:
-            logger.debug(f"Error al contextualizar query (fallback a original): {e}")
-        
+            logger.error(f"Error en _reformulate_query: {e}")
+            
         return query
 
-    def get_response(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "") -> Tuple[str, List[str]]:
+    def get_response(self, query: str, chat_history: Optional[List[dict]] = None, user_context: str = "", attached_doc_ids: Optional[List[str]] = None, db: Session = None, session_id: int = None, patient_id: int = None) -> Tuple[str, List[str]]:
         """
-        Consulta al chatbot. Primero recupera el contexto médico local y luego
-        utiliza la API gratuita de Groq o el modelo Qwen/Llama para generar la respuesta.
+        Consulta al chatbot con la nueva Arquitectura de Memoria Híbrida Inteligente.
         """
-        search_query = query
-        is_follow_up = False
+        if not query or not query.strip():
+            query = "Por favor analiza los documentos adjuntos." if attached_doc_ids else "Hola."
 
-        # Determinar si la pregunta es sobre los datos personales del usuario
-        query_lower = query.lower()
-        personal_keywords = [
-            "mis consultas", "mis citas", "mis recetas", "mi historial", 
-            "tengo citas", "tengo consultas", "medicamento recetado", "medicamentos recetados",
-            "mis medicamentos", "tengo algo", "tengo alguna", "citas pendientes", "cita pendiente",
-            "próxima cita", "proxima cita", "tengo cita", "tengo citas", "mi cita", "mis citas",
-            "última cita", "ultima cita", "resumen de mi", "resumen de la"
-        ]
-        is_personal_query = any(phrase in query_lower for phrase in personal_keywords)
+        sources = ["Historial Clínico del Paciente", "Memoria Persistente Híbrida"]
         
-        # Si la pregunta actual es de seguimiento puro, evitamos hacer una nueva búsqueda web que contamine el contexto
-        if chat_history and (len(query) < 40 or any(w in query_lower for w in ["estos", "este", "esta", "ellos", "ambos", "dos", "cual", "cuál"])):
-            is_follow_up = True
-            search_query = self._contextualize_query(query, chat_history)
-            logger.info(f"Query reformulada por LLM para búsqueda: '{search_query}'")
-
-        # Recuperar contexto RAG / Web (Saltamos la búsqueda web si es una pregunta puramente personal sobre la plataforma)
-        if is_personal_query:
-            context, sources = "", ["Base de Datos del Paciente"]
-            logger.info("Consulta personal detectada. Saltando búsqueda web y usando contexto de BD.")
-        else:
-            context, sources = self.retrieve_context(search_query)
-            logger.info(f"--> CONTEXTO FINAL INYECTADO A LA IA:\n{context}\n----------------------------------")
-        
-        # Si no hay contexto de fuentes, definimos fuentes como la base general
-        if not sources:
-            sources = ["Base General UCE"]
+        # 1. Guardar mensaje del usuario si hay sesión
+        if session_id and db:
+            conversation_service.save_message(db, session_id, "user", query, tokens_count=conversation_service.estimate_tokens(query))
+            
+            # 2. Extracción de Conocimiento en 2do Plano
+            def extract_and_save():
+                try:
+                    from app.database import SessionLocal
+                    bg_db = SessionLocal()
+                    facts = knowledge_extraction_service.extract_knowledge(query)
+                    for fact in facts:
+                        patient_memory_service.upsert_memory(
+                            bg_db, patient_id, memory_type=fact.get("type", "dato"), 
+                            value=fact.get("value", ""), origin="inferencia"
+                        )
+                    bg_db.close()
+                except Exception as e:
+                    logger.error(f"Error en extracción asíncrona: {e}")
+            
+            # Iniciar hilo de extracción para no bloquear la respuesta
+            threading.Thread(target=extract_and_save).start()
 
         import datetime
         current_date = datetime.date.today().strftime("%Y-%m-%d")
 
         system_prompt = (
             f"Eres SUPER-UCE DOC, un asistente virtual clínico inteligente, empático, muy amable y profesional de nivel especialista.\n"
-            f"La fecha actual es {current_date}.\n\n"
-            "INFORMACIÓN FUNDAMENTAL DE LA PLATAFORMA SUPER-UCE DOC:\n"
-            "- TELECONSULTAS Y VIDEOLLAMADAS: Se realizan 100% DIRECTAMENTE DENTRO DE ESTA PLATAFORMA (SUPER-UCE DOC). NUNCA digas que se usará llamada telefónica, Zoom, WhatsApp o enlaces externos. El médico y el paciente se conectan directamente en la sala virtual de esta plataforma.\n"
-            "- HISTORIAL Y ANALÍTICAS: Los resultados de laboratorio y expedientes médicos los visualiza el doctor directamente en la plataforma en su panel de control. El paciente no necesita enviarlos por fuera.\n"
-            "- GEOLOCALIZACIÓN Y FARMACIAS: La plataforma cuenta con un mapa interactivo inteligente para geolocalizar farmacias cercanas y consultar disponibilidad de medicamentos recetados.\n"
-            "- CERO CONTRADICCIONES: Mantén coherencia total con tus respuestas previas.\n\n"
-            "INFORMACIÓN Y GUÍAS MÉDICAS DE REFERENCIA (CONOCIMIENTO RAG Y PROTOCOLOS CLÍNICOS):\n"
-            f"{context if context else 'Utiliza tu conocimiento médico clínico especializado y actualizado para responder con precisión y exhaustividad.'}\n\n"
-            "CONTEXTO DEL USUARIO ACTUAL (DATOS REALES DE LA BASE DE DATOS DEL PACIENTE):\n"
-            f"{user_context}\n"
-            "ACCESO TOTAL A DATOS DEL PACIENTE: Hablas DIRECTAMENTE con el paciente. TIENES ACCESO COMPLETO Y DIRECTO a sus datos listados arriba (citas, recetas, medicamentos e historial). NUNCA digas que 'no tienes acceso al historial médico', 'no tienes acceso a la información personal' ni 'no puedes ver tus recetas'. Si el contexto muestra 0 recetas o 0 citas, responde amablemente que actualmente no registra recetas o citas activas en la plataforma.\n\n"
-            "INSTRUCCIONES DE COMPORTAMIENTO (CUMPLIMIENTO ESTRICTO):\n"
-            "1. ANÁLISIS MÉDICO EXHAUSTIVO Y ESPECIALIZADO: Para consultas sobre síntomas complejos (ej: mareos ortostáticos, palpitaciones, fatiga postural), debes actuar como un médico especialista de alto nivel. Identifica y prioriza los diagnósticos específicos más probables (ej: POTS / Síndrome de Taquicardia Ortostática Postural, Hipotensión Ortostática, Síncope Vasovagal), explica con claridad sus criterios de diferenciación (como los cambios en la frecuencia cardíaca y presión arterial al ponerse de pie) e indica explícitamente las pruebas diagnósticas específicas recomendadas (ej: Prueba de Mesa Basculante / Tilt Table Test, test activo de ortostatismo de 10 min, electrocardiograma, monitoreo Holter).\n"
-            "2. INTERACCIÓN DIRECTA: Hablas DIRECTAMENTE al paciente en segunda persona ('tienes', 'tus medicamentos'). Queda ESTRICTAMENTE PROHIBIDO escribir 'Respuesta:', 'Guía para responder' o hablar como si le estuvieras enseñando a alguien más cómo responder.\n"
-            "3. TONO CÁLIDO Y ASISTENCIAL: Responde con empatía, amabilidad y fluidez natural. Al responder una duda o confirmar un dato, ofrece una recomendación útil o ayuda relacionada.\n"
-            "4. CERO REPETICIÓN ROBÓTICA: Responde a la pregunta actual sin usar muletillas o frases introductorias fijas repetitivas de turnos anteriores.\n"
-            "5. CONSULTAS PASADAS VS FUTURAS: Si el paciente pregunta por el resumen de su última cita y no tiene consultas finalizadas, indícaselo con amabilidad y ofrece ayuda para prepararse para su próxima consulta o resolver dudas médicas.\n"
-            "6. CITAS RECHAZADAS O CANCELADAS: Las citas rechazadas están canceladas y NUNCA son citas activas ni próximas. Si el paciente pregunta por citas pendientes y no tiene, infórmalo con amabilidad. Si pregunta explícitamente por citas rechazadas, explica con empatía que se debió a falta de disponibilidad en la agenda del médico.\n"
-            "7. IDENTIDAD Y ENFOQUE MÉDICO: Eres SUPER-UCE DOC, asistente virtual clínico creado por estudiantes de la Universidad Central del Este (UCE). Si la consulta no es médica ni de la plataforma, orienta amablemente hacia temas de salud.\n"
-            "8. ESTADO DE RECETAS (ACTIVAS VS VENCIDAS/DESPACHADAS): Distingue estrictamente entre recetas 'ACTIVA Y VIGENTE' (pendientes de ser retiradas en farmacia) y recetas 'DESPACHADA / VENCIDA' (que el paciente YA las retiró/consiguió en la farmacia o ya venció su plazo). Si una receta indica que ya fue DESPACHADA o VENCIDA, NUNCA digas que está activa; aclara con precisión que dicha receta ya fue conseguida/despachada y por tanto ya NO está activa ni disponible para ser reclamada de nuevo.\n"
-            "9. FORMATO: Escribe en párrafos naturales, cálidos, estructurados y bien redactados."
+            f"La fecha actual es {current_date}.\n"
         )
+        medical_rules = (
+            "- TELECONSULTAS Y VIDEOLLAMADAS: Se realizan 100% DIRECTAMENTE DENTRO DE LA PLATAFORMA. NUNCA digas que se usará llamada telefónica o WhatsApp.\n"
+            "- HISTORIAL Y ANALÍTICAS: Visibles directamente en el panel del doctor.\n"
+            "- CERO CONTRADICCIONES: Mantén coherencia total con tus respuestas previas y con la memoria del paciente.\n"
+            "- Hablas DIRECTAMENTE al paciente en segunda persona ('tienes', 'tus medicamentos').\n"
+            "- NATURALIDAD EXTREMA: Responde de forma muy fluida, conversacional y humana. NO repitas el nombre del paciente en cada mensaje (úsalo solo al inicio de la conversación si es natural). NO repitas mecánicamente la pregunta o información que te acaban de dar. Ve directo al grano.\n"
+            "- NUNCA repitas introducciones robóticas como 'según la base de datos' o 'revisando tu historial'.\n"
+            "- CRÍTICO: JAMÁS digas que no tienes la capacidad de abrir, ver o leer archivos adjuntos (ni que eres un asistente de texto). El texto de los documentos adjuntos YA fue extraído y está en tu contexto. Asume que lo estás leyendo directamente.\n"
+            "- REGLA DE ORO SOBRE DOCUMENTOS: Si el usuario pregunta por 'este documento', 'este archivo' o pide analizar un adjunto, DEBES buscar EXCLUSIVAMENTE dentro de las etiquetas <documentos_adjuntos_actuales>. Si esas etiquetas están vacías, respóndele con mucha empatía diciéndole que te encantaría ayudarle con su documento/archivo, pero que parece que aún no lo ha subido a la plataforma. BAJO NINGUNA CIRCUNSTANCIA asumas que 'este documento' se refiere a su <historial_clinico_bd>.\n"
+            f"<historial_clinico_bd>\n{user_context}\n</historial_clinico_bd>"
+        )
+
+        # 2.5 Query Reformulation
+        search_query = query
+        if chat_history:
+            search_query = self._reformulate_query(query, chat_history)
+
+        # 3. Memory Manager construye el contexto inmutable
+        if db and session_id and patient_id:
+            context_dict = memory_manager.build_optimal_context(
+                db=db, session_id=session_id, patient_id=patient_id,
+                user_message=query, system_prompt=system_prompt, medical_rules=medical_rules,
+                doc_ids=attached_doc_ids, search_query=search_query
+            )
+        else:
+            context_dict = {
+                "system_instruction": f"{system_prompt}\n{medical_rules}",
+                "patient_context": "",
+                "teleconsultation_context": "",
+                "conversation_summary": "",
+                "rag_context": "",
+                "conversation_history": [],
+                "user_message": query
+            }
 
         def sanitize_reply(text: str) -> str:
             text = text.strip()
@@ -449,23 +448,34 @@ class MedicalRAGChatbot:
             if text:
                 text = text[0].upper() + text[1:]
             return text
+            
+        # Ensamblaje nativo de contexto dinámico con Etiquetas XML (Industry Standard)
+        dynamic_context = "[CONOCIMIENTO INTERNO SUBCONSCIENTE - NO LO MENCIONES EXPLÍCITAMENTE A MENOS QUE SEA RELEVANTE]\n"
+        if context_dict["patient_context"]:
+            dynamic_context += f"\n<memoria_paciente>\n{context_dict['patient_context']}\n</memoria_paciente>"
+        if context_dict["teleconsultation_context"]:
+            dynamic_context += f"\n<resumenes_clinicos_previos>\n{context_dict['teleconsultation_context']}\n</resumenes_clinicos_previos>"
+        
+        # Siempre incluimos la etiqueta de adjuntos para que la "Regla de Oro" sepa si está vacía
+        if context_dict["rag_context"]:
+            dynamic_context += f"\n<documentos_adjuntos_actuales>\n{context_dict['rag_context']}\n</documentos_adjuntos_actuales>"
+        else:
+            dynamic_context += f"\n<documentos_adjuntos_actuales></documentos_adjuntos_actuales>"
+            
+        if context_dict["conversation_summary"]:
+            dynamic_context += f"\n<resumen_conversacion_antigua>\n{context_dict['conversation_summary']}\n</resumen_conversacion_antigua>"
 
         # 1. Intentar usar la API de Ollama Local (Llama-3.1 8B)
         if settings.USE_LOCAL_LLM:
             try:
-                messages = [{"role": "system", "content": system_prompt}]
-                if chat_history:
-                    for msg in chat_history[-6:]:
-                        role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
-                        content = msg.get("content") or msg.get("text") or ""
-                        if content.strip():
-                            messages.append({"role": role, "content": content})
+                messages = [
+                    {"role": "system", "content": context_dict["system_instruction"]},
+                    {"role": "system", "content": dynamic_context}
+                ]
+                if context_dict["conversation_history"]:
+                    messages.extend(context_dict["conversation_history"])
 
-                user_message_content = (
-                    f"Pregunta actual del paciente: {query}\n"
-                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta sin repetir introducciones de mensajes anteriores."
-                )
-
+                user_message_content = f"Pregunta actual del paciente: {context_dict['user_message']}"
                 messages.append({"role": "user", "content": user_message_content})
                 
                 payload = {
@@ -488,38 +498,36 @@ class MedicalRAGChatbot:
             except Exception as e:
                 logger.error(f"Error llamando a Ollama API local: {e}")
 
-        # 2. Intentar usar la API Gratuita de Groq (Llama-3.3 70B Versatile)
-        if settings.GROQ_API_KEY:
+        # 2. Intentar usar la API de OpenRouter con Gemini 2.5 Flash
+        if settings.OPENROUTER_API_KEY:
             try:
                 headers = {
-                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "SUPER-UCE DOC"
                 }
+
+                messages = [
+                    {"role": "system", "content": context_dict["system_instruction"]},
+                    {"role": "system", "content": dynamic_context}
+                ]
                 
-                messages = [{"role": "system", "content": system_prompt}]
-                if chat_history:
-                    for msg in chat_history[-4:]:
-                        role = "assistant" if msg.get("role") == "assistant" or msg.get("from") in ["bot", "assistant"] else "user"
-                        content = msg.get("content") or msg.get("text") or ""
-                        if content.strip():
-                            messages.append({"role": role, "content": content})
-                
-                user_message_content = (
-                    f"Pregunta actual del paciente: {query}\n"
-                    "INSTRUCCIÓN: Responde DIRECTAMENTE a esta pregunta con máxima precisión médica, sin frases repetitivas de introducciones anteriores."
-                )
-                messages.append({"role": "user", "content": user_message_content})
+                if context_dict["conversation_history"]:
+                    messages.extend(context_dict["conversation_history"])
+                    
+                messages.append({"role": "user", "content": context_dict["user_message"]})
                 
                 payload = {
-                    "model": "llama-3.3-70b-versatile",
+                    "model": settings.OPENROUTER_MODEL,
                     "messages": messages,
                     "temperature": 0.2,
                     "max_tokens": 1200
                 }
                 
-                logger.info(f"Llamando a Groq API con modelo llama-3.3-70b-versatile (API Key activa: {settings.GROQ_API_KEY[:8]}...)")
+                logger.info(f"Llamando a OpenRouter API con modelo {settings.OPENROUTER_MODEL} (API Key activa: {settings.OPENROUTER_API_KEY[:8]}...)")
                 response = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=25
@@ -528,12 +536,17 @@ class MedicalRAGChatbot:
                 if response.status_code == 200:
                     resp_json = response.json()
                     reply = sanitize_reply(resp_json["choices"][0]["message"]["content"])
-                    logger.info("Respuesta obtenida con ÉXITO de Groq Llama-3.3 70B Versatile!")
+                    logger.info("Respuesta obtenida con ÉXITO de OpenRouter Gemini 2.5 Flash!")
+                    
+                    # 4. Guardar respuesta de la IA en el historial reciente
+                    if session_id and db:
+                        conversation_service.save_message(db, session_id, "assistant", reply, tokens_count=conversation_service.estimate_tokens(reply))
+                        
                     return reply, sources
                 else:
-                    logger.error(f"Groq API devolvió HTTP {response.status_code}: {response.text}")
+                    logger.error(f"OpenRouter API devolvió HTTP {response.status_code}: {response.text}")
             except Exception as e:
-                logger.error(f"Error llamando a Groq API: {e}")
+                logger.error(f"Error llamando a OpenRouter API: {e}")
 
         # 2. Intentar usar la API de Inferencia gratuita de Hugging Face
         try:

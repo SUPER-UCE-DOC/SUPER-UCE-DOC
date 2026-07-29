@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { api } from "../utils/api";
+import { api, UploadedDocument } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
-  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
@@ -625,8 +625,10 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   const [sessions, setSessions] = useState<any[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(() => {
     const saved = sessionStorage.getItem("aiActiveSessionId");
-    return saved ? (saved === "new" ? null : Number(saved)) : null;
+    if (saved && saved !== "new") return parseInt(saved);
+    return null;
   });
+  const [sessionActiveDocIds, setSessionActiveDocIds] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = sessionStorage.getItem("aiSidebarOpen");
     return saved !== null ? saved === "true" : true;
@@ -636,7 +638,20 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState<{ from: string; text: string; isNew?: boolean }[]>([]);
   const [typing, setTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const autoSendAfterRecordRef = useRef(false);
   const msgsEndRef = useRef<HTMLDivElement | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<UploadedDocument[]>([]);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [audioData, setAudioData] = useState<number[]>(new Array(40).fill(5));
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [sidebarWidth, setSidebarWidth] = useState<number>(280);
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -690,11 +705,16 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   }, []);
 
   useEffect(() => {
+    if (skipFetchRef.current) {
+      skipFetchRef.current = false;
+      return;
+    }
+    
+    // Al cambiar de sesión, limpiamos los documentos activos del contexto anterior
+    setSessionActiveDocIds([]);
+    
     if (activeSessionId) {
-      if (skipFetchRef.current) {
-        skipFetchRef.current = false;
-        return;
-      }
+      setTyping(true);
       api.getChatSessionById(activeSessionId).then(data => {
         if (data.messages) {
           setMsgs(data.messages.map((m: any) => ({
@@ -705,6 +725,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
         } else {
           setMsgs([]);
         }
+        setTyping(false);
       }).catch(console.error);
     } else {
       setMsgs([]);
@@ -730,14 +751,91 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
     }
   };
 
-  const send = async (text?: string) => {
-    if (isSendingRef.current || typing) return;
+  const handlePlusClick = () => {
+    if (fileInputRef.current && !isUploadingDoc && !typing) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    try {
+      setIsUploadingDoc(true);
+      const res = await api.uploadDocument(file);
+      setAttachedFiles((prev) => [...prev.filter(d => d.doc_id !== res.doc_id), res]);
+    } catch (err: any) {
+      alert(err.message || "No se pudo procesar el documento clínico.");
+    } finally {
+      setIsUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveFile = (docId: string) => {
+    setAttachedFiles((prev) => prev.filter((d) => d.doc_id !== docId));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!isRecording && !isUploadingDoc && !typing) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isRecording || isUploadingDoc || typing) return;
     
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    
+    // Toma el primer archivo (limitado a 1 para mantener paridad con el clic)
+    const file = files[0];
+    try {
+      setIsUploadingDoc(true);
+      const res = await api.uploadDocument(file);
+      setAttachedFiles((prev) => [...prev.filter(d => d.doc_id !== res.doc_id), res]);
+    } catch (err: any) {
+      alert(err.message || "No se pudo procesar el documento clínico.");
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const send = async (text?: string, bypassChecks = false) => {
+    if (!bypassChecks && (isSendingRef.current || typing || isTranscribing || isUploadingDoc)) return;
+    
+    if (isRecording) {
+      autoSendAfterRecordRef.current = true;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+      return;
+    }
+
     const query = (text ?? input).trim();
-    if (!query) return;
+    if (!query && attachedFiles.length === 0) return;
     
     isSendingRef.current = true;
     setInput("");
+    const docIds = attachedFiles.map(f => f.doc_id);
+    const docNames = attachedFiles.map(f => f.filename).join(", ");
+    setAttachedFiles([]);
+    
+    let currentSessionDocs = [...sessionActiveDocIds];
+    if (docIds.length > 0) {
+      currentSessionDocs = Array.from(new Set([...currentSessionDocs, ...docIds]));
+      setSessionActiveDocIds(currentSessionDocs);
+    }
     
     let currentSessionId = activeSessionId;
     if (!currentSessionId) {
@@ -748,7 +846,12 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
        setSessions(prev => [newSession, ...prev]);
     }
 
-    setMsgs((p) => [...p, { from: "user", text: query, isNew: true }]);
+    let displayQuery = query;
+    if (docIds.length > 0) {
+      displayQuery = (displayQuery ? `${displayQuery}\n\n` : "") + `[📎 Documento clínico: ${docNames}]`;
+    }
+
+    setMsgs((p) => [...p, { from: "user", text: displayQuery, isNew: true }]);
     setTyping(true);
 
     try {
@@ -757,19 +860,119 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
         content: m.text
       }));
       
-      const res = await api.queryChatbot(query, currentSessionId, history);
+      const res = await api.queryChatbot(query, currentSessionId, history, currentSessionDocs.length > 0 ? currentSessionDocs : undefined);
       
+      if (res.session_title && !sessions.find(s => s.id === currentSessionId)?.title) {
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: res.session_title } : s));
+      }
+
       setTyping(false);
       setMsgs((p) => [...p, { from: "bot", text: res.reply, isNew: true }]);
-      
-      const updatedTitle = res.session_title || (query.slice(0, 25) + (query.length > 25 ? "..." : ""));
-      setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: updatedTitle } : s));
     } catch (err: any) {
       setTyping(false);
       setMsgs((p) => [...p, { from: "bot", text: "Lo siento, hubo un error de conexión con mi cerebro clínico.", isNew: true }]);
     } finally {
       isSendingRef.current = false;
       setTyping(false);
+    }
+  };
+
+  const handleToggleRecord = async () => {
+    if (isTranscribing || typing) return;
+
+    if (isRecording) {
+      autoSendAfterRecordRef.current = false;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      setAudioData(new Array(40).fill(5));
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const updateAudio = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const bars = [];
+        for (let i = 0; i < 40; i++) {
+          bars.push(dataArray[i] || 5);
+        }
+        setAudioData(bars);
+        animationFrameRef.current = requestAnimationFrame(updateAudio);
+      };
+      updateAudio();
+      audioContextRef.current = audioCtx;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
+        
+        setIsTranscribing(true);
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = reader.result as string;
+            try {
+              const res = await api.speechToText(base64Audio, mediaRecorder.mimeType || "webm", activeSessionId || undefined);
+              if (res.transcription) {
+                setInput((prevInput) => {
+                  const combinedText = (prevInput ? `${prevInput} ${res.transcription}` : res.transcription).trim();
+                  if (autoSendAfterRecordRef.current) {
+                    autoSendAfterRecordRef.current = false;
+                    setTimeout(() => send(combinedText, true), 0);
+                    return "";
+                  }
+                  return combinedText;
+                });
+              }
+            } catch (error) {
+              console.error("Error transcribiendo audio con Gemini:", error);
+              const errMsg = error instanceof Error ? error.message : "Hubo un problema transcribiendo tu nota de voz con Gemini 2.5 Flash. Por favor intenta de nuevo.";
+              setMsgs(p => [...p, { from: "bot", text: errMsg, isNew: true }]);
+            } finally {
+              setIsTranscribing(false);
+            }
+          };
+        } catch (err) {
+          console.error("Error leyendo blob:", err);
+          autoSendAfterRecordRef.current = false;
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("No se pudo acceder al micrófono:", err);
+      alert("Por favor habilita el permiso de micrófono en tu navegador para usar esta función.");
     }
   };
 
@@ -925,40 +1128,146 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           <div className="w-full max-w-4xl flex flex-col pointer-events-auto">
             
             {/* Modern Floating Input */}
-            <div className="animated-border-wrapper w-full shadow-2xl transition-all mb-4">
-              <div className="animated-border-inner w-full flex flex-col p-4 relative">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (!typing) send();
-                    }
-                  }}
-                  placeholder={isEmpty ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
-                  className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60"
-                  style={{ fontSize: "16px", minHeight: "72px" }}
-                  rows={1}
-                  autoFocus
-                />
+            <div 
+              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-4 ${isRecording ? "rounded-full shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-2xl"}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-3xl p-4"} ${isDragging ? "bg-teal-50/50" : "bg-white"}`}>
                 
-                <div className="flex items-center justify-between mt-1">
-                  <div className="flex items-center gap-1">
-                    <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                      <Plus size={20} />
-                    </button>
-                    <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                      <Mic size={20} />
+                {/* Indicador visual al arrastrar */}
+                {isDragging && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-teal-50/80 rounded-3xl backdrop-blur-sm pointer-events-none border-2 border-dashed border-[#00A69D]">
+                    <div className="flex flex-col items-center text-[#00A69D]">
+                      <Plus size={32} className="mb-2 animate-bounce" />
+                      <span className="font-bold text-sm">Suelta tu documento aquí</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tarjetas flotantes de documentos adjuntos */}
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${(!isRecording && (attachedFiles.length > 0 || isUploadingDoc)) ? "max-h-[200px] opacity-100 mb-2" : "max-h-0 opacity-0 mb-0"}`}>
+                  <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-b border-gray-100">
+                    {attachedFiles.map((doc) => (
+                      <div key={doc.doc_id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[13px] text-gray-700 shadow-2xs transition-all hover:bg-gray-100/70">
+                        <FileText size={15} className="text-[#203A70] shrink-0" />
+                        <span className="font-medium max-w-[190px] truncate" title={doc.filename}>{doc.filename}</span>
+                        <span className="text-[11px] text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase font-semibold tracking-wider">Procesado</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(doc.doc_id)}
+                          className="text-gray-400 hover:text-gray-600 transition-colors ml-0.5 p-0.5 cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {isUploadingDoc && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 border border-dashed border-gray-300 rounded-lg text-[13px] text-gray-600">
+                        <Loader2 size={15} className="animate-spin text-[#203A70]" />
+                        <span className="font-medium">Procesando...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Textarea Contenedor (Se oculta suavemente al grabar) */}
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden w-full ${isRecording ? "max-h-0 opacity-0 min-h-0" : "max-h-[200px] opacity-100"}`}>
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!typing && (input.trim() || attachedFiles.length > 0)) send();
+                      }
+                    }}
+                    placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
+                    className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60"
+                    style={{ fontSize: "16px", minHeight: "72px" }}
+                    rows={1}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Barra inferior (Botones y Audio Visualizer) */}
+                <div className={`flex w-full items-center justify-between transition-all duration-300 ${isRecording ? "mt-0" : "mt-1"}`}>
+                  
+                  {/* Botones de acción izquierda */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                    <div className={`transition-all duration-300 overflow-hidden ${isRecording ? "w-0 opacity-0 scale-0" : "w-[40px] opacity-100 scale-100"}`}>
+                      <button
+                        onClick={handlePlusClick}
+                        disabled={isUploadingDoc || typing || isTranscribing || isRecording}
+                        className="p-2.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed w-[40px] h-[40px] flex items-center justify-center"
+                      >
+                        {isUploadingDoc ? <Loader2 size={20} className="animate-spin text-[#203A70]" /> : <Plus size={20} />}
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleToggleRecord}
+                      disabled={isTranscribing || typing || isUploadingDoc}
+                      className={`p-2.5 rounded-full transition-all duration-300 flex items-center justify-center relative w-[44px] h-[44px] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400 ${
+                        isRecording 
+                          ? "text-[#203A70] bg-gray-50 hover:bg-gray-100 ml-1" 
+                          : isTranscribing
+                          ? "text-[#00A69D]"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      {isTranscribing ? (
+                        <Loader2 size={20} className="animate-spin" />
+                      ) : isRecording ? (
+                        <Square size={20} fill="currentColor" />
+                      ) : (
+                        <Mic size={20} />
+                      )}
                     </button>
                   </div>
+
+                  {/* Audio Visualizer (Aparece y empuja al grabar) */}
+                  <div 
+                    className={`flex items-center justify-center gap-[3px] overflow-hidden transition-all duration-300 ease-in-out ${
+                      isRecording ? "flex-1 opacity-100 px-4 h-[44px] max-w-[500px]" : "w-0 opacity-0 px-0 h-[44px] max-w-0"
+                    }`}
+                  >
+                    {audioData.map((val, i) => (
+                      <div 
+                        key={i} 
+                        className="w-1.5 rounded-full transition-all duration-75"
+                        style={{ 
+                          height: `${Math.max(4, (val / 255) * 36)}px`, 
+                          backgroundColor: val > 150 ? "#00A69D" : "#203A70",
+                          opacity: 0.6 + (val / 255) * 0.4 
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Botón de Enviar derecha */}
                   <button
                     onClick={() => send()}
-                    disabled={!input.trim() || typing}
-                    className="p-3 rounded-full text-white shadow-md transition-all disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer"
-                    style={{ background: (!input.trim() || typing) ? "#9CA3AF" : "#203A70" }}
+                    disabled={(!input.trim() && !isRecording && attachedFiles.length === 0) || typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)}
+                    className={`shrink-0 rounded-full text-white shadow-md transition-all duration-300 disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center ${isRecording ? "mr-1" : ""}`}
+                    style={{ 
+                      background: ((!input.trim() && !isRecording && attachedFiles.length === 0) || typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)) ? "#9CA3AF" : "#203A70", 
+                      width: isRecording ? "44px" : "48px", 
+                      height: isRecording ? "44px" : "48px"
+                    }}
                   >
-                    <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />
+                    {(isTranscribing && autoSendAfterRecordRef.current) ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />
+                    )}
                   </button>
                 </div>
               </div>

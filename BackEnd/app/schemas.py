@@ -276,8 +276,27 @@ class ChatbotRequest(BaseModel):
     message: str
     session_id: Optional[int] = None
     chat_history: Optional[List[dict]] = None
+    attached_doc_ids: Optional[List[str]] = None
 
 class ChatbotResponse(BaseModel):
     reply: str
     sources: Optional[List[str]] = None
     session_title: Optional[str] = None
+
+class SpeechToTextRequest(BaseModel):
+    audio_base64: str
+    audio_format: Optional[str] = "webm"
+    session_id: Optional[int] = None
+
+class SpeechToTextResponse(BaseModel):
+    transcription: str
+
+class DocumentUploadResponse(BaseModel):
+    doc_id: str
+    filename: str
+    doc_type: str
+    pages_count: int
+    chunks_count: int
+    status: str
+    hash: str
+

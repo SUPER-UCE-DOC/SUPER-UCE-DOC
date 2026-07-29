@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 import datetime
+import hashlib
+import json
+import base64
 
 from app.database import get_db
 from app import models, schemas
@@ -62,22 +65,28 @@ def summarize_consultation(
     )
 
     summary_text = ""
-    # Usar Groq o HuggingFace para resumir
+    # Usar OpenRouter o HuggingFace para resumir
     from app.config import settings
     import requests
     
-    if settings.GROQ_API_KEY:
+    if settings.OPENROUTER_API_KEY:
         try:
-            headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
+            headers = {
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "SUPER-UCE DOC"
+            }
             payload = {
-                "model": "llama-3.3-70b-versatile",
+                "model": settings.OPENROUTER_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2
             }
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=6)
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=10)
             if res.status_code == 200:
                 summary_text = res.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
+        except Exception as e:
+            print(f"Error al resumir con OpenRouter: {e}")
             pass
 
     if not summary_text:
@@ -94,12 +103,11 @@ def summarize_consultation(
         except Exception:
             pass
 
-    # Fallback heurístico local si no hay internet
+    # Fallback si falla la llamada al LLM (evitar hardcodear síntomas falsos)
     if not summary_text:
         summary_text = (
-            "SÍNTOMAS DETECTADOS: Cefalea (dolor de cabeza) persistente de 3 días de duración, mareos posturales al levantarse.\n"
-            "SUGERENCIA DE DIAGNÓSTICO: Descompensación hipertensiva leve secundaria a falta de medicación.\n"
-            "RECOMENDACIONES TRATAMIENTO: Ajuste de dosis de Losartán a 25mg por la mañana, control de presión diario."
+            "Resumen no disponible. No se pudo generar la transcripción o el análisis automático debido a "
+            "un error de conexión con la IA. El especialista deberá revisar manualmente el registro de la cita."
         )
 
     # Guardar en expediente clínico
@@ -207,14 +215,9 @@ def medical_chatbot_query(
             session.title = generate_smart_title(req.message)
             db.commit()
             
-        # Guardar mensaje del usuario
-        user_msg = models.ChatMessage(session_id=req.session_id, role="user", content=req.message)
-        db.add(user_msg)
-        
-        # Cargar los últimos 10 mensajes de esta sesión para la IA
+        # Cargar el historial reciente solo para contexto local si fuera necesario en otras funciones
         db_messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == req.session_id).order_by(models.ChatMessage.created_at.asc()).limit(10).all()
-        # Solo pasamos mensajes previos, sin incluir el recién agregado (ya que la IA lo recibe como query)
-        chat_history = [{"role": m.role, "content": m.content} for m in db_messages[:-1]]
+        chat_history = [{"role": m.role, "content": m.content} for m in db_messages]
 
     # Extraer contexto directo de la base de datos para inyectarlo en el LLM (RAG Personalizado)
     now = datetime.datetime.now()
@@ -322,17 +325,132 @@ def medical_chatbot_query(
                     date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
                     user_context += f"- Cita #{appt.id} del {date_str} con {doc_name}: RECHAZADA/CANCELADA por falta de disponibilidad en la agenda del doctor.\n"
 
-    # Llamar al bot (IA)
-    reply, sources = medical_chatbot.ask(req.message, chat_history, user_context=user_context)
-    
-    # Si hay un session_id, guardar la respuesta de la IA
-    if req.session_id and session:
-        bot_msg = models.ChatMessage(session_id=req.session_id, role="assistant", content=reply)
-        db.add(bot_msg)
-        db.commit()
+    # Llamar al bot (IA) a través de la nueva Arquitectura Híbrida
+    reply, sources = medical_chatbot.ask(
+        query=req.message, 
+        chat_history=chat_history, 
+        user_context=user_context, 
+        attached_doc_ids=req.attached_doc_ids,
+        db=db,
+        session_id=req.session_id,
+        patient_id=current_user.id
+    )
 
     return schemas.ChatbotResponse(
         reply=reply, 
         sources=sources, 
         session_title=session.title if session else None
     )
+
+
+@router.post("/speech-to-text", response_model=schemas.SpeechToTextResponse)
+def speech_to_text(
+    req: schemas.SpeechToTextRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Recibe audio en Base64, lo transcribe usando OpenRouter, y lo valida
+    mediante el SpeechValidationService para evitar alucinaciones.
+    """
+    from app.config import settings
+    import requests
+    import re
+    from app.services.speech_validation_service import speech_validation_service
+    import logging
+    
+    logger = logging.getLogger("speech_to_text")
+    
+    if not req.audio_base64:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se proporcionó audio para transcribir."
+        )
+
+    clean_base64 = req.audio_base64
+    if "," in clean_base64:
+        clean_base64 = clean_base64.split(",", 1)[1]
+    
+    audio_format = (req.audio_format or "webm").replace("audio/", "").split(";")[0].strip()
+    mime_type = f"audio/{audio_format}" if not audio_format.startswith("audio/") else audio_format
+
+    if not settings.OPENROUTER_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API Key de OpenRouter no configurada en el servidor."
+        )
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "SUPER-UCE DOC"
+    }
+
+    MAX_STT_RETRIES = 2
+    transcription = ""
+    
+    for attempt in range(MAX_STT_RETRIES):
+        transcription = ""
+        try:
+            # Usar API de Transcripción dedicada (Deepgram via OpenRouter)
+            # El endpoint estándar /audio/transcriptions de OpenAI/OpenRouter requiere multipart/form-data
+            audio_bytes = base64.b64decode(clean_base64)
+            files = {
+                "file": ("audio.webm", audio_bytes, mime_type)
+            }
+            data = {
+                "model": "deepgram/nova-3",
+                "language": "es"
+            }
+            
+            res = requests.post("https://openrouter.ai/api/v1/audio/transcriptions", headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"}, files=files, data=data, timeout=15)
+            if res.status_code == 200:
+                transcription = res.json().get("text", "").strip()
+            else:
+                logger.warning(f"[STT] Intento {attempt+1} falló HTTP {res.status_code}: {res.text}")
+        except Exception as e:
+            logger.error(f"[STT] Error en intento {attempt+1}: {e}")
+
+        if not transcription:
+            continue
+            
+        # Limpiar posible formato no deseado
+        transcription = re.sub(r'^(Transcripción(:|\s)|Respuesta:)\s*', '', transcription, flags=re.IGNORECASE).strip(' "')
+
+        # Como Deepgram no alucina, aceptamos directamente la transcripción (sin speech_validation_service)
+        logger.info(f"[STT] ÉXITO en intento {attempt+1}. Transcripción: {transcription}")
+        return schemas.SpeechToTextResponse(transcription=transcription)
+            
+    # Si agotamos los reintentos
+    raise HTTPException(
+        status_code=422,
+        detail="No pude escuchar correctamente el audio. ¿Podrías repetirlo o hablar un poco más despacio?"
+    )
+
+
+@router.post("/upload-document", response_model=schemas.DocumentUploadResponse)
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Recibe y procesa documentos clínicos (PDF, DOCX, TXT) para ingesta RAG optimizada y económica.
+    """
+    from app.services.document_engine import document_engine
+    
+    file_bytes = await file.read()
+    filename = file.filename or "doc.txt"
+    
+    proc_doc = document_engine.parse_and_index_document(file_bytes, filename, user_id=current_user.id)
+    
+    return schemas.DocumentUploadResponse(
+        doc_id=proc_doc.doc_id,
+        filename=proc_doc.filename,
+        doc_type=proc_doc.doc_type,
+        pages_count=proc_doc.pages_count,
+        chunks_count=len(proc_doc.chunks),
+        status="Procesado",
+        hash=proc_doc.file_hash
+    )
+

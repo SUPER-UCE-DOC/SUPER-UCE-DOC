@@ -41,9 +41,19 @@ class Settings:
         return vals.get("DATABASE_URL") or os.getenv("DATABASE_URL", "sqlite:///./super_uce_doc.db")
 
     @property
-    def GROQ_API_KEY(self) -> str:
+    def OPENROUTER_API_KEY(self) -> str:
         vals = dotenv_values(env_path)
-        return vals.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY", "")
+        return vals.get("OPENROUTER_API_KEY") or vals.get("GROQ_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")
+
+    @property
+    def GOOGLE_API_KEY(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+
+    @property
+    def OPENROUTER_MODEL(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("OPENROUTER_MODEL") or os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
     @property
     def OLLAMA_BASE_URL(self) -> str:

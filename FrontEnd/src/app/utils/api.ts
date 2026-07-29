@@ -229,10 +229,37 @@ export const api = {
     });
   },
 
-  async queryChatbot(message: string, sessionId?: number, history?: any[]): Promise<{ reply: string; sources: string[] }> {
+  async queryChatbot(message: string, sessionId?: number, history?: any[], attachedDocIds?: string[]): Promise<{ reply: string; sources: string[]; session_title?: string }> {
     return request("/api/ai/chatbot", {
       method: "POST",
-      body: JSON.stringify({ message, session_id: sessionId, chat_history: history }),
+      body: JSON.stringify({ message, session_id: sessionId, chat_history: history, attached_doc_ids: attachedDocIds }),
+    });
+  },
+
+  async uploadDocument(file: File): Promise<UploadedDocument> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request("/api/ai/upload-document", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  async speechToText(audioBase64: string, audioFormat: string = "webm", sessionId?: number): Promise<{ transcription: string }> {
+    return request("/api/ai/speech-to-text", {
+      method: "POST",
+      body: JSON.stringify({ audio_base64: audioBase64, audio_format: audioFormat, session_id: sessionId }),
     });
   },
 };
+
+export interface UploadedDocument {
+  doc_id: string;
+  filename: string;
+  doc_type: string;
+  pages_count: number;
+  chunks_count: number;
+  status: string;
+  hash: string;
+}
+

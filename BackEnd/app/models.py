@@ -135,11 +135,17 @@ class ClinicalHistory(Base):
     gestures_detected = Column(String, nullable=True)  # Stored as text / comma-separated
     translation_text = Column(String, nullable=True)
     summary_ia = Column(String, nullable=True)
+    
+    # Extensiones de la Memoria Híbrida (Teleconsultation History)
+    diagnostics = Column(String, nullable=True)
+    recommendations = Column(String, nullable=True)
+    prescriptions = Column(String, nullable=True)
+    metadata_json = Column(String, nullable=True) # Estructura JSON para almacenar metadatos extra
+    embedding_ref = Column(String, nullable=True) # Referencia al UUID del índice vectorial independiente
 
     # Relationships
     patient = relationship("Patient", back_populates="clinical_histories")
     doctor = relationship("Doctor", back_populates="clinical_histories")
-
 
 class SupplierOrder(Base):
     __tablename__ = "supplier_orders"
@@ -172,10 +178,42 @@ class ChatMessage(Base):
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
     role = Column(String, nullable=False)  # "user" or "assistant"
     content = Column(String, nullable=False)
+    tokens_count = Column(Integer, default=0)
+    metadata_json = Column(String, nullable=True) # Conversation ID temporal, adjuntos, etc.
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
     session = relationship("ChatSession", back_populates="messages")
+
+
+class ConversationSummary(Base):
+    __tablename__ = "conversation_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
+    summary_text = Column(String, nullable=False)
+    last_message_id_included = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    session = relationship("ChatSession")
+
+
+class PatientMemory(Base):
+    __tablename__ = "patient_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    memory_type = Column(String, nullable=False)  # ej. alergia, enfermedad, medicamento, antecedente, cirugia
+    value = Column(String, nullable=False)
+    confidence = Column(Float, default=1.0)
+    origin = Column(String, nullable=False)       # paciente, inferencia, documento, doctor, teleconsulta
+    status = Column(String, default="activo")     # activo / inactivo
+    embedding_ref = Column(String, nullable=True) # Referencia al índice vectorial
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    patient = relationship("Patient")
 
 
 class DoctorPatientInvitation(Base):
