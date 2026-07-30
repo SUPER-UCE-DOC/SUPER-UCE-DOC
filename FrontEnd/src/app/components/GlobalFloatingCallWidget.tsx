@@ -200,8 +200,8 @@ function FloatingRoomContent({
   const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
   
-  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.isMuted;
-  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.isMuted;
+  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
+  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
 
   if (!isCounterpartConnected) {
     return (

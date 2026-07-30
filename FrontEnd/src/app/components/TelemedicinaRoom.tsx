@@ -327,8 +327,8 @@ function TelemedicinaRoomContent({
   // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
   const remoteParticipants = useRemoteParticipants();
   const isCounterpartConnected = remoteParticipants.length > 0;
-  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.isMuted;
-  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.isMuted;
+  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
+  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
   const [presenceToast, setPresenceToast] = useState<string | null>(null);
   const prevConnectedRef = useRef(false);
 
