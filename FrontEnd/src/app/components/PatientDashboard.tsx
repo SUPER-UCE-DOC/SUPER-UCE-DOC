@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { api, UploadedDocument } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
-  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square, ChevronDown
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
@@ -116,7 +116,8 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
     if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
     if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} userAvatar={userAvatar} activeCallDoc={activeCallDoc} onEndCall={handleEndCall} />;
     if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
-    if (currentView === "appointments") return <CitasView onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "appointments") return <CitasView key="appointments" onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "appointments_new") return <CitasView key="appointments_new" onJoinCall={handleJoinCall} inCall={inCall} initialOpenModal={true} />;
     if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
     if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
     return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
@@ -317,19 +318,46 @@ function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
 }
 
 /* ─── CITAS ─── */
-function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; inCall?: boolean }) {
+function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt: any) => void; inCall?: boolean; initialOpenModal?: boolean }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(initialOpenModal || false);
   const [myDoctors, setMyDoctors] = useState<any[]>([]);
   const [form, setForm] = useState({ doctor_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [doctorSearchName, setDoctorSearchName] = useState("");
+  const doctorDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (myDoctors.length > 0 && form.doctor_id) {
+      const doc = myDoctors.find(d => d.id.toString() === form.doctor_id);
+      if (doc) setDoctorSearchName(`${doc.full_name} (${doc.specialty})`);
+    }
+  }, [myDoctors, form.doctor_id]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
+        setShowDoctorDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredDoctors = myDoctors.filter(d => 
+    d.full_name.toLowerCase().includes(doctorSearchName.toLowerCase()) || 
+    d.specialty.toLowerCase().includes(doctorSearchName.toLowerCase())
+  );
 
   const loadAppointments = async () => {
     try {
       setLoading(true);
       const data = await api.getAppointments();
       if (Array.isArray(data)) {
+        data.sort((a: any, b: any) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime());
         setAppointmentsList(data);
       }
     } catch (err) {
@@ -345,6 +373,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
       try {
         const data = await api.getAppointments();
         if (Array.isArray(data)) {
+          data.sort((a: any, b: any) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime());
           setAppointmentsList(data);
         }
       } catch (e) {
@@ -373,9 +402,21 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
     }
   };
 
+  useEffect(() => {
+    if (initialOpenModal && myDoctors.length === 0) {
+      handleOpenModal();
+    }
+  }, [initialOpenModal]);
+
   const handleCreateAppointment = async () => {
     if (!form.doctor_id || !form.date || !form.time || !form.reason.trim()) {
       alert("Por favor completa la fecha, hora, médico y motivo de consulta.");
+      return;
+    }
+
+    const selectedDateTime = new Date(`${form.date}T${form.time}:00`);
+    if (selectedDateTime < new Date()) {
+      alert("No puedes agendar una cita para una fecha/hora que ya ha pasado.");
       return;
     }
 
@@ -407,7 +448,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
           style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
         >
-          <Plus size={16} /> Solicitar Cita
+          <Plus size={16} /> Agendar Cita
         </button>
       </div>
 
@@ -415,7 +456,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
         <div className="text-center py-8 text-gray-500 text-sm">Cargando mis citas...</div>
       ) : appointmentsList.length === 0 ? (
         <div className="text-center py-8 text-gray-500 text-sm bg-white rounded-2xl shadow-sm border border-gray-100">
-          No tienes citas agendadas aún. Haz clic en "Solicitar Cita" para programar una.
+          No tienes citas agendadas aún. Haz clic en "Agendar Cita" para programar una.
         </div>
       ) : (
         <div className="space-y-3">
@@ -494,12 +535,12 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
         </div>
       )}
 
-      {/* Modal Solicitar Cita */}
+      {/* Modal Agendar Cita */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowModal(false)}>
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Solicitar Cita Médica</h3>
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Agendar Cita Médica</h3>
               <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
                 <Trash2 size={18} />
               </button>
@@ -513,17 +554,67 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
                     No tienes médicos vinculados en tu lista. Primero debes aceptar una invitación de tu doctor.
                   </div>
                 ) : (
-                  <select
-                    value={form.doctor_id}
-                    onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-[#00A69D]"
-                  >
-                    {myDoctors.map(doc => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.full_name} ({doc.specialty})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={doctorDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDoctorDropdown(!showDoctorDropdown)}
+                      className="w-full px-4 py-3 border rounded-xl flex items-center justify-between outline-none focus:border-[#00A69D] text-left transition-colors bg-white shadow-sm hover:bg-gray-50"
+                      style={{ borderColor: "#E5E7EB" }}
+                    >
+                      {form.doctor_id ? (
+                        (() => {
+                          const doc = myDoctors.find(d => d.id.toString() === form.doctor_id);
+                          if (!doc) return <span className="text-gray-400">Seleccionar médico...</span>;
+                          return (
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden">
+                                {doc.avatar && (doc.avatar.startsWith("http") || doc.avatar.startsWith("data:")) ? (
+                                  <img src={doc.avatar} alt={doc.full_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  getInitialsSafe(doc.full_name)
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-sm font-semibold" style={{ color: "#203A70", lineHeight: 1.2 }}>{doc.full_name}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">{doc.specialty}</div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-gray-400">Seleccionar médico...</span>
+                      )}
+                      <ChevronDown size={18} className="text-gray-400" />
+                    </button>
+                    
+                    {showDoctorDropdown && myDoctors.length > 0 && (
+                      <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto anim-fade-in-up">
+                        {myDoctors.map(doc => (
+                          <div
+                            key={doc.id}
+                            onClick={() => {
+                              setDoctorSearchName(`${doc.full_name} (${doc.specialty})`);
+                              setForm({ ...form, doctor_id: doc.id.toString() });
+                              setShowDoctorDropdown(false);
+                            }}
+                            className="flex items-center gap-3 p-3 hover:bg-[#F0FFFE] cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                          >
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-sm overflow-hidden shadow-sm" style={{ background: "#203A70" }}>
+                              {doc.avatar && (doc.avatar.startsWith("http") || doc.avatar.startsWith("data:")) ? (
+                                <img src={doc.avatar} alt={doc.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                getInitialsSafe(doc.full_name)
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold" style={{ color: "#203A70" }}>{doc.full_name}</div>
+                              <div className="text-xs text-gray-500">{doc.specialty}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -532,6 +623,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
                   <input
                     type="date"
+                    min={new Date().toISOString().split("T")[0]}
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
                     className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"

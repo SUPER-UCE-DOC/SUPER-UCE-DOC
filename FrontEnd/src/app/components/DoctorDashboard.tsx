@@ -134,8 +134,33 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
 
 /* ─── MI AGENDA ─── */
 function AgendaView({ userName }: { userName: string }) {
+  const [allAgenda, setAllAgenda] = useState<any[]>([]);
   const [agenda, setAgenda] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
+  // Estados para el calendario custom
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Estados para el Tooltip que sigue al mouse
+  const [hoveredDay, setHoveredDay] = useState<Date | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setShowCalendar(false);
+      }
+    }
+    if (showCalendar) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showCalendar]);
 
   const loadAgenda = async (isBackground = false) => {
     try {
@@ -148,9 +173,10 @@ function AgendaView({ userName }: { userName: string }) {
           time: new Date(app.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           type: app.type || "Teleconsulta",
           deaf: app.patient_name ? (app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales")) : false,
-          status: app.status
+          status: app.status,
+          rawDate: new Date(app.date_time)
         }));
-        setAgenda(formatted);
+        setAllAgenda(formatted);
       }
     } catch (err) {
       console.error("Error al cargar la agenda:", err);
@@ -165,40 +191,192 @@ function AgendaView({ userName }: { userName: string }) {
     return () => clearInterval(interval);
   }, []);
 
+  const isSameDay = (d1: Date, d2: Date) => 
+    d1.getFullYear() === d2.getFullYear() && 
+    d1.getMonth() === d2.getMonth() && 
+    d1.getDate() === d2.getDate();
+
+  useEffect(() => {
+    const filtered = allAgenda.filter(a => isSameDay(a.rawDate, selectedDate));
+    filtered.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+    setAgenda(filtered);
+  }, [allAgenda, selectedDate]);
+
   const totalHoy = agenda.length;
   const completadas = agenda.filter(item => item.status === "completada").length;
   const pendientes = agenda.filter(item => item.status === "pendiente" || item.status === "en_curso").length;
 
-  const dateStr = new Date().toLocaleDateString("es-DO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const dateStr = selectedDate.toLocaleDateString("es-DO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const dateCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
+  // Lógica del calendario
+  const generateMonthGrid = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay(); // 0 = Domingo
+    
+    const grid = [];
+    for (let i = 0; i < firstDay; i++) grid.push(null);
+    for (let i = 1; i <= daysInMonth; i++) grid.push(new Date(year, month, i));
+    return grid;
+  };
+
+  const monthGrid = generateMonthGrid(calendarViewDate);
+  const weekDays = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+  const prevMonth = () => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1));
+  const nextMonth = () => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1));
+
   return (
-    <div className="p-6 space-y-6 anim-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
+    <div className="p-6 space-y-6 anim-fade-in relative">
+      <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0 relative z-50">
         <div>
           <h1 style={{ color: "#203A70", fontSize: "24px", fontWeight: 800 }}>Mi Agenda</h1>
-          <p className="text-sm" style={{ color: "#6B7280" }}>Dr. {userName} · {dateCapitalized}</p>
+          <div className="flex items-center gap-3 mt-1">
+             <p className="text-sm font-medium" style={{ color: "#6B7280" }}>{dateCapitalized}</p>
+             {!isSameDay(selectedDate, new Date()) && (
+                <button onClick={() => {
+                  setSelectedDate(new Date());
+                  setCalendarViewDate(new Date());
+                }} className="text-xs bg-[#F0FFFE] text-[#00A69D] border border-[#00C7C0] px-3 py-1 rounded-full font-bold hover:bg-[#E0F8F7] transition-all shadow-sm transform hover:scale-105 active:scale-95">
+                  Volver a Hoy
+                </button>
+             )}
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          {[
-            { label: "Total hoy", value: totalHoy, color: "#203A70" },
-            { label: "Completadas", value: completadas, color: "#10B981" },
-            { label: "Pendientes", value: pendientes, color: "#D97706" },
-          ].map((s) => (
-            <div key={s.label} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-              <div style={{ color: s.color, fontSize: "22px", fontWeight: 800 }}>{s.value}</div>
-              <div className="text-xs" style={{ color: "#9CA3AF" }}>{s.label}</div>
+        <div className="flex gap-4 items-center" ref={calendarRef}>
+          {/* Botón para abrir el Calendario */}
+          <button 
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="flex items-center gap-2.5 bg-white border border-gray-200 text-[#203A70] px-4 py-2.5 rounded-xl font-bold shadow-sm hover:border-[#203A70] transition-all hover:bg-gray-50 transform active:scale-95"
+          >
+            <Calendar size={18} strokeWidth={2.5} className="text-[#00A69D]" />
+            Cambiar Fecha
+            <span className={`text-xs ml-1 transition-transform duration-300 ${showCalendar ? "rotate-180" : "rotate-0"}`}>▼</span>
+          </button>
+
+          <div className="grid grid-cols-3 gap-3 text-center ml-4">
+            {[
+              { label: "Total este día", value: totalHoy, color: "#203A70" },
+              { label: "Completadas", value: completadas, color: "#10B981" },
+              { label: "Pendientes", value: pendientes, color: "#D97706" },
+            ].map((s) => (
+              <div key={s.label} className="bg-white rounded-xl px-4 py-2 shadow-sm border border-gray-100">
+                <div style={{ color: s.color, fontSize: "20px", fontWeight: 800 }}>{s.value}</div>
+                <div className="text-[10px]" style={{ color: "#9CA3AF", fontWeight: 500 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Calendario Flotante (Dropdown) */}
+          <div 
+            className={`absolute top-24 right-6 z-[100] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 w-[340px] transition-all duration-300 transform origin-top-right ${showCalendar ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 -translate-y-4 pointer-events-none"}`}
+          >
+            <div className="flex justify-between items-center mb-4">
+               <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 font-bold transition-colors">&lt;</button>
+               <div className="font-bold text-[#203A70] capitalize text-lg">
+                  {calendarViewDate.toLocaleDateString("es-DO", { month: "long", year: "numeric" })}
+               </div>
+               <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 font-bold transition-colors">&gt;</button>
             </div>
-          ))}
+            
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+              {weekDays.map(d => (
+                <div key={d} className="text-[10px] font-bold text-gray-400 uppercase">{d}</div>
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-7 gap-1">
+              {monthGrid.map((d, i) => {
+                if (!d) return <div key={i} className="h-10"></div>;
+                
+                const isSelected = isSameDay(d, selectedDate);
+                const isToday = isSameDay(d, new Date());
+                const dayApps = allAgenda.filter(a => isSameDay(a.rawDate, d));
+                
+                return (
+                  <div 
+                    key={i} 
+                    className="relative flex justify-center"
+                    onMouseMove={(e) => {
+                      setHoveredDay(d);
+                      setMousePos({ x: e.clientX, y: e.clientY });
+                    }}
+                    onMouseLeave={() => setHoveredDay(null)}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedDate(d);
+                        setShowCalendar(false);
+                        setHoveredDay(null);
+                      }}
+                      className={`w-10 h-10 flex flex-col items-center justify-center rounded-xl text-sm font-bold transition-all transform hover:scale-110 active:scale-95 ${
+                        isSelected ? "bg-[#203A70] text-white shadow-md" 
+                        : isToday ? "bg-[#F0FFFE] text-[#00A69D] border border-[#00C7C0]" 
+                        : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <span>{d.getDate()}</span>
+                      {dayApps.length > 0 && (
+                        <div className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? "bg-white" : "bg-[#00A69D]"}`} />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Timeline de citas */}
-      <div className="space-y-3 anim-fade-in-up anim-d-1">
-        {loading ? (
-          <div className="text-center py-8 text-gray-500 text-sm">Cargando agenda médica...</div>
+      {/* Tooltip Global que sigue al mouse */}
+      {hoveredDay && (
+        <div 
+          className="fixed z-[9999] pointer-events-none bg-white/95 backdrop-blur-md text-[#203A70] text-xs rounded-2xl py-3 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] w-[220px] overflow-hidden border border-gray-200"
+          style={{
+            left: mousePos.x - 240,
+            top: mousePos.y - 10,
+            transition: "left 0.1s ease-out, top 0.1s ease-out, opacity 0.2s"
+          }}
+        >
+          {(() => {
+            const dayApps = allAgenda.filter(a => isSameDay(a.rawDate, hoveredDay));
+            return (
+              <>
+                <div className="font-extrabold mb-2 text-center text-[#203A70] border-b border-gray-100 pb-2 capitalize text-[13px]">
+                  {hoveredDay.toLocaleDateString("es-DO", { weekday: "long", day: "numeric", month: "long" })}
+                </div>
+                {dayApps.length === 0 ? (
+                  <div className="text-center text-gray-400 italic text-[11px] font-medium py-1">No hay citas</div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {dayApps.slice(0,3).map((a, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-[#F0FFFE] rounded-lg px-2.5 py-1.5 border border-[#00C7C0]/20">
+                        <span className="text-[#00A69D] font-bold text-[10px]">{a.time}</span>
+                        <span className="truncate max-w-[90px] text-right text-[#203A70] text-[10px] font-bold">{a.patient}</span>
+                      </div>
+                    ))}
+                    {dayApps.length > 3 && <div className="text-center font-bold text-[#00A69D] mt-1 text-[10px]">+{dayApps.length - 3} más</div>}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Timeline de citas del día seleccionado */}
+      <div className="space-y-3 anim-fade-in-up anim-d-2 relative z-10">
+        {loading && agenda.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 text-sm">Cargando agenda médica...</div>
         ) : agenda.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 text-sm">No hay citas programadas para hoy.</div>
+          <div className="text-center py-12 text-gray-500 text-sm">
+             <div className="flex justify-center mb-3">
+               <Calendar size={48} strokeWidth={1.5} className="text-gray-300" />
+             </div>
+             No hay citas programadas para este día.
+          </div>
         ) : (
           agenda.map((item, i) => {
             const statusConf = {
@@ -242,11 +420,13 @@ function AgendaView({ userName }: { userName: string }) {
                     </div>
                     <div className="flex items-center gap-2">
                       <span
-                        className="text-xs px-3 py-1 rounded-full"
+                        className="text-[11px] px-3 py-1 rounded-full"
                         style={{
-                          background: item.status === "en_curso" ? "#DCFCE7" : item.status === "completada" ? "#F3F4F6" : "#FEF3C7",
-                          color: item.status === "en_curso" ? "#10B981" : item.status === "completada" ? "#9CA3AF" : "#D97706",
-                          fontWeight: 600,
+                          background: item.status === "en_curso" ? "#DCFCE7" : item.status === "completada" ? "#F3F4F6" : item.status === "rechazada" ? "#FEE2E2" : "#FEF3C7",
+                          color: item.status === "en_curso" ? "#10B981" : item.status === "completada" ? "#9CA3AF" : item.status === "rechazada" ? "#EF4444" : "#D97706",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px"
                         }}
                       >
                         {s.label}
@@ -262,6 +442,7 @@ function AgendaView({ userName }: { userName: string }) {
     </div>
   );
 }
+
 
 /* ─── PACIENTES ─── */
 function PatientsView() {
@@ -684,6 +865,12 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
       return;
     }
 
+    const selectedDateTime = new Date(`${scheduleForm.date}T${scheduleForm.time}:00`);
+    if (selectedDateTime < new Date()) {
+      alert("No puedes agendar una cita para una fecha/hora que ya ha pasado.");
+      return;
+    }
+
     try {
       setIsScheduling(true);
       const dateTimeStr = `${scheduleForm.date}T${scheduleForm.time}:00`;
@@ -967,6 +1154,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
                   <input
                     type="date"
+                    min={new Date().toISOString().split("T")[0]}
                     value={scheduleForm.date}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
                     className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"

@@ -90,6 +90,7 @@ class DoctorResponse(BaseModel):
     lon: float
     full_name: str
     email: str
+    avatar: Optional[str] = None
 
     class Config:
         from_attributes = True

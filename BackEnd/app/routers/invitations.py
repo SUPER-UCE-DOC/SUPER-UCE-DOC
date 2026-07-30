@@ -229,7 +229,8 @@ def get_my_doctors(db: Session = Depends(get_db), current_user: models.User = De
                 "lat": doc_user.doctor_profile.lat,
                 "lon": doc_user.doctor_profile.lon,
                 "full_name": doc_user.full_name,
-                "email": doc_user.email
+                "email": doc_user.email,
+                "avatar": doc_user.avatar
             })
     return results
 

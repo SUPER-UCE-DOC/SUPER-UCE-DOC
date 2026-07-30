@@ -71,7 +71,17 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
           avatar: getAvatarInitials(app.patient_name),
           status: app.status
         }));
-        setAppointmentsList(formatted);
+
+        const isSameDay = (d1: Date, d2: Date) => 
+          d1.getFullYear() === d2.getFullYear() && 
+          d1.getMonth() === d2.getMonth() && 
+          d1.getDate() === d2.getDate();
+
+        const todayApps = formatted.filter((app: any) => 
+          isSameDay(new Date(app.date_time_raw), new Date())
+        );
+
+        setAppointmentsList(todayApps);
       }
     } catch (err) {
       console.error("Error al cargar agenda:", err);

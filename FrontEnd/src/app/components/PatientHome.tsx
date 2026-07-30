@@ -90,7 +90,8 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
         icon: <Activity size={15} style={{ color: "#00A69D" }} />,
         title: "Consulta completada",
         desc: `Teleconsulta con ${apt.doctor_name || "Doctor"}`,
-        time: formatDateSafe(apt.date_time)
+        time: formatDateSafe(apt.date_time),
+        rawDate: apt.date_time
       });
     } else if (apt.status === "confirmada" || apt.status === "en_curso") {
       recentActivities.push({
@@ -98,7 +99,8 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
         icon: <Calendar size={15} style={{ color: "#203A70" }} />,
         title: apt.status === "en_curso" ? "Consulta en curso" : "Cita confirmada",
         desc: `Teleconsulta con ${apt.doctor_name || "Doctor"}`,
-        time: formatDateSafe(apt.date_time)
+        time: formatDateSafe(apt.date_time),
+        rawDate: apt.date_time
       });
     }
   });
@@ -109,9 +111,18 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
       icon: <Pill size={15} style={{ color: "#D97706" }} />,
       title: "Receta emitida",
       desc: `${rx.medicine} (${rx.dose || "Dosis prescrita"})`,
-      time: formatDateSafe(rx.created_at)
+      time: formatDateSafe(rx.created_at),
+      rawDate: rx.created_at
     });
   });
+
+  recentActivities.sort((a, b) => {
+    const da = new Date(a.rawDate || 0).getTime();
+    const db = new Date(b.rawDate || 0).getTime();
+    return db - da; // Más nueva a más vieja
+  });
+
+  const activePrescriptionsCount = prescriptionsList.filter(rx => rx.status === "activa").length;
 
   return (
     <div className="p-6 space-y-6 anim-fade-in" style={{ background: "#F9FAFB" }}>
@@ -218,7 +229,7 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
               </button>
             ) : (
               <button
-                onClick={() => onNavigate("appointments")}
+                onClick={() => onNavigate(nextApp ? "appointments" : "appointments_new")}
                 className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all font-bold text-white shadow-md cursor-pointer"
                 style={{ background: "#00A69D" }}
               >
@@ -239,7 +250,7 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
 
           {/* Agendar cita */}
           <button
-            onClick={() => onNavigate("appointments")}
+            onClick={() => onNavigate("appointments_new")}
             className="bg-white rounded-2xl p-5 text-left shadow-sm group transition-all cursor-pointer"
             style={{ border: "1px solid #F3F4F6" }}
           >
@@ -275,12 +286,12 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
             className="bg-white rounded-2xl p-5 text-left shadow-sm transition-all relative cursor-pointer"
             style={{ border: "1px solid #F3F4F6" }}
           >
-            {prescriptionsList.length > 0 && (
-              <span
+            {activePrescriptionsCount > 0 && (
+              <span 
                 className="absolute top-4 right-4 text-xs px-2 py-0.5 rounded-full"
                 style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 700 }}
               >
-                {prescriptionsList.length} {prescriptionsList.length === 1 ? "Activa" : "Activas"}
+                {activePrescriptionsCount} {activePrescriptionsCount === 1 ? "Activa" : "Activas"}
               </span>
             )}
 
