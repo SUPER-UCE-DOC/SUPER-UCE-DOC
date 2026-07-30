@@ -2,12 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import datetime
+import time
 
 from app.database import get_db
 from app import models, schemas
 from app.routers.auth import get_current_user, RoleChecker
 
 router = APIRouter(prefix="/api/appointments", tags=["appointments"])
+
+VALID_APPOINTMENT_STATUSES = {"pendiente", "en_curso", "completada", "cancelada"}
+
+
+def notify_state_change(appointment_id: int, new_status: str) -> None:
+    print(f"Notificando Módulo 5: cita {appointment_id} cambió a estado {new_status}")
+
 
 @router.post("", response_model=schemas.AppointmentResponse, status_code=status.HTTP_201_CREATED)
 def create_appointment(
@@ -46,7 +54,7 @@ def create_appointment(
             patient_id=appointment_in.patient_id,
             doctor_id=current_user.id,
             date_time=appointment_in.date_time,
-            status="confirmada",
+            status="pendiente",
             type=appointment_in.type,
             reason=appointment_in.reason
         )
@@ -135,8 +143,7 @@ def update_appointment_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cita no encontrada."
         )
-    
-    # Check permissions (doctor can modify any of their appointments, patient can cancel theirs)
+
     if current_user.role == "patient" and app.patient_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -147,15 +154,63 @@ def update_appointment_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No eres el médico asignado a esta cita."
         )
-    
-    # Update status
-    app.status = status_update.status
-    
-    # If the doctor updates state, update the doctor's room state accordingly
+
+    requested_status = status_update.status.strip().lower()
+    if requested_status not in VALID_APPOINTMENT_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Estado inválido. Los estados permitidos son: pendiente, en_curso, completada, cancelada."
+        )
+
+    if app.status in {"completada", "cancelada"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede modificar una cita que ya está en estado '{app.status}'."
+        )
+
+    if requested_status == app.status:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La cita ya se encuentra en estado '{app.status}'."
+        )
+
+    if current_user.role == "doctor":
+        if requested_status not in {"en_curso", "completada"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solo el médico puede cambiar el estado a 'en_curso' o 'completada'."
+            )
+
+        if app.status == "pendiente" and requested_status != "en_curso":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede saltar estados. Desde 'pendiente' solo se permite avanzar a 'en_curso'."
+            )
+
+        if app.status == "en_curso" and requested_status != "completada":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede saltar estados. Desde 'en_curso' solo se permite avanzar a 'completada'."
+            )
+
+    elif current_user.role == "patient":
+        if requested_status != "cancelada":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solo el paciente puede cancelar la cita, cambiando su estado a 'cancelada'."
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rol no permitido para cambiar el estado de la cita."
+        )
+
+    app.status = requested_status
+
     if current_user.role == "doctor":
         doc = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
         if doc:
-            if status_update.status == "en_curso":
+            if requested_status == "en_curso":
                 doc.room_state = "en_consulta"
                 try:
                     from app.routers.realtime import room_presence_store
@@ -166,21 +221,23 @@ def update_appointment_status(
                         room_presence_store[clean_room]["start_time"] = time.time()
                 except Exception as ex:
                     print("Error setting start_time:", ex)
-            elif status_update.status == "completada":
+            elif requested_status == "completada":
                 doc.room_state = "libre"
-            elif status_update.status == "pendiente":
+            elif requested_status == "pendiente":
                 doc.room_state = "esperando"
 
     db.commit()
     db.refresh(app)
-    
+
+    notify_state_change(app.id, app.status)
+
     p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
     d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
     d_prof = db.query(models.Doctor).filter(models.Doctor.id == app.doctor_id).first()
     p_name = p_user.full_name if p_user else "Paciente"
     d_name = d_user.full_name if d_user else "Doctor"
     d_spec = d_prof.specialty if d_prof else "Medicina General"
-    
+
     return schemas.AppointmentResponse(
         id=app.id,
         patient_id=app.patient_id,
@@ -239,3 +296,130 @@ def get_waiting_room(
             )
         )
     return response
+
+
+# Helper local para serializar una cita en el formato usado por la API
+def _build_appointment_response(db: Session, appointment: models.Appointment) -> schemas.AppointmentResponse:
+    p_user = db.query(models.User).filter(models.User.id == appointment.patient_id).first()
+    d_user = db.query(models.User).filter(models.User.id == appointment.doctor_id).first()
+    d_prof = db.query(models.Doctor).filter(models.Doctor.id == appointment.doctor_id).first()
+    p_name = p_user.full_name if p_user else "Paciente"
+    d_name = d_user.full_name if d_user else "Doctor"
+    d_spec = d_prof.specialty if d_prof else "Medicina General"
+
+    return schemas.AppointmentResponse(
+        id=appointment.id,
+        patient_id=appointment.patient_id,
+        doctor_id=appointment.doctor_id,
+        date_time=appointment.date_time,
+        status=appointment.status,
+        type=appointment.type,
+        reason=appointment.reason,
+        patient_name=p_name,
+        doctor_name=d_name,
+        doctor_specialty=d_spec,
+        patient_avatar=p_user.avatar if p_user else None,
+        doctor_avatar=d_user.avatar if d_user else None
+    )
+
+
+@router.get("/{id}", response_model=schemas.AppointmentResponse)
+def get_appointment_by_id(
+    id: int,
+    current_user: models.User = Depends(RoleChecker(["patient", "doctor"])),
+    db: Session = Depends(get_db)
+):
+    """Devuelve el detalle de una cita si el usuario tiene permiso para verla."""
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == id).first()
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cita no encontrada."
+        )
+
+    if current_user.role == "patient" and appointment.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ver esta cita."
+        )
+
+    if current_user.role == "doctor" and appointment.doctor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ver esta cita."
+        )
+
+    return _build_appointment_response(db, appointment)
+
+
+@router.put("/{id}", response_model=schemas.AppointmentResponse)
+def update_appointment(
+    id: int,
+    appointment_update: schemas.AppointmentCreate,
+    current_user: models.User = Depends(RoleChecker(["doctor"])),
+    db: Session = Depends(get_db)
+):
+    """Permite editar los datos básicos de una cita únicamente por el médico asignado."""
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == id).first()
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cita no encontrada."
+        )
+
+    if appointment.doctor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para editar esta cita."
+        )
+
+    if appointment.status in {"completada", "cancelada"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede editar una cita que ya está completada o cancelada."
+        )
+
+    # Solo se permiten estos campos para evitar modificar el flujo clínico de la cita
+    appointment.date_time = appointment_update.date_time
+    appointment.type = appointment_update.type
+    appointment.reason = appointment_update.reason
+
+    db.commit()
+    db.refresh(appointment)
+
+    return _build_appointment_response(db, appointment)
+
+
+@router.delete("/{id}", status_code=status.HTTP_200_OK)
+def cancel_appointment(
+    id: int,
+    current_user: models.User = Depends(RoleChecker(["patient"])),
+    db: Session = Depends(get_db)
+):
+    """Cancela una cita cambiando su estado en vez de borrar el registro."""
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == id).first()
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cita no encontrada."
+        )
+
+    if appointment.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el paciente dueño de la cita puede cancelarla."
+        )
+
+    if appointment.status in {"completada", "cancelada"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede cancelar una cita que ya está completada o cancelada."
+        )
+
+    appointment.status = "cancelada"
+    db.commit()
+    db.refresh(appointment)
+
+    notify_state_change(appointment.id, appointment.status)
+
+    return {"message": "Cita cancelada exitosamente"}
