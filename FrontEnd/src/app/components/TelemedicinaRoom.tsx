@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, 
-  Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2, 
+import {
+  Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare,
+  Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2,
   User, ShieldCheck, Minimize2, Maximize2, MapPin, RefreshCw
 } from "lucide-react";
 import { api, getToken } from "../utils/api";
+import {
+  LiveKitRoom,
+  VideoTrack,
+  useTracks,
+  useLocalParticipant,
+  useRemoteParticipants,
+  RoomAudioRenderer
+} from "@livekit/components-react";
+import { Track } from "livekit-client";
 
 interface TelemedicinaRoomProps {
   role: "doctor" | "patient";
@@ -48,7 +57,61 @@ const ragMedicines = [
   { name: "Sales de Rehidratación Oral (SRO)", defaultDose: "1 sobre disuelto en 1L de agua", defaultFreq: "Tomar a voluntad tras cada deposición" },
 ];
 
-export function TelemedicinaRoom({
+export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
+  const [tokenToUse, setTokenToUse] = useState<string>("");
+  const [roomStartTime, setRoomStartTime] = useState<number>(0);
+  const [initialVideoOn, setInitialVideoOn] = useState(true);
+  const [initialAudioOn, setInitialAudioOn] = useState(true);
+
+  useEffect(() => {
+    // Read local hardware preferences
+    const savedVideoOff = localStorage.getItem("local_video_off") === "true";
+    const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
+    setInitialVideoOn(!savedVideoOff);
+    setInitialAudioOn(!savedAudioMuted);
+
+    const fetchToken = async () => {
+      try {
+        const roomCode = props.appointmentId ? String(props.appointmentId) : "global";
+        const res = await api.getLiveKitToken(roomCode);
+        setTokenToUse(res.token);
+        if (res.start_time) {
+          setRoomStartTime(res.start_time);
+        }
+      } catch (err) {
+        console.error("Error fetching LiveKit token:", err);
+      }
+    };
+    fetchToken();
+  }, [props.appointmentId]);
+
+  if (!tokenToUse) {
+    return (
+      <div className="flex items-center justify-center h-full w-full bg-[#F9FAFB]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 rounded-full border-4 border-[#00A69D] border-t-transparent animate-spin"></div>
+          <div className="text-sm font-bold text-[#203A70]">Conectando a la sala segura...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <LiveKitRoom
+      serverUrl="ws://127.0.0.1:7880"
+      token={tokenToUse}
+      connect={true}
+      video={initialVideoOn}
+      audio={initialAudioOn}
+      className="h-full w-full"
+    >
+      <TelemedicinaRoomContent {...props} startTime={roomStartTime} initialVideoOff={!initialVideoOn} initialAudioMuted={!initialAudioOn} />
+      <RoomAudioRenderer />
+    </LiveKitRoom>
+  );
+}
+
+function TelemedicinaRoomContent({
   role,
   userName,
   userAvatar,
@@ -59,11 +122,14 @@ export function TelemedicinaRoom({
   appointmentId,
   appointmentReason,
   onEndCall,
-  onEmitRxSuccess
-}: TelemedicinaRoomProps) {
+  onEmitRxSuccess,
+  startTime,
+  initialVideoOff,
+  initialAudioMuted
+}: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean }) {
   // Call Controls State
-  const [muted, setMuted] = useState(false);
-  const [videoOff, setVideoOff] = useState(false);
+  const [muted, setMuted] = useState(initialAudioMuted);
+  const [videoOff, setVideoOff] = useState(initialVideoOff);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [lseMode, setLseMode] = useState(false);
   const [showRxMedSuggestions, setShowRxMedSuggestions] = useState(false);
@@ -72,6 +138,24 @@ export function TelemedicinaRoom({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isEndedByDoctor, setIsEndedByDoctor] = useState(false);
   const [isSwapped, setIsSwapped] = useState(false);
+
+  // LiveKit Hooks para Tracks de Video
+  const cameraTracks = useTracks([Track.Source.Camera]);
+  const audioTracks = useTracks([Track.Source.Microphone]);
+  const localCameraTrack = cameraTracks.find(t => t.participant.isLocal);
+  const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
+  const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
+  const { localParticipant } = useLocalParticipant();
+
+  // Sincronizar estado local de controles con LiveKit y LocalStorage
+  useEffect(() => {
+    if (localParticipant) {
+      localParticipant.setMicrophoneEnabled(!muted);
+      localParticipant.setCameraEnabled(!videoOff);
+    }
+    localStorage.setItem("local_audio_muted", muted ? "true" : "false");
+    localStorage.setItem("local_video_off", videoOff ? "true" : "false");
+  }, [muted, videoOff, localParticipant]);
 
   // Arrastre interactivo y magnetismo a esquinas de ventana flotante (PIP)
   type CornerPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -176,7 +260,7 @@ export function TelemedicinaRoom({
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const key = `teleconsult_subtitles_${roomCode}`;
       const saved = localStorage.getItem(key);
@@ -184,7 +268,7 @@ export function TelemedicinaRoom({
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) setSubtitlesList(parsed);
-        } catch (e) {}
+        } catch (e) { }
       }
     };
 
@@ -229,168 +313,82 @@ export function TelemedicinaRoom({
   const [clinicalNotes, setClinicalNotes] = useState("");
   const roomCode = appointmentId ? String(appointmentId) : "global";
 
-  // 1. Single Source of Truth Live Call Timer
-  const startTimeRef = useRef<number | null>(null);
-
+  // 1. Single Source of Truth Live Call Timer (Basado en el Servidor)
   useEffect(() => {
+    if (!startTime) return;
     const timer = setInterval(() => {
-      if (startTimeRef.current) {
-        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-        setElapsedSecs(Math.max(0, elapsed));
-      } else {
-        setElapsedSecs((prev) => prev + 1);
-      }
+      const elapsed = Math.floor(Date.now() / 1000) - startTime;
+      setElapsedSecs(Math.max(0, elapsed));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [startTime]);
 
-  // 3. Real-Time Room Presence & Media State Tracking (FastAPI Heartbeat + Dynamic Sync)
-  const [isCounterpartConnected, setIsCounterpartConnected] = useState(false);
-  const [isCounterpartMuted, setIsCounterpartMuted] = useState(false);
-  const [isCounterpartVideoOff, setIsCounterpartVideoOff] = useState(false);
+  // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
+  const remoteParticipants = useRemoteParticipants();
+  const isCounterpartConnected = remoteParticipants.length > 0;
+  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.isMuted;
+  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.isMuted;
   const [presenceToast, setPresenceToast] = useState<string | null>(null);
   const prevConnectedRef = useRef(false);
 
   useEffect(() => {
-    // Sincronización instantánea de medios locales en LocalStorage
-    const mediaKey = `room_media_${roomCode}_${role}`;
-    localStorage.setItem(mediaKey, JSON.stringify({ muted, videoOff, timestamp: Date.now() }));
+    if (isCounterpartConnected && !prevConnectedRef.current) {
+      const msg = role === "doctor"
+        ? `¡${counterpartName} se ha unido a la teleconsulta!`
+        : `¡El ${counterpartName} se ha conectado a la sala!`;
+      setPresenceToast(msg);
+      setTimeout(() => setPresenceToast(null), 4500);
+    } else if (!isCounterpartConnected && prevConnectedRef.current) {
+      const msg = role === "doctor"
+        ? `${counterpartName} ha salido de la sala.`
+        : `El ${counterpartName} se ha desconectado.`;
+      setPresenceToast(msg);
+      setTimeout(() => setPresenceToast(null), 4500);
+    }
+    prevConnectedRef.current = isCounterpartConnected;
 
-    const counterpartRole = role === "doctor" ? "patient" : "doctor";
-    const counterpartMediaKey = `room_media_${roomCode}_${counterpartRole}`;
-
-    const syncCounterpartMediaFromStorage = () => {
-      const rawCounterpartMedia = localStorage.getItem(counterpartMediaKey);
-      if (rawCounterpartMedia) {
+    // Verificación de finalización de cita para el paciente
+    if (role === "patient" && appointmentId) {
+      const checkAppointment = async () => {
         try {
-          const parsed = JSON.parse(rawCounterpartMedia);
-          if (parsed.videoOff !== undefined) setIsCounterpartVideoOff(Boolean(parsed.videoOff));
-          if (parsed.muted !== undefined) setIsCounterpartMuted(Boolean(parsed.muted));
-        } catch (e) {}
-      }
-    };
-
-    // Sincronización primaria vía REST API de FastAPI (Servidor)
-    const updatePresence = async () => {
-      try {
-        const now = Date.now();
-
-        // 1. Llamada a API REST FastAPI con parámetros actuales de muted y videoOff
-        let apiConnected = false;
-        try {
-          const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}/${role}?muted=${muted}&video_off=${videoOff}`, {
-            method: "POST"
+          const token = getToken();
+          const res = await fetch(`http://localhost:8000/api/appointments`, {
+            headers: { "Authorization": `Bearer ${token}` }
           });
           if (res.ok) {
-            const data = await res.json();
-            apiConnected = Boolean(data.connected);
-            if (data.counterpart_muted !== undefined) {
-              setIsCounterpartMuted(Boolean(data.counterpart_muted));
-            }
-            if (data.counterpart_video_off !== undefined) {
-              setIsCounterpartVideoOff(Boolean(data.counterpart_video_off));
-            }
-            if (data.elapsed_seconds !== undefined) {
-              setElapsedSecs(data.elapsed_seconds);
-            }
-            if (data.start_time) {
-              startTimeRef.current = Math.floor(data.start_time * 1000);
+            const apts = await res.json();
+            const myApt = apts.find((a: any) => a.id === appointmentId);
+            if (myApt && myApt.status === "completada") {
+              setIsEndedByDoctor(true);
             }
           }
-        } catch (err) {}
-
-        // 2. Sincronización complementaria mediante LocalStorage
-        syncCounterpartMediaFromStorage();
-
-        const presenceKey = `room_presence_${roomCode}`;
-        const rawSpecific = localStorage.getItem(presenceKey);
-        const currentSpecific = rawSpecific ? JSON.parse(rawSpecific) : {};
-
-        if (role === "doctor") {
-          currentSpecific.doctor = true;
-          currentSpecific.doctorTime = now;
-        } else {
-          currentSpecific.patient = true;
-          currentSpecific.patientTime = now;
-        }
-        localStorage.setItem(presenceKey, JSON.stringify(currentSpecific));
-
-        const specTime = currentSpecific[`${counterpartRole}Time`];
-        const specOnline = currentSpecific[counterpartRole] === true && specTime && (now - specTime < 6000);
-
-        const isOnline = Boolean(apiConnected || specOnline);
-
-        setIsCounterpartConnected(isOnline);
-
-        if (isOnline && !prevConnectedRef.current) {
-          const msg = role === "doctor"
-            ? `¡${counterpartName} se ha unido a la teleconsulta!`
-            : `¡El ${counterpartName} se ha conectado a la sala!`;
-          setPresenceToast(msg);
-          setTimeout(() => setPresenceToast(null), 4500);
-        } else if (!isOnline && prevConnectedRef.current) {
-          const msg = role === "doctor"
-            ? `${counterpartName} ha salido de la sala.`
-            : `El ${counterpartName} se ha desconectado.`;
-          setPresenceToast(msg);
-          setTimeout(() => setPresenceToast(null), 4500);
-        }
-
-        prevConnectedRef.current = isOnline;
-
-        // 3. Verificación de finalización de cita para el paciente
-        if (role === "patient") {
-          const statusKey = `room_status_${roomCode}`;
-          const rawStatus = localStorage.getItem(statusKey);
-          if (rawStatus) {
-            try {
-              const parsedStatus = JSON.parse(rawStatus);
-              if (parsedStatus.status === "completada" || parsedStatus.status === "ended") {
-                setIsEndedByDoctor(true);
-              }
-            } catch (e) {}
+        } catch (e) { }
+      };
+      
+      const statusKey = `room_status_${roomCode}`;
+      const rawStatus = localStorage.getItem(statusKey);
+      if (rawStatus) {
+        try {
+          const parsedStatus = JSON.parse(rawStatus);
+          if (parsedStatus.status === "completada" || parsedStatus.status === "ended") {
+            setIsEndedByDoctor(true);
           }
-
-          if (appointmentId) {
-            try {
-              const token = getToken();
-              const res = await fetch(`http://localhost:8000/api/appointments`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (res.ok) {
-                const apts = await res.json();
-                const myApt = apts.find((a: any) => a.id === appointmentId);
-                if (myApt && myApt.status === "completada") {
-                  setIsEndedByDoctor(true);
-                }
-              }
-            } catch (e) {}
-          }
-        }
-      } catch (e) {
-        console.error("Error actualizando presencia", e);
+        } catch (e) { }
       }
-    };
+      
+      // Chequeo periódico suave (cada 15s) solo para fallback de estado de cita en BD
+      const interval = setInterval(checkAppointment, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [isCounterpartConnected, role, counterpartName, appointmentId, roomCode]);
 
-    updatePresence();
-    syncCounterpartMediaFromStorage();
-
-    const interval = setInterval(updatePresence, 1000);
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === counterpartMediaKey) {
-        syncCounterpartMediaFromStorage();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
+  // Limpieza de preferencias de hardware al terminar la llamada
+  useEffect(() => {
     return () => {
-      clearInterval(interval);
-      window.removeEventListener("storage", handleStorageChange);
+      // Optional cleanup on component unmount
     };
-  }, [roomCode, role, counterpartName, appointmentId, muted, videoOff]);
+  }, []);
 
   // Poll & Load Live Comments from Backend REST API + LocalStorage fallback
   const storageKey = appointmentId ? `teleconsult_comments_${appointmentId}` : `teleconsult_comments_demo`;
@@ -415,7 +413,7 @@ export function TelemedicinaRoom({
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const saved = localStorage.getItem(storageKey);
@@ -431,7 +429,7 @@ export function TelemedicinaRoom({
         } else {
           setChatMessages([]);
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     loadComments();
@@ -475,7 +473,7 @@ export function TelemedicinaRoom({
 
     try {
       localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`, {
@@ -535,23 +533,26 @@ export function TelemedicinaRoom({
               role: "system"
             })
           });
-        } catch (e) {}
+        } catch (e) { }
       } else if (role === "patient") {
         // El paciente abandona explícitamente la teleconsulta
         try {
           await fetch(`http://localhost:8000/api/realtime/leave/${roomCode}/patient`, { method: "POST" });
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (err) {
       console.error("Error al salir de consulta", err);
     } finally {
+      // Limpiar preferencias locales para próxima consulta
+      localStorage.removeItem("local_video_off");
+      localStorage.removeItem("local_audio_muted");
       onEndCall();
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#F9FAFB] text-gray-800 overflow-hidden relative font-sans" style={{ minHeight: "calc(100vh - 66px)" }}>
-      
+
       {/* ─── BARRA SUPERIOR (ESTILO MÉDICO ESTÁNDAR) ─── */}
       <div className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-gray-200 flex-wrap gap-3 z-20 shadow-xs">
         <div className="flex items-center gap-3">
@@ -593,13 +594,13 @@ export function TelemedicinaRoom({
 
       {/* ─── CUERPO PRINCIPAL (VIDEO + SIDEBAR CON ESTILO MÉDICO UNIFICADO) ─── */}
       <div className="flex-1 flex overflow-hidden relative p-4 gap-4 bg-[#F9FAFB]">
-        
+
         {/* AREA DE VIDEO Y CONTROLES (IZQUIERDA) */}
         <div className="flex-1 flex flex-col gap-4 overflow-hidden relative">
-          
+
           {/* VISOR DE VIDEO */}
           <div ref={mainContainerRef} className="flex-1 relative rounded-2xl overflow-hidden bg-[#111827] border border-gray-200 shadow-md flex items-center justify-center min-h-[380px]">
-            
+
             {/* TOAST NOTIFICACIÓN EN SALA */}
             {presenceToast && (
               <div className="absolute top-4 z-30 px-4 py-2 rounded-xl bg-white text-[#203A70] text-xs font-bold shadow-xl border border-gray-200 flex items-center gap-2">
@@ -651,10 +652,12 @@ export function TelemedicinaRoom({
                   </div>
                 ) : (
                   /* CÁMARA REMOTA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
-                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center">
-                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${
-                      pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
-                    }`}>
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
+                    {remoteCameraTrack && (
+                      <VideoTrack trackRef={remoteCameraTrack} className="w-full h-full object-cover" />
+                    )}
+                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
+                      }`}>
                       <span>{counterpartName}</span>
                       {isCounterpartMuted ? (
                         <MicOff size={13} className="text-red-400" title="Micrófono Desactivado" />
@@ -684,10 +687,12 @@ export function TelemedicinaRoom({
                   </div>
                 ) : (
                   /* CÁMARA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
-                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center">
-                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${
-                      pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
-                    }`}>
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
+                    {localCameraTrack && (
+                      <VideoTrack trackRef={localCameraTrack} className="w-full h-full object-cover" />
+                    )}
+                    <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
+                      }`}>
                       <span>{userName} (Tú)</span>
                       {muted ? (
                         <MicOff size={13} className="text-red-400" title="Micrófono Desactivado" />
@@ -701,7 +706,7 @@ export function TelemedicinaRoom({
             </div>
 
             {/* RECUADRO PIP PEQUEÑO CON ARRASTRE FLUIDO Y MAGNETISMO A ESQUINAS */}
-            <div 
+            <div
               ref={pipRef}
               onMouseDown={handleMouseDownPip}
               onClick={handlePipClick}
@@ -715,13 +720,11 @@ export function TelemedicinaRoom({
                   : "top 350ms cubic-bezier(0.16, 1, 0.3, 1), left 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1)",
                 zIndex: isDraggingPip ? 50 : 20
               }}
-              className={`absolute w-44 h-30 rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center select-none cursor-grab active:cursor-grabbing ${
-                isDraggingPip ? "scale-105 border-[#00C7C0]" : "hover:scale-105"
-              } ${
-                (isSwapped && !isCounterpartConnected) 
-                  ? "border-amber-500 hover:ring-2 hover:ring-amber-500" 
+              className={`absolute w-44 h-30 rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center select-none cursor-grab active:cursor-grabbing ${isDraggingPip ? "scale-105 border-[#00C7C0]" : "hover:scale-105"
+                } ${(isSwapped && !isCounterpartConnected)
+                  ? "border-amber-500 hover:ring-2 hover:ring-amber-500"
                   : "border-[#00A69D] hover:ring-2 hover:ring-[#00A69D]"
-              }`}
+                }`}
               title="Arrastra a cualquier esquina o haz clic para intercambiar pantalla"
             >
               {/* ÍCONO DE INTERCAMBIAR FLOTANTE (SOLO VISIBLE EN HOVER / CLICK) */}
@@ -746,7 +749,10 @@ export function TelemedicinaRoom({
                   </div>
                 ) : (
                   /* CÁMARA PRENDIDA EN PIP: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
-                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2">
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2 overflow-hidden rounded-xl">
+                    {localCameraTrack && (
+                      <VideoTrack trackRef={localCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
+                    )}
                     <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
                       <span className="truncate">{userName} (Tú)</span>
                       {muted ? (
@@ -792,7 +798,10 @@ export function TelemedicinaRoom({
                   </div>
                 ) : (
                   /* PIP CÁMARA DEL INTERLOCUTOR PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
-                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2">
+                  <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2 overflow-hidden rounded-xl">
+                    {remoteCameraTrack && (
+                      <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
+                    )}
                     <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
                       <span className="truncate">{counterpartName}</span>
                       {isCounterpartMuted ? (
@@ -812,11 +821,10 @@ export function TelemedicinaRoom({
           <div className="flex items-center justify-center gap-3 py-3 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm flex-wrap">
             <button
               onClick={() => setMuted(!muted)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                muted 
-                  ? "bg-red-50 text-red-600 border border-red-200" 
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${muted
+                  ? "bg-red-50 text-red-600 border border-red-200"
                   : "bg-gray-100 hover:bg-gray-200 text-[#203A70] border border-gray-200"
-              }`}
+                }`}
               title={muted ? "Activar micrófono" : "Desactivar micrófono"}
             >
               {muted ? <MicOff size={16} /> : <Mic size={16} />}
@@ -825,11 +833,10 @@ export function TelemedicinaRoom({
 
             <button
               onClick={() => setVideoOff(!videoOff)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                videoOff 
-                  ? "bg-red-50 text-red-600 border border-red-200" 
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${videoOff
+                  ? "bg-red-50 text-red-600 border border-red-200"
                   : "bg-gray-100 hover:bg-gray-200 text-[#203A70] border border-gray-200"
-              }`}
+                }`}
               title={videoOff ? "Activar cámara" : "Desactivar cámara"}
             >
               {videoOff ? <VideoOff size={16} /> : <Video size={16} />}
@@ -838,11 +845,10 @@ export function TelemedicinaRoom({
 
             <button
               onClick={() => setActiveTab("subtitles")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "subtitles" 
-                  ? "bg-[#00A69D] text-white shadow-xs" 
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "subtitles"
+                  ? "bg-[#00A69D] text-white shadow-xs"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200"
-              }`}
+                }`}
             >
               <Captions size={16} />
               <span>Subtítulos Clínicos</span>
@@ -850,11 +856,10 @@ export function TelemedicinaRoom({
 
             <button
               onClick={() => setLseMode(!lseMode)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                lseMode 
-                  ? "bg-[#00A69D] text-white shadow-xs" 
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${lseMode
+                  ? "bg-[#00A69D] text-white shadow-xs"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-200"
-              }`}
+                }`}
             >
               <Hand size={16} />
               <span>Traductor LSE</span>
@@ -876,27 +881,25 @@ export function TelemedicinaRoom({
         {/* SIDEBAR PANEL (CHAT / SUBTÍTULOS / RECETA / NOTAS - ESTILO TARJETAS MÉDICAS UNIFICADAS) */}
         {isSidebarOpen && (
           <div className="w-80 sm:w-96 bg-white border border-gray-200 rounded-2xl flex flex-col flex-shrink-0 z-20 overflow-hidden shadow-sm">
-            
+
             {/* TABS NAVEGACIÓN */}
             <div className="flex border-b border-gray-200 bg-gray-50/80 p-1.5 gap-1 overflow-x-auto">
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === "chat" 
-                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === "chat"
+                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
                     : "text-gray-500 hover:text-[#203A70]"
-                }`}
+                  }`}
               >
                 <MessageSquare size={14} /> Chat ({chatMessages.length})
               </button>
 
               <button
                 onClick={() => setActiveTab("subtitles")}
-                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === "subtitles" 
-                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === "subtitles"
+                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
                     : "text-gray-500 hover:text-[#203A70]"
-                }`}
+                  }`}
               >
                 <Captions size={14} /> Subtítulos ({subtitlesList.length})
               </button>
@@ -905,21 +908,19 @@ export function TelemedicinaRoom({
                 <>
                   <button
                     onClick={() => setActiveTab("rx")}
-                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeTab === "rx" 
-                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === "rx"
+                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
                         : "text-gray-500 hover:text-[#203A70]"
-                    }`}
+                      }`}
                   >
                     <Pill size={14} /> Receta
                   </button>
                   <button
                     onClick={() => setActiveTab("notes")}
-                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeTab === "notes" 
-                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200" 
+                    className={`flex-1 py-2.5 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === "notes"
+                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
                         : "text-gray-500 hover:text-[#203A70]"
-                    }`}
+                      }`}
                   >
                     <FileText size={14} /> Resumen
                   </button>
@@ -933,7 +934,7 @@ export function TelemedicinaRoom({
                 <div className="flex-1 overflow-y-auto space-y-3 pr-1 modern-scroll">
                   {chatMessages.length === 0 ? (
                     <div className="text-center py-12 px-4 text-gray-400 text-xs">
-                      No hay mensajes en esta teleconsulta.<br/>Escribe un mensaje abajo para interactuar en vivo.
+                      No hay mensajes en esta teleconsulta.<br />Escribe un mensaje abajo para interactuar en vivo.
                     </div>
                   ) : (
                     chatMessages.map((msg, idx) => (
@@ -946,11 +947,10 @@ export function TelemedicinaRoom({
                           <span>· {msg.time}</span>
                         </div>
                         <div
-                          className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed ${
-                            msg.sender === userName
+                          className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed ${msg.sender === userName
                               ? "bg-[#00A69D] text-white rounded-tr-xs shadow-xs font-medium"
                               : "bg-gray-100 text-gray-800 rounded-tl-xs border border-gray-200 shadow-xs font-medium"
-                          }`}
+                            }`}
                         >
                           {msg.text}
                         </div>

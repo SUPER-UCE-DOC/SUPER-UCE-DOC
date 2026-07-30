@@ -107,6 +107,12 @@ export const api = {
     });
   },
 
+  // --- Realtime / LiveKit ---
+  async getLiveKitToken(roomId: string): Promise<{ token: string; start_time?: number }> {
+    return request(`/api/realtime/livekit-token/${roomId}`);
+  },
+
+
   // --- Citas Médicas ---
   async getAppointments(): Promise<any[]> {
     return request("/api/appointments");
