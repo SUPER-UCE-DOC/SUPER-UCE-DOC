@@ -10,7 +10,7 @@ from app.routers.auth import get_current_user, RoleChecker
 
 router = APIRouter(prefix="/api/appointments", tags=["appointments"])
 
-VALID_APPOINTMENT_STATUSES = {"pendiente", "en_curso", "completada", "cancelada"}
+VALID_APPOINTMENT_STATUSES = {"pendiente", "confirmada", "rechazada", "en_curso", "completada", "cancelada"}
 
 
 def notify_state_change(appointment_id: int, new_status: str) -> None:
@@ -159,7 +159,7 @@ def update_appointment_status(
     if requested_status not in VALID_APPOINTMENT_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Estado inválido. Los estados permitidos son: pendiente, en_curso, completada, cancelada."
+            detail="Estado inválido. Los estados permitidos son: pendiente, confirmada, rechazada, en_curso, completada, cancelada."
         )
 
     if app.status in {"completada", "cancelada"}:
@@ -175,16 +175,22 @@ def update_appointment_status(
         )
 
     if current_user.role == "doctor":
-        if requested_status not in {"en_curso", "completada"}:
+        if requested_status not in {"confirmada", "rechazada", "en_curso", "completada"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solo el médico puede cambiar el estado a 'en_curso' o 'completada'."
+                detail="Solo el médico puede cambiar el estado a 'confirmada', 'rechazada', 'en_curso' o 'completada'."
             )
 
-        if app.status == "pendiente" and requested_status != "en_curso":
+        if app.status == "pendiente" and requested_status not in {"confirmada", "rechazada"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede saltar estados. Desde 'pendiente' solo se permite avanzar a 'en_curso'."
+                detail="No se puede saltar estados. Desde 'pendiente' solo se permite 'confirmada' o 'rechazada'."
+            )
+
+        if app.status == "confirmada" and requested_status != "en_curso":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede saltar estados. Desde 'confirmada' solo se permite avanzar a 'en_curso'."
             )
 
         if app.status == "en_curso" and requested_status != "completada":
