@@ -107,15 +107,45 @@ export const api = {
     });
   },
 
+  async updateSettings(settings: any): Promise<any> {
+    return request("/api/auth/me/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    });
+  },
+
   // --- Realtime / LiveKit ---
   async getLiveKitToken(roomId: string): Promise<{ token: string; start_time?: number }> {
     return request(`/api/realtime/livekit-token/${roomId}`);
+  },
+
+  async getRoomSubtitles(roomId: string): Promise<any[]> {
+    return request(`/api/realtime/subtitles/${roomId}`);
+  },
+
+  async postRoomSubtitle(roomId: string, payload: { speaker_name: string, speaker_role: string, text: string, timestamp: string }): Promise<any> {
+    return request(`/api/realtime/subtitles/${roomId}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
 
   // --- Citas Médicas ---
   async getAppointments(): Promise<any[]> {
     return request("/api/appointments");
+  },
+
+  async getDoctorBookedSlots(doctorId: number | string): Promise<string[]> {
+    return request(`/api/appointments/doctor/${doctorId}/booked-slots`);
+  },
+
+  async getDoctorPatients(): Promise<any[]> {
+    return request("/api/appointments/my-patients");
+  },
+
+  async getPatientHistory(patientId: number): Promise<any[]> {
+    return request(`/api/appointments/patient/${patientId}/history`);
   },
 
   async createAppointment(appointmentData: any): Promise<any> {
@@ -139,6 +169,10 @@ export const api = {
   // --- Recetas Médicas ---
   async getPrescriptions(): Promise<any[]> {
     return request("/api/prescriptions");
+  },
+
+  async getPatientPrescriptions(patientId: number): Promise<any[]> {
+    return request(`/api/prescriptions/patient/${patientId}`);
   },
 
   async createPrescription(prescriptionData: any): Promise<any> {
@@ -208,10 +242,23 @@ export const api = {
     });
   },
 
-  async summarizeConsultation(appointmentId: number, transcript: string): Promise<{ summary: string }> {
+  async summarizeConsultation(appointmentId: number, transcript: string, clinicalNotes?: string): Promise<{ summary: string }> {
     return request("/api/ai/summarize", {
       method: "POST",
-      body: JSON.stringify({ appointment_id: appointmentId, conversation_transcript: transcript }),
+      body: JSON.stringify({ 
+        appointment_id: appointmentId, 
+        conversation_transcript: transcript,
+        clinical_notes: clinicalNotes
+      }),
+    });
+  },
+
+  async transcribeTelemedicineAudio(audioBlob: Blob): Promise<{ text: string }> {
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "audio.webm");
+    return request("/api/ai/telemedicina-stt", {
+      method: "POST",
+      body: formData,
     });
   },
 

@@ -35,9 +35,12 @@ function LiveHomeBadge({ roomCode }: { roomCode: number }) {
   const s = (elapsed % 60).toString().padStart(2, "0");
 
   return (
-    <div className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-cyan-500/30 text-cyan-200 font-bold border border-cyan-400/50">
-      <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
-      ● En Curso · {m}:{s}
+    <div className="flex items-center gap-2 text-sm text-cyan-300 font-bold">
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+      </span>
+      En Curso · {m}:{s}
     </div>
   );
 }
@@ -156,47 +159,47 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
         />
 
         <div className="relative">
-          <span
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full mb-4"
-            style={{ background: "rgba(255,255,255,0.15)", color: "white", fontWeight: 600 }}
-          >
-            <Clock size={11} /> Tu próxima cita médica
-          </span>
+          <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-wide uppercase mb-3" style={{ color: "rgba(255,255,255,0.9)" }}>
+            <Clock size={15} /> Tu próxima cita médica
+          </p>
 
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
-              <h2 className="text-white flex items-center gap-2 flex-wrap" style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1.3 }}>
-                <span>{nextApp ? (nextApp.doctor_name || "Doctor Especialista") : "No tienes citas agendadas"}</span>
-                {nextApp && (nextApp.doctor_specialty || nextApp.specialty) && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-400/20 text-teal-200 border border-teal-300/30 font-semibold">
-                    {nextApp.doctor_specialty || nextApp.specialty}
-                  </span>
-                )}
+              <h2 className="text-white text-2xl font-extrabold mb-1">
+                {nextApp ? (nextApp.doctor_name || "Doctor Especialista") : "No tienes citas agendadas"}
               </h2>
-              <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "14px", marginTop: "2px" }}>
-                {nextApp ? `${nextApp.type || "Teleconsulta"} · ${nextApp.reason || "Consulta General"}` : "Solicita una teleconsulta médica cuando lo necesites"}
-              </p>
-              {nextApp && (
-                <div className="flex items-center gap-4 mt-3 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar size={14} style={{ color: "#00C7C0" }} />
-                    <span className="text-white text-sm" style={{ fontWeight: 600 }}>{formatDateSafe(nextApp.date_time)}</span>
-                  </div>
+              
+              <div className="flex flex-wrap items-center gap-2 text-sm font-medium mb-3" style={{ color: "rgba(255,255,255,0.85)" }}>
+                {nextApp ? (
+                  <>
+                    <span>{nextApp.type || "Teleconsulta"}</span>
+                    {(nextApp.doctor_specialty || nextApp.specialty) && (
+                      <>
+                        <span className="opacity-50">•</span>
+                        <span>{nextApp.doctor_specialty || nextApp.specialty}</span>
+                      </>
+                    )}
+                    {nextApp.reason && (
+                      <>
+                        <span className="opacity-50">•</span>
+                        <span>{nextApp.reason}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span>Solicita una teleconsulta médica cuando lo necesites</span>
+                )}
+              </div>
 
-                  {nextApp.status === "en_curso" ? (
+              {nextApp && (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-white font-semibold">
+                    <Calendar size={15} style={{ color: "#00C7C0" }} />
+                    {formatDateSafe(nextApp.date_time)}
+                  </div>
+                  
+                  {nextApp.status === "en_curso" && (
                     <LiveHomeBadge roomCode={nextApp.id} />
-                  ) : (
-                    <div
-                      className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-                      style={{
-                        background: nextApp.status === "confirmada" ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)",
-                        color: nextApp.status === "confirmada" ? "#6EE7B7" : "#FDE68A",
-                        fontWeight: 600
-                      }}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full inline-block ${nextApp.status === "confirmada" ? "bg-green-400" : "bg-amber-400"}`} />
-                      {nextApp.status === "confirmada" ? "✓ Confirmada" : "⏳ Pendiente"}
-                    </div>
                   )}
                 </div>
               )}
@@ -220,13 +223,46 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
                   : "Entrar a la Sala de Telemedicina"}
               </button>
             ) : nextApp && nextApp.status === "confirmada" ? (
-              <button
-                onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel. En cuanto la inicie, este botón se activará automáticamente.")}
-                className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-90 cursor-pointer"
-              >
-                <Clock size={18} />
-                Esperando al Médico
-              </button>
+              (() => {
+                const isSameDay = (d1: Date, d2: Date) => 
+                  d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+                
+                const now = new Date();
+                const appTime = new Date(nextApp.date_time_raw || nextApp.date_time);
+                const isTooEarly = !isSameDay(appTime, now);
+                
+                const formatRelativeDate = (date: Date) => {
+                  const today = new Date();
+                  const tomorrow = new Date(today);
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+
+                  if (isSameDay(date, today)) return "Hoy";
+                  if (isSameDay(date, tomorrow)) return "Mañana";
+                  return `el ${date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
+                };
+                
+                if (isTooEarly) {
+                  return (
+                    <button
+                      disabled
+                      className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-60 cursor-not-allowed"
+                    >
+                      <Clock size={18} />
+                      Disponible {formatRelativeDate(appTime)} a las {appTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </button>
+                  );
+                }
+                
+                return (
+                  <button
+                    onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel. En cuanto la inicie, este botón se activará automáticamente.")}
+                    className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-90 cursor-pointer"
+                  >
+                    <Clock size={18} />
+                    Esperando al Médico
+                  </button>
+                );
+              })()
             ) : (
               <button
                 onClick={() => onNavigate(nextApp ? "appointments" : "appointments_new")}
@@ -258,8 +294,8 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
               <Calendar size={24} style={{ color: "#203A70" }} />
             </div>
             <p style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>Agendar Cita Médica</p>
-            <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Ver disponibilidad de especialistas</p>
-            <div className="flex items-center gap-1 mt-4 text-xs" style={{ color: "#00A69D", fontWeight: 600 }}>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Ver disponibilidad de especialistas</p>
+            <div className="flex items-center gap-1 mt-4 text-sm" style={{ color: "#00A69D", fontWeight: 600 }}>
               Ver agenda <ChevronRight size={13} />
             </div>
           </button>
@@ -274,8 +310,8 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
               <MessageSquareHeart size={24} style={{ color: "#00A69D" }} />
             </div>
             <p style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>Consultar Asistente IA</p>
-            <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Resuelve dudas sobre tu salud 24/7</p>
-            <div className="flex items-center gap-1 mt-4 text-xs" style={{ color: "#00A69D", fontWeight: 600 }}>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Resuelve dudas sobre tu salud 24/7</p>
+            <div className="flex items-center gap-1 mt-4 text-sm" style={{ color: "#00A69D", fontWeight: 600 }}>
               Abrir chat <ChevronRight size={13} />
             </div>
           </button>
@@ -288,8 +324,7 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
           >
             {activePrescriptionsCount > 0 && (
               <span 
-                className="absolute top-4 right-4 text-xs px-2 py-0.5 rounded-full"
-                style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 700 }}
+                className="absolute top-4 right-4 text-sm px-4 py-1.5 rounded-lg border font-bold bg-green-50 text-green-600 border-green-200"
               >
                 {activePrescriptionsCount} {activePrescriptionsCount === 1 ? "Activa" : "Activas"}
               </span>
@@ -299,8 +334,8 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
               <Pill size={24} style={{ color: "#D97706" }} />
             </div>
             <p style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>Mis Recetas Activas</p>
-            <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Ver y localizar farmacias cercanas</p>
-            <div className="flex items-center gap-1 mt-4 text-xs" style={{ color: "#00A69D", fontWeight: 600 }}>
+            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Ver y localizar farmacias cercanas</p>
+            <div className="flex items-center gap-1 mt-4 text-sm" style={{ color: "#00A69D", fontWeight: 600 }}>
               Ver recetas <ChevronRight size={13} />
             </div>
           </button>
@@ -326,9 +361,9 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{item.title}</p>
-                  <p className="text-xs mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{item.desc}</p>
+                  <p className="text-sm mt-0.5 truncate" style={{ color: "#9CA3AF" }}>{item.desc}</p>
                 </div>
-                <span className="text-xs flex-shrink-0" style={{ color: "#9CA3AF" }}>{item.time}</span>
+                <span className="text-sm flex-shrink-0" style={{ color: "#9CA3AF" }}>{item.time}</span>
               </div>
             ))}
           </div>
@@ -336,7 +371,7 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
           <div className="bg-white rounded-2xl shadow-sm p-8 text-center" style={{ border: "1px solid #F3F4F6" }}>
             <Activity className="w-8 h-8 text-gray-300 mx-auto mb-2" />
             <p className="text-sm font-semibold text-gray-600">Sin actividad reciente registrada</p>
-            <p className="text-xs text-gray-400 mt-1">Tus consultas finalizadas y recetas emitidas aparecerán automáticamente en esta sección.</p>
+            <p className="text-sm text-gray-400 mt-1">Tus consultas finalizadas y recetas emitidas aparecerán automáticamente en esta sección.</p>
           </div>
         )}
       </div>

@@ -206,6 +206,13 @@ def end_room_session(room_id: str):
     session["status"] = "ended"
     session["doctor_time"] = 0
     session["patient_time"] = 0
+    
+    # Limpiar estado en memoria para que no persista si se reutiliza el room_id
+    if clean_room in room_subtitles_store:
+        room_subtitles_store.pop(clean_room, None)
+    if clean_room in room_comments_store:
+        room_comments_store.pop(clean_room, None)
+        
     return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
 
 from pydantic import BaseModel

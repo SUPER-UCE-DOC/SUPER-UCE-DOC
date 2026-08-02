@@ -409,6 +409,47 @@ function DoctorSettings({ userName }: { userName: string }) {
   });
   const dayNames: Record<string, string> = { L: "Lunes", M: "Martes", X: "Miércoles", J: "Jueves", V: "Viernes", S: "Sábado", D: "Domingo" };
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  useEffect(() => {
+    api.getMe().then(user => {
+      if (user.profile) {
+        if (user.profile.firma) setFirma(user.profile.firma);
+        if (user.profile.start_time) setHoraInicio(user.profile.start_time);
+        if (user.profile.end_time) setHoraFin(user.profile.end_time);
+        if (user.profile.available_days) {
+          const loadedDays = user.profile.available_days.split(",");
+          const newDaysState = { ...days };
+          Object.keys(newDaysState).forEach(key => {
+            newDaysState[key] = loadedDays.includes(key);
+          });
+          setDays(newDaysState);
+        }
+      }
+    }).catch(err => console.error("Error loading settings:", err));
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage("");
+    try {
+      const activeDays = Object.keys(days).filter(k => days[k]).join(",");
+      await api.updateSettings({
+        available_days: activeDays,
+        start_time: horaInicio,
+        end_time: horaFin,
+        firma: firma
+      });
+      setSaveMessage("Configuración guardada exitosamente");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch (err) {
+      setSaveMessage("Error al guardar la configuración");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const toggleDay = (key: string) => setDays((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
@@ -522,6 +563,23 @@ function DoctorSettings({ userName }: { userName: string }) {
           />
         </div>
       </Card>
+      
+      {/* Botón Guardar (Global para el rol) */}
+      <div className="flex items-center justify-end gap-4 mt-6">
+        {saveMessage && (
+          <span className="text-sm font-medium" style={{ color: saveMessage.includes("Error") ? "#EF4444" : "#00A69D" }}>
+            {saveMessage}
+          </span>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-6 py-3 rounded-lg text-white font-bold shadow-md hover:shadow-lg transition-all"
+          style={{ background: "#00A69D", opacity: isSaving ? 0.7 : 1 }}
+        >
+          {isSaving ? "Guardando..." : "Guardar Configuración"}
+        </button>
+      </div>
     </>
   );
 }

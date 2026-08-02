@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from 'react-markdown';
 import { api } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, Send, CheckCircle,
   Calendar, Users, Stethoscope, FileText, Clock, AlertCircle,
-  ChevronRight, Plus, Search, Brain, Zap, X, Pill
+  ChevronRight, Plus, Search, Brain, Zap, X, Pill, Sun, Sunset
 } from "lucide-react";
 import { DoctorHome } from "./DoctorHome";
 import { SettingsView } from "./SettingsView";
@@ -57,17 +58,104 @@ const patients = [
 
 const aiTranslations = [
   { time: "11:32", gesture: "DOLOR + CABEZA", translation: "La paciente indica dolor de cabeza" },
-  { time: "11:33", gesture: "TRES + DÍAS", translation: "Señala que lleva 3 días con el síntoma" },
-  { time: "11:33", gesture: "MEDICAMENTO + NO", translation: "No ha tomado medicación" },
-  { time: "11:34", gesture: "MAREO + CAMA", translation: "Refiere mareos al levantarse de la cama" },
-  { time: "11:35", gesture: "PRESIÓN + ALTA", translation: "Asocia síntomas con su hipertensión" },
 ];
+
+/* ─── CALENDARIO PERSONALIZADO ─── */
+function MonthCalendar({ selectedDate, onSelectDate, availableDaysStr, minDate }: { selectedDate: string; onSelectDate: (d: string) => void; availableDaysStr: string; minDate?: string }) {
+  const [currentDate, setCurrentDate] = useState(() => {
+    return selectedDate ? new Date(selectedDate) : new Date();
+  });
+
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const dayMap: Record<number, string> = { 1: 'L', 2: 'M', 3: 'X', 4: 'J', 5: 'V', 6: 'S', 0: 'D' };
+  const availableDaysArr = availableDaysStr ? availableDaysStr.split(",") : ["L","M","X","J","V"];
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+  const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+
+  // Week starts on Sunday as per the screenshot (DOM LUN MAR MIE JUE VIE SAB)
+  const days = [];
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+  // Pad the rest to always have exactly 42 cells (6 rows) to keep height stable
+  while (days.length < 42) {
+    days.push(null);
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let minDateObj = minDate ? new Date(minDate + "T00:00:00") : today;
+  let maxDateObj = new Date(today);
+  maxDateObj.setDate(maxDateObj.getDate() + 30); // Permitir agendar hasta 30 días en el futuro
+
+  return (
+    <div className="bg-transparent rounded-2xl pt-3" style={{ width: "100%", maxWidth: "340px", margin: "0 auto" }}>
+      <div className="flex justify-between items-center mb-4 px-2">
+        <button type="button" onClick={prevMonth} className="text-gray-400 font-bold hover:text-[#203A70]">&lt;</button>
+        <span className="font-bold text-[17px]" style={{ color: "#203A70" }}>
+          {monthNames[currentDate.getMonth()]} De {currentDate.getFullYear()}
+        </span>
+        <button type="button" onClick={nextMonth} className="text-gray-400 font-bold hover:text-[#203A70]">&gt;</button>
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+        {["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"].map(day => (
+          <div key={day} className="text-[10px] font-bold text-gray-400">{day}</div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {days.map((day, idx) => {
+          if (!day) return <div key={idx} className="w-9 h-9"></div>;
+          
+          const dateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+          const dateStr = dateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD local
+          
+          const isSelected = selectedDate === dateStr;
+          const dayLetter = dayMap[dateObj.getDay()];
+          const isAvailable = availableDaysArr.includes(dayLetter) && dateObj.getTime() >= minDateObj.getTime() && dateObj.getTime() <= maxDateObj.getTime();
+
+          return (
+            <button
+              key={idx}
+              type="button"
+              disabled={!isAvailable}
+              onClick={() => onSelectDate(dateStr)}
+              className="w-9 h-9 mx-auto flex items-center justify-center text-sm font-bold rounded-xl transition-all"
+              style={{
+                background: isSelected ? "#203A70" : "transparent",
+                color: isSelected ? "white" : isAvailable ? "#4B5563" : "#D1D5DB",
+                cursor: isAvailable ? "pointer" : "not-allowed"
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 
 export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate }: DoctorDashboardProps) {
   const navigate = (v: string) => onNavigate?.(v);
 
   const [activeAppointment, setActiveAppointment] = useState<any>(null);
   const [inCall, setInCall] = useState(false);
+  const [liveRoomOpen, setLiveRoomOpen] = useState(false);
 
   useEffect(() => {
     const savedActive = localStorage.getItem("doctor_active_teleconsult");
@@ -110,25 +198,31 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     if (currentView === "home") return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
     if (currentView === "dashboard" || currentView === "schedule") return <AgendaView userName={userName} />;
     if (currentView === "patients") return <PatientsView />;
-    if (currentView === "teleconsult" || currentView === "ai-assistant") return <TeleconsultaView userName={userName} userAvatar={userAvatar} onEndCall={handleEndCall} />;
+    if (currentView === "teleconsult" || currentView === "ai-assistant") return <TeleconsultaView userName={userName} userAvatar={userAvatar} onNavigate={navigate} />;
     if (currentView === "prescriptions") return <RecetasView />;
     if (currentView === "settings") return <SettingsView role="doctor" userName={userName} />;
     return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
   };
 
   return (
-    <>
-      {renderViewContent()}
-      {inCall && currentView !== "teleconsult" && currentView !== "ai-assistant" && (
-        <GlobalFloatingCallWidget
-          role="doctor"
-          counterpartName={activeAppointment?.patient_name || "Rosa Chávez"}
-          counterpartAvatar={activeAppointment?.patient_avatar}
-          appointmentId={activeAppointment?.id || 1}
-          onReturnToCall={() => navigate("teleconsult")}
-        />
+    <div className="flex-1 flex flex-col w-full h-full relative">
+      <div style={{ display: currentView === "live_teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
+        {renderViewContent()}
+      </div>
+      {inCall && (
+        <div style={currentView === "live_teleconsult" ? { display: "flex", flexDirection: "column", flex: 1, height: "100%" } : {}}>
+          <DoctorLiveRoom
+            userName={userName}
+            userAvatar={userAvatar}
+            onEndCall={handleEndCall}
+            activeAppointment={activeAppointment}
+            activePatient={activeAppointment?.patient_name}
+            isMinimized={currentView !== "live_teleconsult"}
+            onReturnToCall={() => navigate("live_teleconsult")}
+          />
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -174,7 +268,9 @@ function AgendaView({ userName }: { userName: string }) {
           type: app.type || "Teleconsulta",
           deaf: app.patient_name ? (app.patient_name.includes("Rosa") || app.patient_name.includes("María") || app.patient_name.includes("Morales")) : false,
           status: app.status,
-          rawDate: new Date(app.date_time)
+          rawDate: new Date(app.date_time),
+          real_start_time: app.real_start_time,
+          real_end_time: app.real_end_time
         }));
         setAllAgenda(formatted);
       }
@@ -399,14 +495,13 @@ function AgendaView({ userName }: { userName: string }) {
                 </div>
 
                 <div
-                  className="flex-1 rounded-2xl p-4 border mb-2"
-                  style={{ background: s.bg, borderColor: item.status === "en_curso" ? "#00A69D" : "#E5E7EB" }}
+                  className="flex-1 bg-white rounded-xl p-5 border border-gray-50 shadow-sm mb-3"
                 >
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <span style={{ color: "#203A70", fontWeight: 700, fontSize: "15px" }}>{item.time}</span>
-                        <span className="text-sm" style={{ color: s.color, fontWeight: 600 }}>— {item.patient}</span>
+                        <span className="text-sm" style={{ color: "#4B5563", fontWeight: 600 }}>— {item.patient}</span>
                         {item.deaf && (
                           <span
                             className="text-xs px-2 py-0.5 rounded-full"
@@ -416,21 +511,44 @@ function AgendaView({ userName }: { userName: string }) {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs mt-1" style={{ color: "#9CA3AF" }}>{item.type}</div>
+                      <div className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
+                        {item.type}
+                      </div>
+                      {(item.real_start_time || item.real_end_time) && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <div className="text-xs px-2 py-1.5 bg-green-50 text-green-700 font-medium rounded-lg border border-green-100 whitespace-normal">
+                            {item.real_start_time && item.real_end_time 
+                              ? `Atención clínica brindada de ${new Date(new Date(item.real_start_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})} a ${new Date(new Date(item.real_end_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})}`
+                              : item.real_start_time 
+                              ? `Atención clínica iniciada a las ${new Date(new Date(item.real_start_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})} (En curso)`
+                              : `Atención clínica finalizada a las ${new Date(new Date(item.real_end_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})}`
+                            }
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className="text-[11px] px-3 py-1 rounded-full"
-                        style={{
-                          background: item.status === "en_curso" ? "#DCFCE7" : item.status === "completada" ? "#F3F4F6" : item.status === "rechazada" ? "#FEE2E2" : "#FEF3C7",
-                          color: item.status === "en_curso" ? "#10B981" : item.status === "completada" ? "#9CA3AF" : item.status === "rechazada" ? "#EF4444" : "#D97706",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px"
-                        }}
-                      >
-                        {s.label}
-                      </span>
+                      {item.status === "en_curso" ? (
+                        <div className="flex items-center gap-2 text-sm uppercase tracking-wider font-bold" style={{ color: "#00A69D" }}>
+                          <span
+                            className="flex h-2.5 w-2.5 rounded-full"
+                            style={{
+                              background: "#008f87",
+                              boxShadow: "0 0 0 3px rgba(0,166,157,0.2)"
+                            }}
+                          ></span>
+                          <span>En curso</span>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-sm font-bold uppercase tracking-wider"
+                          style={{
+                            color: item.status === "confirmada" ? "#00A69D" : item.status === "completada" ? "#9CA3AF" : item.status === "pendiente" ? "#D97706" : "#EF4444"
+                          }}
+                        >
+                          {item.status === "confirmada" ? "Confirmada" : item.status === "completada" ? "Finalizada" : item.status === "pendiente" ? "Pendiente" : "Rechazada"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -457,31 +575,52 @@ function PatientsView() {
   const [isSearching, setIsSearching] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
+  // Historial Clínico Modal
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isClosingHistory, setIsClosingHistory] = useState(false);
+  const [selectedPatientHistory, setSelectedPatientHistory] = useState<any>(null);
+  const [patientHistoryData, setPatientHistoryData] = useState<any[]>([]);
+  const [patientPrescriptionsData, setPatientPrescriptionsData] = useState<any[]>([]);
+  const [historyTab, setHistoryTab] = useState<"teleconsultas" | "recetas">("teleconsultas");
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const loadPatients = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const formatted = data.map((p: any) => ({
-          id: p.id,
-          name: p.full_name,
-          age: p.age || "N/A",
-          condition: p.condition || "Sin especificar",
-          lastVisit: "Reciente",
-          status: "estable", 
-          deaf: false,
-          avatar: p.avatar || p.full_name.substring(0, 2).toUpperCase(),
-        }));
-        setPatientsList(formatted);
+      const data = await api.getDoctorPatients();
+      if (data && Array.isArray(data)) {
+        setPatientsList(data);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+  const closeHistoryModal = () => {
+    setIsClosingHistory(true);
+    setTimeout(() => {
+      setShowHistoryModal(false);
+      setIsClosingHistory(false);
+    }, 300);
+  };
+
+  const handleViewHistory = async (patient: any) => {
+    setSelectedPatientHistory(patient);
+    setHistoryTab("teleconsultas");
+    setShowHistoryModal(true);
+    setLoadingHistory(true);
+    try {
+      const [historyData, rxData] = await Promise.all([
+        api.getPatientHistory(patient.id).catch(() => []),
+        api.getPatientPrescriptions(patient.id).catch(() => [])
+      ]);
+      setPatientHistoryData(historyData);
+      setPatientPrescriptionsData(rxData);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -596,28 +735,33 @@ function PatientsView() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span style={{ color: "#203A70", fontWeight: 700 }}>{p.name}</span>
-                    <span className="text-sm" style={{ color: "#9CA3AF" }}>{p.age} años</span>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-lg" style={{ color: "#203A70", fontWeight: 800 }}>{p.name}</span>
+                    <span className="text-base font-semibold" style={{ color: "#9CA3AF" }}>{p.age} años</span>
                   </div>
-                  <div className="text-sm mt-0.5" style={{ color: "#6B7280" }}>{p.condition}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>Última visita: {p.lastVisit}</div>
+                  <div className="text-base font-medium" style={{ color: "#6B7280" }}>Condición: {p.condition}</div>
+                  <div className="text-sm mt-1" style={{ color: "#9CA3AF" }}>Última visita: {p.lastVisit}</div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
-                    className="text-xs px-3 py-1 rounded-full border"
+                    className="text-sm font-bold uppercase tracking-wider flex items-center gap-2"
                     style={{
-                      background: p.status === "estable" ? "#F0FFFE" : p.status === "critico" ? "#FEF2F2" : "#FFFBEB",
-                      color: p.status === "estable" ? "#00A69D" : p.status === "critico" ? "#EF4444" : "#D97706",
-                      borderColor: p.status === "estable" ? "#CCFBF6" : p.status === "critico" ? "#FEE2E2" : "#FEF3C7",
-                      fontWeight: 600,
+                      color: p.status === "estable" ? "#00A69D" : p.status === "critico" ? "#EF4444" : "#D97706"
                     }}
                   >
-                    {p.status === "estable" ? "✓ Estable" : p.status === "critico" ? "🚨 Crítico" : "⚠ Seguimiento"}
+                    <span
+                      className="flex h-2 w-2 rounded-full"
+                      style={{
+                        background: p.status === "estable" ? "#008f87" : p.status === "critico" ? "#DC2626" : "#B45309",
+                        boxShadow: `0 0 0 3px ${p.status === "estable" ? "rgba(0,166,157,0.2)" : p.status === "critico" ? "rgba(239,68,68,0.2)" : "rgba(217,119,6,0.2)"}`
+                      }}
+                    ></span>
+                    {p.status === "estable" ? "Estable" : p.status === "critico" ? "Crítico" : "Seguimiento"}
                   </span>
                   <button
-                    className="px-4 py-1.5 rounded-lg text-sm border font-semibold transition-colors"
+                    onClick={() => handleViewHistory(p)}
+                    className="px-4 py-1.5 rounded-lg text-sm border font-semibold transition-colors hover:bg-gray-50"
                     style={{ borderColor: "#E5E7EB", color: "#4B5563" }}
                   >
                     Ver historial
@@ -727,6 +871,185 @@ function PatientsView() {
           </div>
         </div>
       )}
+
+      {/* Modal de Historial Clínico */}
+      {showHistoryModal && selectedPatientHistory && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+          onClick={closeHistoryModal}
+          style={{ animation: isClosingHistory ? "fadeOut 0.3s ease-in forwards" : "fadeIn 0.3s ease-out forwards" }}
+        >
+          <div 
+            className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ border: "1px solid #E5E7EB", animation: isClosingHistory ? "scaleDown 0.3s ease-in forwards" : "scaleUp 0.3s ease-out forwards" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Estilos inline de animación temporal para no depender de librerías externas o tailwind configs */}
+            <style>{`
+              @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+              @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+              @keyframes scaleUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+              @keyframes scaleDown { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
+            `}</style>
+
+            {/* Cabecera */}
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-4">
+                {selectedPatientHistory.avatar && (selectedPatientHistory.avatar.startsWith("http") || selectedPatientHistory.avatar.startsWith("data:")) ? (
+                  <img src={selectedPatientHistory.avatar} alt={selectedPatientHistory.name} className="w-14 h-14 rounded-full object-cover border border-gray-200" />
+                ) : (
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center text-white" style={{ background: "#203A70", fontWeight: 800, fontSize: "18px" }}>
+                    {getAvatarInitials(selectedPatientHistory.name)}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-xl font-bold" style={{ color: "#203A70" }}>{selectedPatientHistory.name}</h3>
+                  <p className="text-sm text-gray-500">{selectedPatientHistory.age} años • Condición: {selectedPatientHistory.condition}</p>
+                </div>
+              </div>
+              <button onClick={closeHistoryModal} className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex px-6 pt-2 border-b border-gray-200 bg-gray-50/50">
+              <button
+                onClick={() => setHistoryTab("teleconsultas")}
+                className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${historyTab === "teleconsultas" ? "border-[#00A69D] text-[#00A69D]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+              >
+                Historial de Teleconsultas
+              </button>
+              <button
+                onClick={() => setHistoryTab("recetas")}
+                className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${historyTab === "recetas" ? "border-[#00A69D] text-[#00A69D]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+              >
+                Historial de Recetas Emitidas
+              </button>
+            </div>
+
+            {/* Contenido */}
+            <div className="p-6 overflow-y-auto flex-1 bg-[#FAFAFA]">
+              {historyTab === "teleconsultas" && (
+                <div className="anim-fade-in">
+                  <h4 className="font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <FileText size={18} style={{ color: "#00A69D" }} />
+                    Historial de Teleconsultas
+                  </h4>
+              
+              {loadingHistory ? (
+                <div className="text-center py-12 text-gray-500 flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-4 border-t-[#00A69D] border-gray-200 animate-spin"></div>
+                  Cargando expediente...
+                </div>
+              ) : patientHistoryData.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                  <FileText size={32} className="mx-auto mb-3 opacity-20" />
+                  No hay reportes de IA o teleconsultas finalizadas para este paciente.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {patientHistoryData.map((history, idx) => (
+                    <div key={history.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex gap-4">
+                      <div className="hidden sm:flex flex-col items-center">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white bg-[#00A69D] shadow-sm">
+                          <Stethoscope size={20} />
+                        </div>
+                        {idx !== patientHistoryData.length - 1 && <div className="w-0.5 h-full bg-gray-100 my-2"></div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start flex-wrap gap-2 mb-3">
+                          <div>
+                            <span className="text-xs font-bold text-[#00A69D] bg-[#F0FFFE] px-3 py-1.5 rounded-md border border-[#CCFBF6]">
+                              {formatDateSafe(history.date)}
+                            </span>
+                            <div className="text-sm text-gray-500 font-medium mt-3">Atendido por: <span className="text-gray-700 font-bold">{history.doctor_name}</span></div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 p-5 rounded-xl bg-gray-50 border border-gray-200 prose prose-sm max-w-none prose-headings:text-[#203A70] prose-p:text-gray-700 leading-relaxed">
+                          <ReactMarkdown>{history.summary_ia || "*No hay reporte de IA generado para esta consulta.*"}</ReactMarkdown>
+                        </div>
+                        
+                        {history.translation_text && history.translation_text !== "No se registró ninguna conversación de voz o de gestos durante esta consulta." && (
+                          <details className="mt-4 group cursor-pointer">
+                            <summary className="text-sm font-semibold text-[#00A69D] hover:text-[#008A82] transition-colors outline-none select-none flex items-center gap-1">
+                              Ver transcripción completa de la llamada
+                            </summary>
+                            <div className="mt-3 p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl whitespace-pre-wrap max-h-60 overflow-y-auto text-sm text-[#334155] leading-relaxed font-sans shadow-inner">
+                              {history.translation_text}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+            )}
+
+            {historyTab === "recetas" && (
+              <div className="anim-fade-in">
+                  <h4 className="font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <FileText size={18} style={{ color: "#00A69D" }} />
+                    Recetas Emitidas al Paciente
+                  </h4>
+                  
+                  {loadingHistory ? (
+                    <div className="text-center py-12 text-gray-500 flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 rounded-full border-4 border-t-[#00A69D] border-gray-200 animate-spin"></div>
+                      Cargando recetas...
+                    </div>
+                  ) : patientPrescriptionsData.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                      <FileText size={32} className="mx-auto mb-3 opacity-20" />
+                      No se han emitido recetas para este paciente.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {patientPrescriptionsData.map((rx) => {
+                        const isExpired = new Date(rx.expires_at).getTime() < new Date().getTime();
+                        const isDespachada = rx.status === "despachada";
+                        const showActive = !isExpired && !isDespachada;
+                        
+                        return (
+                          <div key={rx.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: showActive ? "#00A69D" : "#9CA3AF" }}>
+                              <FileText size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start flex-wrap gap-2 mb-1">
+                                <h5 className="font-bold text-[#203A70] text-base">{rx.medicine}</h5>
+                                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${showActive ? 'bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]' : isDespachada ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                  {isDespachada ? "Despachada" : isExpired ? "Vencida" : "Activa"}
+                                </span>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-700 mb-2">{rx.dose} • {rx.frequency}</p>
+                              
+                              <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100 text-xs">
+                                <div>
+                                  <div className="text-gray-400 font-medium mb-0.5">Emitida el</div>
+                                  <div className="font-semibold text-gray-700">{formatDateSafe(rx.issued_at)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400 font-medium mb-0.5">Válida hasta</div>
+                                  <div className="font-semibold text-gray-700">{formatDateSafe(rx.expires_at)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -738,27 +1061,26 @@ const waitingPatients = [
 ];
 
 /* ─── TELECONSULTA CON TRADUCTOR IA ─── */
-function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: string; userAvatar?: string; onEndCall?: () => void }) {
+function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: string; userAvatar?: string; onNavigate?: (v: string) => void }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePatient, setActivePatient] = useState<string | null>(null);
   const [activeAppointment, setActiveAppointment] = useState<any>(null);
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
+
   const [visibleLines, setVisibleLines] = useState(0);
   const [elapsedSecs, setElapsedSecs] = useState(0);
-  const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "" });
+  const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "", expires_at_date: "" });
   const [rxSubmitted, setRxSubmitted] = useState(false);
   const [doctorAvatar, setDoctorAvatar] = useState<string | undefined>(userAvatar);
+  const [docProfile, setDocProfile] = useState<any>(null);
 
   useEffect(() => {
-    if (userAvatar) {
-      setDoctorAvatar(userAvatar);
-      return;
-    }
     api.getMe().then((me) => {
-      if (me && me.avatar) {
-        setDoctorAvatar(me.avatar);
+      if (me) {
+        if (me.avatar && !userAvatar) setDoctorAvatar(me.avatar);
+        if (me.profile) setDocProfile(me.profile);
       }
     }).catch(() => {});
   }, [userAvatar]);
@@ -906,6 +1228,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
       setActivePatient(patient.patient_name);
       await api.updateAppointmentStatus(patient.id, "en_curso");
       setInCall(true);
+      onNavigate?.("live_teleconsult");
       setElapsedSecs(0);
       setVisibleLines(0);
       setRxSubmitted(false);
@@ -918,13 +1241,12 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
   const endCall = async () => {
     localStorage.removeItem("doctor_active_teleconsult");
     localStorage.setItem("doctor_user_left_call", "true");
-    if (selectedPatient) {
+    if (activeAppointment) {
       try {
-        const transcript = aiTranslations.map(t => `${t.gesture} -> ${t.translation}`).join("\n");
-        await api.summarizeConsultation(selectedPatient.id, transcript);
-        await api.updateAppointmentStatus(selectedPatient.id, "completada");
+        // La TelemedicinaRoom ya se encarga de guardar el resumen clínico y actualizar el estado
+        console.log("Cita completada, actualizando UI local...");
       } catch (err) {
-        console.error("Error guardando resumen clínico:", err);
+        console.error("Error al finalizar:", err);
       }
     }
     setInCall(false);
@@ -936,17 +1258,19 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
   };
 
   const handleEmitRx = async () => {
-    if (!rx.medicine || !selectedPatient) return;
+    if (!rx.medicine || !activeAppointment) return;
     try {
       await api.createPrescription({
-        patient_id: selectedPatient.patient_id,
-        appointment_id: selectedPatient.id,
+        patient_id: activeAppointment.patient_id,
+        appointment_id: activeAppointment.id,
         medicine: rx.medicine,
         dose: rx.dose || "1 comprimido",
         frequency: rx.frequency || "Cada 24 horas",
-        expires_in_days: 30
+        expires_in_days: 30,
+        expires_at_date: rx.expires_at_date || undefined
       });
       setRxSubmitted(true);
+      setRx({ medicine: "", dose: "", frequency: "", expires_at_date: "" });
     } catch (err: any) {
       alert("Error al emitir receta: " + err.message);
     }
@@ -961,7 +1285,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
   const confirmedApps = appointmentsList.filter(a => a.status === "confirmada" || a.status === "en_curso");
 
   /* ── Vista de Sala de Espera / Solicitudes ── */
-  if (!inCall) return (
+  return (
     <div className="p-6 space-y-6 anim-fade-in relative" style={{ background: "#F9FAFB" }}>
       <div className="flex items-center justify-between flex-wrap gap-3 anim-fade-in-up anim-d-0">
         <div>
@@ -994,7 +1318,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
             ) : (
               <div className="space-y-3">
                 {pendingApps.map(apt => (
-                  <div key={apt.id} className="flex items-center justify-between p-4 border rounded-xl bg-amber-50/40 border-amber-100 flex-wrap gap-3">
+                  <div key={apt.id} className="bg-white rounded-xl p-5 flex items-center justify-between gap-4 border border-gray-50 shadow-sm flex-wrap sm:flex-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
                         {apt.patient_avatar && (apt.patient_avatar.startsWith("http") || apt.patient_avatar.startsWith("data:")) ? (
@@ -1009,7 +1333,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                           {apt.type} · {formatDateSafe(apt.date_time)}
                         </div>
                         {apt.reason && (
-                          <div className="text-xs text-gray-700 font-medium mt-1 bg-white px-2.5 py-1 rounded-lg border border-amber-200">
+                          <div className="inline-block text-xs text-gray-700 font-medium mt-1 bg-white px-2.5 py-1 rounded-lg border border-amber-200">
                             <strong>Motivo:</strong> {apt.reason}
                           </div>
                         )}
@@ -1019,14 +1343,14 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleUpdateStatus(apt.id, "confirmada")}
-                        className="px-3.5 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-opacity shadow-sm"
+                        className="px-4 py-1.5 rounded-lg text-white text-sm font-bold hover:opacity-90 transition-opacity shadow-sm"
                         style={{ background: "#00A69D" }}
                       >
                         Aceptar
                       </button>
                       <button
                         onClick={() => handleUpdateStatus(apt.id, "rechazada")}
-                        className="px-3.5 py-1.5 rounded-lg text-gray-600 text-xs font-bold border border-gray-200 hover:bg-gray-100 bg-white transition-colors"
+                        className="px-4 py-1.5 rounded-lg text-gray-600 text-sm font-bold border border-gray-200 hover:bg-gray-100 bg-white transition-colors"
                       >
                         Rechazar
                       </button>
@@ -1048,7 +1372,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
             ) : (
               <div className="space-y-3">
                 {confirmedApps.map(apt => (
-                  <div key={apt.id} className="flex items-center justify-between p-4 border rounded-xl bg-white border-gray-100 flex-wrap gap-3 shadow-xs">
+                  <div key={apt.id} className="bg-white rounded-xl p-5 flex items-center justify-between gap-4 border border-gray-50 shadow-sm flex-wrap sm:flex-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-full bg-[#203A70] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
                         {apt.patient_avatar && (apt.patient_avatar.startsWith("http") || apt.patient_avatar.startsWith("data:")) ? (
@@ -1070,7 +1394,7 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                           {apt.type} · {formatDateSafe(apt.date_time)}
                         </div>
                         {apt.reason && (
-                          <div className="text-xs text-gray-600 mt-1 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                          <div className="inline-block text-xs text-gray-600 mt-1 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
                             <strong>Motivo:</strong> {apt.reason}
                           </div>
                         )}
@@ -1078,11 +1402,20 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                     </div>
 
                     <button
-                      onClick={() => startCall(apt)}
+                      onClick={() => {
+                        if (apt.status === "en_curso") {
+                          setActiveAppointment(apt);
+                          setActivePatient(apt.patient_name);
+                          setInCall(true);
+                          onNavigate?.("live_teleconsult");
+                        } else {
+                          startCall(apt);
+                        }
+                      }}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold shadow-sm transition-opacity hover:opacity-90"
                       style={{ background: "#00A69D" }}
                     >
-                      <Video size={16} /> Iniciar Videollamada
+                      <Video size={16} /> {apt.status === "en_curso" ? "Volver a Videollamada" : "Iniciar Videollamada"}
                     </button>
                   </div>
                 ))}
@@ -1149,68 +1482,263 @@ function TeleconsultaView({ userName, userAvatar, onEndCall }: { userName?: stri
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
-                  <input
-                    type="date"
-                    min={new Date().toISOString().split("T")[0]}
-                    value={scheduleForm.date}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Hora</label>
-                  <input
-                    type="time"
-                    value={scheduleForm.time}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
-                  />
-                </div>
-              </div>
+              <div className="space-y-4">
+                {(() => {
+                  const availableDaysStr = docProfile?.available_days || "L,M,X,J,V";
+                  const startTimeStr = docProfile?.start_time || "08:00";
+                  const endTimeStr = docProfile?.end_time || "17:00";
+                  
+                  const timeSlots = [];
+                  if (scheduleForm.date) {
+                    const [sH, sM] = startTimeStr.split(":").map(Number);
+                    const [eH, eM] = endTimeStr.split(":").map(Number);
+                    let currentMinutes = sH * 60 + sM;
+                    const endMinutes = eH * 60 + eM;
+                    
+                    const selectedDateObj = new Date(scheduleForm.date);
+                    const now = new Date();
+                    // Force time to 0 to compare dates accurately
+                    const isToday = selectedDateObj.toISOString().split("T")[0] === now.toISOString().split("T")[0];
+                    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo clínico</label>
-                <textarea
-                  value={scheduleForm.reason}
-                  onChange={(e) => setScheduleForm({ ...scheduleForm, reason: e.target.value })}
-                  placeholder="Escribe el motivo o nota clínica para esta cita (ej. Control de hipertensión)..."
-                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none"
-                />
-              </div>
+                    const bookedSlots = appointmentsList
+                      .filter(app => app.status === "pendiente" || app.status === "confirmada")
+                      .map(app => app.date_time);
 
-              <button
-                onClick={handleDoctorSchedule}
-                disabled={isScheduling || myPatients.length === 0}
-                className="w-full py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md"
-                style={{ background: "#00A69D" }}
-              >
-                {isScheduling ? "Agendando..." : "Confirmar Teleconsulta"}
-              </button>
+                    while (currentMinutes < endMinutes) {
+                      // If it's today, only show future time slots (at least 30 mins from now)
+                      if (!isToday || currentMinutes > nowMinutes + 15) {
+                        const h = Math.floor(currentMinutes / 60).toString().padStart(2, '0');
+                        const m = (currentMinutes % 60).toString().padStart(2, '0');
+                        
+                        // Check if slot is booked
+                        const slotPrefixT = `${scheduleForm.date}T${h}:${m}`;
+                        const slotPrefixSpace = `${scheduleForm.date} ${h}:${m}`;
+                        const isBooked = bookedSlots.some(slot => slot.startsWith(slotPrefixT) || slot.startsWith(slotPrefixSpace));
+                        
+                        if (!isBooked) {
+                          timeSlots.push(`${h}:${m}`);
+                        }
+                      }
+                      currentMinutes += 30; // 30 min intervals
+                    }
+                  }
+
+                  return (
+                    <div className="space-y-4">
+                      {!scheduleForm.date ? (
+                        <div className="anim-fade-in-up">
+                          <label className="block text-xs font-semibold text-gray-600 mb-2">Paso 1: Selecciona un día</label>
+                          <div className="border rounded-2xl p-1 bg-white shadow-sm" style={{ borderColor: "#E5E7EB" }}>
+                            <MonthCalendar
+                              selectedDate={scheduleForm.date}
+                              onSelectDate={(d) => setScheduleForm({ ...scheduleForm, date: d, time: "" })}
+                              availableDaysStr={availableDaysStr}
+                              minDate={new Date().toLocaleDateString('en-CA')}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="anim-fade-in space-y-4">
+                          <div 
+                            onClick={() => setScheduleForm({ ...scheduleForm, date: "", time: "" })}
+                            className="flex justify-between items-center p-3 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[#0284C7]">
+                                <Calendar size={16} />
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Día seleccionado</div>
+                                <div className="font-bold text-sm text-[#203A70] capitalize">
+                                  {new Date(scheduleForm.date + "T00:00:00").toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-[#00A69D]">Cambiar</span>
+                          </div>
+
+                          {!scheduleForm.time ? (
+                            <div className="anim-fade-in-up">
+                              <label className="block text-xs font-semibold text-gray-600 mb-2">Paso 2: Selecciona la hora</label>
+                              {timeSlots.length === 0 ? (
+                                <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                                  No hay horarios disponibles para este día.
+                                </div>
+                              ) : (
+                                <div className="bg-white p-4 rounded-2xl border shadow-sm max-h-64 overflow-y-auto" style={{ borderColor: "#E5E7EB" }}>
+                                  {(() => {
+                                    const format12Hour = (time24: string) => {
+                                      const [h, m] = time24.split(":").map(Number);
+                                      const ampm = h >= 12 ? 'PM' : 'AM';
+                                      const h12 = h % 12 || 12;
+                                      return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                    };
+                                    
+                                    const morningSlots = timeSlots.filter(t => parseInt(t.split(":")[0]) < 12);
+                                    const afternoonSlots = timeSlots.filter(t => parseInt(t.split(":")[0]) >= 12);
+
+                                    return (
+                                      <>
+                                        {morningSlots.length > 0 && (
+                                          <div className="mb-5">
+                                            <div className="flex items-center gap-2 mb-3 text-[#203A70]">
+                                              <Sun size={16} />
+                                              <span className="font-bold text-sm">Mañana</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                              {morningSlots.map(time => (
+                                                <button
+                                                  key={time}
+                                                  type="button"
+                                                  onClick={() => setScheduleForm({ ...scheduleForm, time })}
+                                                  className="py-2.5 text-xs rounded-xl font-bold transition-all border hover:border-[#00A69D]"
+                                                  style={{
+                                                    background: scheduleForm.time === time ? "#203A70" : "white",
+                                                    color: scheduleForm.time === time ? "white" : "#4B5563",
+                                                    borderColor: scheduleForm.time === time ? "#203A70" : "#E5E7EB"
+                                                  }}
+                                                >
+                                                  {format12Hour(time)}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {afternoonSlots.length > 0 && (
+                                          <div>
+                                            <div className="flex items-center gap-2 mb-3 text-[#203A70]">
+                                              <Sunset size={16} />
+                                              <span className="font-bold text-sm">Tarde</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                              {afternoonSlots.map(time => (
+                                                <button
+                                                  key={time}
+                                                  type="button"
+                                                  onClick={() => setScheduleForm({ ...scheduleForm, time })}
+                                                  className="py-2.5 text-xs rounded-xl font-bold transition-all border hover:border-[#00A69D]"
+                                                  style={{
+                                                    background: scheduleForm.time === time ? "#203A70" : "white",
+                                                    color: scheduleForm.time === time ? "white" : "#4B5563",
+                                                    borderColor: scheduleForm.time === time ? "#203A70" : "#E5E7EB"
+                                                  }}
+                                                >
+                                                  {format12Hour(time)}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="anim-fade-in-up">
+                              <div 
+                                onClick={() => setScheduleForm({ ...scheduleForm, time: "" })}
+                                className="flex justify-between items-center p-3 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors mb-4"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[#0284C7]">
+                                    <Clock size={16} />
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-gray-500">Hora seleccionada</div>
+                                    <div className="font-bold text-sm text-[#203A70]">
+                                      {(() => {
+                                        const [h, m] = scheduleForm.time.split(":").map(Number);
+                                        const ampm = h >= 12 ? 'PM' : 'AM';
+                                        const h12 = h % 12 || 12;
+                                        return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="text-xs font-bold text-[#00A69D]">Cambiar</span>
+                              </div>
+
+                              <div className="space-y-4 bg-white p-4 rounded-2xl border shadow-sm" style={{ borderColor: "#E5E7EB" }}>
+                                <label className="block text-xs font-semibold text-[#203A70] mb-2 border-b pb-2">Paso 3: Detalles clínicos</label>
+                                
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo clínico</label>
+                                  <textarea
+                                    value={scheduleForm.reason}
+                                    onChange={(e) => setScheduleForm({ ...scheduleForm, reason: e.target.value })}
+                                    placeholder="Escribe el motivo o nota clínica para esta cita (ej. Control de hipertensión)..."
+                                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none bg-gray-50 text-sm"
+                                  />
+                                </div>
+
+                                <button
+                                  onClick={handleDoctorSchedule}
+                                  disabled={isScheduling || !scheduleForm.reason.trim()}
+                                  className="w-full mt-2 py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+                                  style={{ background: "#00A69D" }}
+                                >
+                                  {isScheduling ? "Agendando..." : "Confirmar Teleconsulta"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
   );
+}
 
-  /* ── Vista en llamada unificada ── */
+/* ─── DOCTOR LIVE ROOM ─── */
+function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, activePatient, isMinimized, onReturnToCall }: any) {
+  const [resolvedDoc, setResolvedDoc] = useState<any>(activeAppointment);
+  const [doctorAvatar, setDoctorAvatar] = useState<string | undefined>(userAvatar);
+
+  useEffect(() => {
+    api.getMe().then((me) => {
+      if (me) {
+        if (me.avatar && !userAvatar) setDoctorAvatar(me.avatar);
+      }
+    }).catch(() => {});
+  }, [userAvatar]);
+
+  useEffect(() => {
+    if (!resolvedDoc || !resolvedDoc.id) {
+      api.getAppointments().then((apts) => {
+        if (Array.isArray(apts) && apts.length > 0) {
+          const active = apts.find((a: any) => a.status === "en_curso");
+          if (active) {
+            setResolvedDoc(active);
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [activeAppointment]);
+
   return (
     <TelemedicinaRoom
       role="doctor"
       userName={userName || "Dr. Jose Matos"}
       userAvatar={doctorAvatar || userAvatar}
-      counterpartName={activeAppointment?.patient_name || selectedPatient?.patient_name || activePatient || "Paciente"}
-      counterpartAvatar={activeAppointment?.patient_avatar || selectedPatient?.patient_avatar}
-      patientId={activeAppointment?.patient_id || selectedPatient?.patient_id || selectedPatient?.id}
-      appointmentId={activeAppointment?.id || selectedPatient?.id}
-      appointmentReason={activeAppointment?.reason || selectedPatient?.reason}
-      onEndCall={endCall}
-      onEmitRxSuccess={() => {
-        loadAppointments();
-      }}
+      counterpartName={resolvedDoc?.patient_name || activePatient || "Paciente"}
+      counterpartAvatar={resolvedDoc?.patient_avatar}
+      patientId={resolvedDoc?.patient_id}
+      appointmentId={resolvedDoc?.id}
+      appointmentReason={resolvedDoc?.reason}
+      onEndCall={onEndCall}
+      isMinimized={isMinimized}
+      onReturnToCall={onReturnToCall}
     />
   );
 }
@@ -1245,7 +1773,7 @@ const ragMedicines = [
 
 /* ─── RECETAS ─── */
 function RecetasView() {
-  const [form, setForm] = useState({ patient: "", medicine: "", dose: "", frequency: "" });
+  const [form, setForm] = useState({ patient: "", medicine: "", dose: "", frequency: "", expires_at_date: "" });
   const [myPatients, setMyPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -1321,7 +1849,8 @@ function RecetasView() {
         medicine: form.medicine,
         dose: form.dose || "1 comprimido",
         frequency: form.frequency || "Cada 24 horas",
-        expires_in_days: 30
+        expires_in_days: 30,
+        expires_at_date: form.expires_at_date || undefined
       });
       setSubmitted(true);
     } catch (err: any) {
@@ -1463,6 +1992,18 @@ function RecetasView() {
                 value={form.frequency}
                 onChange={(e) => setForm({ ...form, frequency: e.target.value })}
                 placeholder="Ej: Cada 24 horas por 30 días"
+                className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
+                style={{ borderColor: "#E5E7EB" }}
+              />
+            </div>
+
+            {/* Válida hasta */}
+            <div>
+              <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>Válida hasta (Opcional)</label>
+              <input
+                type="date"
+                value={form.expires_at_date}
+                onChange={(e) => setForm({ ...form, expires_at_date: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border outline-none text-sm focus:border-[#00A69D]"
                 style={{ borderColor: "#E5E7EB" }}
               />

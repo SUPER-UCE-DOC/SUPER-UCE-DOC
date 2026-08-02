@@ -54,7 +54,7 @@ def create_appointment(
             patient_id=appointment_in.patient_id,
             doctor_id=current_user.id,
             date_time=appointment_in.date_time,
-            status="pendiente",
+            status="confirmada",
             type=appointment_in.type,
             reason=appointment_in.reason
         )
@@ -81,7 +81,9 @@ def create_appointment(
         doctor_name=doctor_name,
         doctor_specialty=doc_spec,
         patient_avatar=patient_user.avatar,
-        doctor_avatar=doctor_user.avatar
+        doctor_avatar=doctor_user.avatar,
+        real_start_time=new_app.real_start_time,
+        real_end_time=new_app.real_end_time
     )
 
 
@@ -124,7 +126,9 @@ def get_my_appointments(
                 doctor_name=d_name,
                 doctor_specialty=d_spec,
                 patient_avatar=p_user.avatar if p_user else None,
-                doctor_avatar=d_user.avatar if d_user else None
+                doctor_avatar=d_user.avatar if d_user else None,
+                real_start_time=app.real_start_time,
+                real_end_time=app.real_end_time
             )
         )
     return response
@@ -213,18 +217,23 @@ def update_appointment_status(
 
     app.status = requested_status
 
+    if requested_status == "en_curso" and not app.real_start_time:
+        app.real_start_time = datetime.datetime.utcnow()
+    elif requested_status == "completada" and not app.real_end_time:
+        app.real_end_time = datetime.datetime.utcnow()
+
     if current_user.role == "doctor":
         doc = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
         if doc:
             if requested_status == "en_curso":
                 doc.room_state = "en_consulta"
                 try:
-                    from app.routers.realtime import room_presence_store
+                    from app.routers.realtime import get_or_create_session
                     clean_room = str(app.id)
-                    if clean_room not in room_presence_store:
-                        room_presence_store[clean_room] = {}
-                    if "start_time" not in room_presence_store[clean_room]:
-                        room_presence_store[clean_room]["start_time"] = time.time()
+                    session = get_or_create_session(clean_room)
+                    if "start_time" not in session or not session["start_time"]:
+                        import time
+                        session["start_time"] = time.time()
                 except Exception as ex:
                     print("Error setting start_time:", ex)
             elif requested_status == "completada":
@@ -256,7 +265,9 @@ def update_appointment_status(
         doctor_name=d_name,
         doctor_specialty=d_spec,
         patient_avatar=p_user.avatar if p_user else None,
-        doctor_avatar=d_user.avatar if d_user else None
+        doctor_avatar=d_user.avatar if d_user else None,
+        real_start_time=app.real_start_time,
+        real_end_time=app.real_end_time
     )
 
 
@@ -327,6 +338,88 @@ def _build_appointment_response(db: Session, appointment: models.Appointment) ->
         patient_avatar=p_user.avatar if p_user else None,
         doctor_avatar=d_user.avatar if d_user else None
     )
+
+
+@router.get("/my-patients")
+def get_my_patients(
+    current_user: models.User = Depends(RoleChecker(["doctor"])),
+    db: Session = Depends(get_db)
+):
+    """Devuelve la lista de pacientes únicos que tienen o han tenido una cita con el doctor actual."""
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == current_user.id
+    ).all()
+    
+    patient_ids = list(set([a.patient_id for a in appointments]))
+    
+    patients_data = []
+    for pid in patient_ids:
+        patient_user = db.query(models.User).filter(models.User.id == pid).first()
+        patient_profile = db.query(models.Patient).filter(models.Patient.id == pid).first()
+        
+        if not patient_user:
+            continue
+            
+        last_appt = db.query(models.Appointment).filter(
+            models.Appointment.patient_id == pid,
+            models.Appointment.doctor_id == current_user.id,
+            models.Appointment.status == "completada"
+        ).order_by(models.Appointment.date_time.desc()).first()
+        
+        if not last_appt:
+            last_appt = db.query(models.Appointment).filter(
+                models.Appointment.patient_id == pid,
+                models.Appointment.doctor_id == current_user.id
+            ).order_by(models.Appointment.date_time.desc()).first()
+            
+        patients_data.append({
+            "id": pid,
+            "name": patient_user.full_name,
+            "email": patient_user.email,
+            "age": patient_profile.age if patient_profile else 0,
+            "condition": patient_profile.condition if patient_profile else "Ninguna",
+            "lastVisit": last_appt.date_time.strftime("%d %b") if last_appt else "Reciente",
+            "status": getattr(patient_profile, "risk_status", "estable") if patient_profile else "estable",
+            "avatar": patient_user.avatar
+        })
+        
+    return patients_data
+
+
+@router.get("/patient/{patient_id}/history")
+def get_patient_history(
+    patient_id: int,
+    current_user: models.User = Depends(RoleChecker(["doctor"])),
+    db: Session = Depends(get_db)
+):
+    """Devuelve el historial clínico de un paciente específico, para un médico autorizado."""
+    has_treated = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == current_user.id,
+        models.Appointment.patient_id == patient_id
+    ).first()
+    
+    if not has_treated:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes autorización para ver el historial de este paciente."
+        )
+        
+    histories = db.query(models.ClinicalHistory).filter(
+        models.ClinicalHistory.patient_id == patient_id
+    ).order_by(models.ClinicalHistory.date.desc()).all()
+    
+    result = []
+    for h in histories:
+        doc = db.query(models.User).filter(models.User.id == h.doctor_id).first()
+        result.append({
+            "id": h.id,
+            "date": (h.date - datetime.timedelta(hours=4)).isoformat(),
+            "doctor_name": doc.full_name if doc else "Doctor",
+            "summary_ia": h.summary_ia,
+            "translation_text": h.translation_text
+        })
+        
+    return result
 
 
 @router.get("/{id}", response_model=schemas.AppointmentResponse)
@@ -429,3 +522,22 @@ def cancel_appointment(
     notify_state_change(appointment.id, appointment.status)
 
     return {"message": "Cita cancelada exitosamente"}
+
+@router.get("/doctor/{doctor_id}/booked-slots", response_model=List[str])
+def get_doctor_booked_slots(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RoleChecker(["patient", "doctor"]))
+):
+    """Devuelve las fechas/horas ocupadas (ISO string) para un doctor específico."""
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == doctor_id,
+        models.Appointment.status.in_(["pendiente", "confirmada"])
+    ).all()
+    
+    # Retornar las fechas en formato ISO string
+    booked_slots = [
+        app.date_time.isoformat() if hasattr(app.date_time, 'isoformat') else str(app.date_time) 
+        for app in appointments
+    ]
+    return booked_slots

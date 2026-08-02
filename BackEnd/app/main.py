@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime, invitations
+from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime, invitations, sign_language
 from app.services.sign_translator import sign_translator_service
 from app.services.chatbot import medical_chatbot
 
@@ -63,6 +63,7 @@ app.include_router(invitations.router)
 app.include_router(pharmacies.router)
 app.include_router(ai.router)
 app.include_router(realtime.router)
+app.include_router(sign_language.router)
 
 @app.get("/")
 def root():

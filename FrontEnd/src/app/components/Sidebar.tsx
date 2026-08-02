@@ -49,7 +49,23 @@ export function Sidebar({ role, userName, currentView, onViewChange, onLogout }:
 
   useEffect(() => {
     sessionStorage.setItem("mainSidebarCollapsed", collapsed.toString());
+    document.documentElement.style.setProperty("--sidebar-width", collapsed ? "72px" : "240px");
   }, [collapsed]);
+
+  useEffect(() => {
+    const handleForceCollapse = () => {
+      setCollapsed(true);
+    };
+    const handleForceExpand = () => {
+      setCollapsed(false);
+    };
+    window.addEventListener("force-sidebar-collapse", handleForceCollapse);
+    window.addEventListener("force-sidebar-expand", handleForceExpand);
+    return () => {
+      window.removeEventListener("force-sidebar-collapse", handleForceCollapse);
+      window.removeEventListener("force-sidebar-expand", handleForceExpand);
+    };
+  }, []);
   const menu = menuByRole[role];
 
   return (

@@ -91,7 +91,8 @@ function RecetasEntrantes({ userName }: { userName: string }) {
         id: rx.id,
         patient: rx.patient_name,
         medicine: rx.medicine,
-        dose: `${rx.dose} · ${rx.frequency}`,
+        dose: rx.dose,
+        frequency: rx.frequency,
         doctor: rx.doctor_name,
         issuedAt: new Date(rx.issued_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         urgent: rx.medicine.includes("Sertralina") || rx.medicine.includes("Furosemida"),
@@ -246,7 +247,14 @@ function RecetasEntrantes({ userName }: { userName: string }) {
                   <Pill size={13} style={{ color: "#00A69D", flexShrink: 0 }} />
                   <span className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{rx.medicine}</span>
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>{rx.dose}</div>
+                <div className="flex flex-col gap-0.5 mt-1.5">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Dosis</div>
+                  <div className="text-sm font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.dose}</div>
+                </div>
+                <div className="flex flex-col gap-0.5 mt-2.5">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Frecuencia</div>
+                  <div className="text-sm font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.frequency}</div>
+                </div>
               </div>
 
               {/* Médico */}
@@ -298,7 +306,16 @@ function RecetasEntrantes({ userName }: { userName: string }) {
               <Pill size={14} style={{ color: "#00A69D" }} />
               <span className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{rx.medicine}</span>
             </div>
-            <div className="text-xs mb-0.5" style={{ color: "#9CA3AF" }}>{rx.dose}</div>
+            <div className="grid grid-cols-2 gap-2 mt-2 mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Dosis</div>
+                <div className="text-xs font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.dose}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Frecuencia</div>
+                <div className="text-xs font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.frequency}</div>
+              </div>
+            </div>
             <div className="text-xs mb-3" style={{ color: "#6B7280" }}>{rx.doctor}</div>
             {rx.dispatched ? (
               <div className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs" style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 600 }}>

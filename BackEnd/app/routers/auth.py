@@ -209,7 +209,11 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
                 "phone": doc.phone,
                 "room_state": doc.room_state,
                 "lat": doc.lat,
-                "lon": doc.lon
+                "lon": doc.lon,
+                "available_days": doc.available_days,
+                "start_time": doc.start_time,
+                "end_time": doc.end_time,
+                "firma": doc.firma
             }
     elif current_user.role == "pharmacy":
         ph = db.query(models.Pharmacy).filter(models.Pharmacy.id == current_user.id).first()
@@ -234,6 +238,28 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
         "profile": profile_data
     }
 
+
+@router.put("/me/settings")
+def update_settings(
+    req: schemas.UserSettingsUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role == "doctor":
+        doc = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
+        if doc:
+            if req.available_days is not None:
+                doc.available_days = req.available_days
+            if req.start_time is not None:
+                doc.start_time = req.start_time
+            if req.end_time is not None:
+                doc.end_time = req.end_time
+            if req.firma is not None:
+                doc.firma = req.firma
+            db.commit()
+            
+    # Future: handle patient or pharmacy settings here if needed
+    return {"message": "Settings updated successfully"}
 
 def verify_google_token(token: str) -> dict:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}

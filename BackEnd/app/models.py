@@ -29,6 +29,7 @@ class Patient(Base):
     avatar = Column(String, nullable=True)
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
+    risk_status = Column(String, default="estable")
 
     # Relationships
     user = relationship("User", back_populates="patient_profile")
@@ -48,6 +49,12 @@ class Doctor(Base):
     room_state = Column(String, default="libre")  # "libre", "esperando", "en_consulta"
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
+    
+    # Settings and availability
+    firma = Column(String, nullable=True)
+    available_days = Column(String, default="L,M,X,J,V")
+    start_time = Column(String, default="08:00")
+    end_time = Column(String, default="17:00")
 
     # Relationships
     user = relationship("User", back_populates="doctor_profile")
@@ -96,6 +103,8 @@ class Appointment(Base):
     status = Column(String, default="pendiente")  # "pendiente", "en_curso", "completada"
     type = Column(String, nullable=False)  # "Teleconsulta", "Presencial", "Seguimiento"
     reason = Column(String, nullable=True)
+    real_start_time = Column(DateTime, nullable=True)
+    real_end_time = Column(DateTime, nullable=True)
 
     # Relationships
     patient = relationship("Patient", back_populates="appointments")

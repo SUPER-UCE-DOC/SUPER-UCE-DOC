@@ -32,7 +32,16 @@ def create_prescription(
         )
 
     # Calculate expiration date
-    expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=prescription_in.expires_in_days)
+    if prescription_in.expires_at_date:
+        try:
+            # Parse as YYYY-MM-DD and set time to 23:59:59
+            parsed_date = datetime.datetime.strptime(prescription_in.expires_at_date, "%Y-%m-%d")
+            expires_at = parsed_date.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            # Fallback if invalid format
+            expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=prescription_in.expires_in_days)
+    else:
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=prescription_in.expires_in_days)
     
     # Generate unique ID e.g. RX-2026-XXXX
     unique_rx_id = f"RX-{datetime.datetime.now().year}-{str(uuid.uuid4().int)[:4]}"
@@ -116,6 +125,40 @@ def get_prescriptions(
         )
     return response
 
+
+@router.get("/patient/{patient_id}", response_model=List[schemas.PrescriptionResponse])
+def get_prescriptions_by_patient(
+    patient_id: int,
+    current_user: models.User = Depends(RoleChecker(["doctor"])),
+    db: Session = Depends(get_db)
+):
+    rx_list = db.query(models.Prescription).filter(
+        models.Prescription.patient_id == patient_id
+    ).order_by(models.Prescription.issued_at.desc()).all()
+    
+    response = []
+    for rx in rx_list:
+        p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
+        d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
+        response.append(
+            schemas.PrescriptionResponse(
+                id=rx.id,
+                appointment_id=rx.appointment_id,
+                patient_id=rx.patient_id,
+                patient_name=p_name,
+                doctor_id=rx.doctor_id,
+                doctor_name=d_name,
+                medicine=rx.medicine,
+                dose=rx.dose,
+                frequency=rx.frequency,
+                status=rx.status,
+                issued_at=rx.issued_at,
+                expires_at=rx.expires_at,
+                patient_lat=rx.patient_lat,
+                patient_lon=rx.patient_lon
+            )
+        )
+    return response
 
 @router.get("/{id}", response_model=schemas.PrescriptionResponse)
 def get_prescription_by_id(

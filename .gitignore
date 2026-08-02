@@ -6,6 +6,7 @@ venv/
 .venv/
 .DS_Store
 BackEnd/medical_knowledge_vectors/
+modeloLSA/
 
 # Environment files
 *.env
@@ -14,6 +15,11 @@ BackEnd/medical_knowledge_vectors/
 !.env.example
 BackEnd/.env
 FrontEnd/.env
+
+# Build outputs
+dist/
+FrontEnd/dist/
+build/
 
 # Databases
 *.db
