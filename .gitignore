@@ -25,3 +25,10 @@ build/
 *.db
 *.sqlite3
 *.db-journal
+
+# Logs
+*.log
+*.csv
+BackEnd/*.log
+BackEnd/*.csv
+

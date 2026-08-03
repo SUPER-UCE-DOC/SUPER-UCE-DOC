@@ -1,6 +1,7 @@
 import base64
 import json
 import time
+import datetime
 import os
 import cv2
 import collections
@@ -12,6 +13,18 @@ import mediapipe as mp
 import asyncio
 from app.islr.model import IsolatedASLRecognition, Landmark, LandmarkData
 from app.services.llm_translator import translate_signs_to_sentence
+
+LOG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "islr_realtime_debug.log")
+
+def log_islr_event(msg: str):
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    line = f"[{timestamp}] {msg}\n"
+    print(line, end="")
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
 
 # Trigger reload for mediapipe version
 router = APIRouter(prefix="/api/sign-language", tags=["islr"])
@@ -76,8 +89,8 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
     start_time = time.time()
     last_predicted_count = 0
 
-    WINDOW_SIZE = 25
-    PREDICT_EVERY = 15
+    WINDOW_SIZE = 20
+    PREDICT_EVERY = 5
     
     websocket.word_buffer = []
     websocket.last_sign_time = time.time()
@@ -103,16 +116,17 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
 
     try:
         while True:
-            # Detectar pausas (0.5s sin nuevas señas y sin manos en pantalla) para disparar el LLM
+            # Detectar pausa al final de una oración completa (3.5s continuos de inactividad tras la última seña)
             current_time = time.time()
             if len(websocket.word_buffer) > 0 and not websocket.is_translating:
-                # Disparar si pasaron 0.5s desde la última seña y no hay manos, o si hay silencio explícito
-                hands_detected = getattr(websocket, "hands_detected", False)
-                is_timeout = (current_time - websocket.last_sign_time) > 0.5 and not hands_detected
+                # El temporizador de oración depende únicamente del tiempo transcurrido desde la última seña confirmada (resiliente a parpadeos de MediaPipe)
+                is_timeout = (current_time - websocket.last_sign_time) > 3.5
                 is_silence = getattr(websocket, "silence_trigger", False)
                 
                 if is_timeout or is_silence:
                     websocket.is_translating = True
+                    reason = "silence_trigger (No Movement Detected)" if is_silence else f"inactivity_timeout ({current_time - websocket.last_sign_time:.2f}s)"
+                    log_islr_event(f"🚀 DISPARO TRADUCCIÓN UNIFICADA -> Causa: {reason} | Palabras acumuladas: {websocket.word_buffer}")
                     websocket.silence_trigger = False # Reset
                     words_copy = list(websocket.word_buffer)
                     websocket.word_buffer.clear() # Limpiar buffer para la próxima oración
@@ -198,6 +212,7 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
                             confidence = res.get("confidence", 1.0)
                             
                             if current_sign == "No Movement Detected":
+                                log_islr_event(f"🛑 NO MOVEMENT DETECTED | Buffer actual: {getattr(websocket, 'word_buffer', [])}")
                                 # Detectar silencio explícito para enviar el buffer rápidamente
                                 if hasattr(websocket, "word_buffer") and len(websocket.word_buffer) > 0:
                                     websocket.silence_trigger = True
@@ -221,6 +236,8 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
                                         websocket.last_sent_sign = current_sign
                                         websocket.word_buffer.append(current_sign)
                                         websocket.last_sign_time = time.time()
+                                        
+                                        log_islr_event(f"✅ SEÑA CONFIRMADA: '{current_sign}' ({confidence*100:.1f}%) | Buffer acumulado: {websocket.word_buffer}")
                                         
                                         # Enviar resultado parcial (palabra) al paciente
                                         await websocket.send_json({

@@ -53,6 +53,13 @@ def on_startup():
     logger.info("Inicializando modelos de Inteligencia Artificial (LSTM & Qwen)...")
     sign_translator_service.load_models()
     
+    logger.info("Precargando traductor de señas MarianMT en RAM...")
+    try:
+        from app.services.llm_translator import _load_model_if_needed
+        _load_model_if_needed()
+    except Exception as e:
+        logger.warning(f"No se pudo precargar MarianMT en el arranque: {e}")
+    
     logger.info("Arranque del servidor SUPER-UCE DOC completado.")
 
 # Registrar routers
