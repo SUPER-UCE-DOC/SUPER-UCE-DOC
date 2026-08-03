@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare,
   Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2,
@@ -736,7 +737,7 @@ function TelemedicinaRoomContent({
       canvas.height = (video.videoHeight / video.videoWidth) * 480 || 360;
       
       let sentFrames = 0;
-      // Capturar a ~20 FPS (50ms) para mantener tiempo real estricto sin lag
+      // Capturar a ~15 FPS (66ms) para mantener tiempo real estricto pero reducir lag en el backend
       interval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN && ctx) {
           // Si el servidor o la red están saturados (más de 50KB en cola), saltar el frame actual
@@ -750,11 +751,11 @@ function TelemedicinaRoomContent({
           ws.send(JSON.stringify({ type: "FRAME", frame: base64 }));
           
           sentFrames++;
-          if (sentFrames % 20 === 0) {
-            console.log(`[ISLR] ${sentFrames} frames enviados al backend (0 Lag).`);
+          if (sentFrames % 15 === 0) {
+            console.log(`[ISLR] ${sentFrames} frames enviados al backend (Optimizado a 15 FPS).`);
           }
         }
-      }, 50);
+      }, 66);
     };
     
     return () => {
@@ -986,8 +987,8 @@ function TelemedicinaRoomContent({
           />
         </div>
 
-        {isEndedByDoctor && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        {isEndedByDoctor && createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
             <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
               <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
                 <CheckCircle2 size={36} />
@@ -1000,7 +1001,8 @@ function TelemedicinaRoomContent({
                 <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </>
     );
@@ -1636,8 +1638,8 @@ function TelemedicinaRoomContent({
       </div>
 
       {/* ─── MODAL TELECONSULTA FINALIZADA POR EL MÉDICO ─── */}
-      {isEndedByDoctor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+      {isEndedByDoctor && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
             <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
               <CheckCircle2 size={36} />
@@ -1651,7 +1653,8 @@ function TelemedicinaRoomContent({
             </div>
             <p className="text-xs text-gray-400 font-medium">Redirigiendo a tu portal médico...</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

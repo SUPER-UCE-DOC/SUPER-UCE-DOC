@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from 'react-markdown';
 import { api } from "../utils/api";
 import {
@@ -774,7 +775,7 @@ function PatientsView() {
       )}
 
       {/* Modal de Búsqueda Exacta (Privacidad) */}
-      {showInviteModal && (
+      {showInviteModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => { setShowInviteModal(false); setSearchResult([]); setInviteSearchName(""); setInviteStatus(null); }}>
           <div 
             className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in"
@@ -869,11 +870,12 @@ function PatientsView() {
               <div className="text-center text-sm text-gray-400 py-2">No se encontraron pacientes.</div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal de Historial Clínico */}
-      {showHistoryModal && selectedPatientHistory && (
+      {showHistoryModal && selectedPatientHistory && createPortal(
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
           onClick={closeHistoryModal}
@@ -1047,7 +1049,8 @@ function PatientsView() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
@@ -1426,7 +1429,7 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
       )}
 
       {/* Modal Agendar Teleconsulta Doctor */}
-      {showScheduleModal && (
+      {showScheduleModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowScheduleModal(false)}>
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
@@ -1694,7 +1697,8 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

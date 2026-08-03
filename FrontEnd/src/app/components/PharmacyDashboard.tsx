@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { SettingsView } from "./SettingsView";
 import { api } from "../utils/api";
 import {
@@ -581,7 +582,7 @@ function PedidosView() {
 function OrderDetailModal({ order, onClose, onUpdateStatus }: { order: Order; onClose: () => void; onUpdateStatus: (id: string, status: OrderStatus) => void }) {
   const conf = statusConfig[order.status];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/40 backdrop-blur-sm anim-fade-in" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-5 anim-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b pb-3">
@@ -657,7 +658,8 @@ function OrderDetailModal({ order, onClose, onUpdateStatus }: { order: Order; on
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -807,7 +809,7 @@ function NewOrderModal({ onClose, onCreated, initialMed }: { onClose: () => void
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50 backdrop-blur-sm anim-fade-in overflow-y-auto"
       onClick={onClose}
@@ -1007,7 +1009,8 @@ function NewOrderModal({ onClose, onCreated, initialMed }: { onClose: () => void
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1251,7 +1254,7 @@ function AddInventoryItemModal({ onClose, onAdded }: { onClose: () => void; onAd
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50 backdrop-blur-sm anim-fade-in" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
@@ -1331,7 +1334,8 @@ function AddInventoryItemModal({ onClose, onAdded }: { onClose: () => void; onAd
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 

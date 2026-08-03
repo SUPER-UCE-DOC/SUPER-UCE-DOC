@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api, UploadedDocument } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
@@ -686,7 +687,7 @@ function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt
       )}
 
       {/* Modal Agendar Cita */}
-      {showModal && (
+      {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowModal(false)}>
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
@@ -1000,7 +1001,8 @@ function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

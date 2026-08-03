@@ -41,6 +41,17 @@ def get_landmarks(landmark_list):
         return None
     return [Landmark(x=lm.x, y=lm.y, z=lm.z, visibility=lm.visibility) for lm in landmark_list.landmark]
 
+def decode_and_process_frame(frame_base64, holistic_model):
+    """Decodifica Base64 y procesa con MediaPipe de forma síncrona (para usar en hilos)."""
+    if "," in frame_base64:
+        frame_base64 = frame_base64.split(",")[1]
+    image_bytes = base64.b64decode(frame_base64)
+    np_arr = np.frombuffer(image_bytes, np.uint8)
+    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_rgb.flags.writeable = False
+    return holistic_model.process(frame_rgb)
+
 # Diccionario para gestionar las salas activas y evitar solapamientos
 active_connections: Dict[str, WebSocket] = {}
 
@@ -72,6 +83,7 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
     websocket.last_sign_time = time.time()
     websocket.is_translating = False
     websocket.translation_tasks = set()
+    websocket.hands_detected = False
 
     async def _run_llm_translation(words_to_translate, original_timestamp=None):
         sentence = await translate_signs_to_sentence(words_to_translate)
@@ -91,11 +103,12 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
 
     try:
         while True:
-            # Detectar pausas (1.0s sin nuevas señas) para disparar el LLM
+            # Detectar pausas (0.5s sin nuevas señas y sin manos en pantalla) para disparar el LLM
             current_time = time.time()
             if len(websocket.word_buffer) > 0 and not websocket.is_translating:
-                # Disparar si pasaron 1.0s desde la última seña o si se detectó silencio explícito repetido
-                is_timeout = (current_time - websocket.last_sign_time) > 1.0
+                # Disparar si pasaron 0.5s desde la última seña y no hay manos, o si hay silencio explícito
+                hands_detected = getattr(websocket, "hands_detected", False)
+                is_timeout = (current_time - websocket.last_sign_time) > 0.5 and not hands_detected
                 is_silence = getattr(websocket, "silence_trigger", False)
                 
                 if is_timeout or is_silence:
@@ -145,23 +158,14 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
             if not frame_base64:
                 continue
 
-            # Decodificar base64 a imagen OpenCV
+            # Ejecutar decodificación y MediaPipe en un hilo de fondo para no bloquear el Event Loop de FastAPI
             try:
-                # Quitar el prefijo "data:image/jpeg;base64," si existe
-                if "," in frame_base64:
-                    frame_base64 = frame_base64.split(",")[1]
-                
-                image_bytes = base64.b64decode(frame_base64)
-                np_arr = np.frombuffer(image_bytes, np.uint8)
-                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                results = await asyncio.to_thread(decode_and_process_frame, frame_base64, holistic)
             except Exception as e:
-                print(f"[ISLR] Error decodificando imagen: {e}")
+                print(f"[ISLR] Error procesando imagen en MediaPipe: {e}")
                 continue
-
-            # Procesar con MediaPipe (OpenCV imdecode por defecto usa BGR, MediaPipe necesita RGB)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_rgb.flags.writeable = False
-            results = holistic.process(frame_rgb)
+            
+            websocket.hands_detected = bool(results.left_hand_landmarks or results.right_hand_landmarks)
             
             frame_count += 1
             time_in_sec = time.time() - start_time

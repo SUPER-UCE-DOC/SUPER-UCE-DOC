@@ -1,0 +1,40 @@
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: hello donkey | OUT: Hola burro.
+[Traductor Local] IN: pizza | OUT: Pizza.
+[Traductor Local] IN: sun | OUT: Sol.
+[Traductor Local] IN: hat | OUT: Sombrero.
+[Traductor Local] IN: flower | OUT: Flor.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: napkin | OUT: Servilleta.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass napkin | OUT: Servilleta de hierba.
+[Traductor Local] IN: any | OUT: Cualquier.
+[Traductor Local] IN: napkin | OUT: Servilleta.
+[Traductor Local] IN: shower lion | OUT: León de la ducha.
+[Traductor Local] IN: lion | OUT: León.
+[Traductor Local] IN: cloud | OUT: Nube.
+[Traductor Local] IN: lion | OUT: León.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: like | OUT: Como.
+[Traductor Local] IN: flag | OUT: Bandera.
+[Traductor Local] IN: hello pizza | OUT: Hola pizza.
+[Traductor Local] IN: like | OUT: Como.
+[Traductor Local] IN: pizza | OUT: Pizza.
+[Traductor Local] IN: yesterday | OUT: Ayer.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: yesterday | OUT: Ayer.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: grass | OUT: Hierba.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: like | OUT: Como.
+[Traductor Local] IN: like | OUT: Como.
+[Traductor Local] IN: yesterday hello | OUT: Hola ayer.
+[Traductor Local] IN: hello grandpa | OUT: Hola abuelo.
