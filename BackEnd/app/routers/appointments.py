@@ -66,6 +66,25 @@ def create_appointment(
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+
+    # Enviar correo de notificación al paciente sobre la nueva cita agendada
+    if patient_user and patient_user.email:
+        try:
+            from app.services.email_service import email_service
+            date_formatted = new_app.date_time.strftime("%d/%m/%Y a las %I:%M %p") if isinstance(new_app.date_time, datetime.datetime) else str(new_app.date_time)
+            is_doc = (current_user.role == "doctor")
+            email_service.send_appointment_status_email(
+                to_email=patient_user.email,
+                patient_name=patient_name,
+                doctor_name=doctor_name,
+                date_time_str=date_formatted,
+                status_name=new_app.status,
+                reason=new_app.reason or "",
+                is_created_by_doctor=is_doc
+            )
+        except Exception as ex:
+            print("Error al enviar correo al crear cita médica:", ex)
+
     doc_profile = db.query(models.Doctor).filter(models.Doctor.id == doctor_user.id).first() if doctor_user else None
     doc_spec = doc_profile.specialty if doc_profile else "Medicina General"
 
@@ -252,6 +271,22 @@ def update_appointment_status(
     p_name = p_user.full_name if p_user else "Paciente"
     d_name = d_user.full_name if d_user else "Doctor"
     d_spec = d_prof.specialty if d_prof else "Medicina General"
+
+    # Enviar correo de notificación de cita si el paciente tiene correo registrado
+    if p_user and p_user.email:
+        try:
+            from app.services.email_service import email_service
+            date_formatted = app.date_time.strftime("%d/%m/%Y a las %I:%M %p") if isinstance(app.date_time, datetime.datetime) else str(app.date_time)
+            email_service.send_appointment_status_email(
+                to_email=p_user.email,
+                patient_name=p_name,
+                doctor_name=d_name,
+                date_time_str=date_formatted,
+                status_name=app.status,
+                reason=app.reason or ""
+            )
+        except Exception as ex:
+            print("Error al enviar correo de actualización de cita:", ex)
 
     return schemas.AppointmentResponse(
         id=app.id,

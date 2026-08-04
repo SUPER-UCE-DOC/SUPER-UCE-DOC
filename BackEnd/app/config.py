@@ -76,4 +76,24 @@ class Settings:
         vals = dotenv_values(env_path)
         return vals.get("TAVILY_API_KEY") or os.getenv("TAVILY_API_KEY", "")
 
+    @property
+    def SMTP_HOST(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("SMTP_HOST") or os.getenv("SMTP_HOST", "smtp.gmail.com")
+
+    @property
+    def SMTP_PORT(self) -> int:
+        vals = dotenv_values(env_path)
+        return int(vals.get("SMTP_PORT") or os.getenv("SMTP_PORT", 587))
+
+    @property
+    def SMTP_USER(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("SMTP_USER") or os.getenv("SMTP_USER", "")
+
+    @property
+    def SMTP_PASSWORD(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("SMTP_PASSWORD") or os.getenv("SMTP_PASSWORD", "")
+
 settings = Settings()

@@ -96,6 +96,24 @@ export const api = {
     });
   },
 
+  async verifyEmailCode(email: string, code: string): Promise<any> {
+    const data = await request("/api/auth/verify-code", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
+    if (data.access_token) {
+      setToken(data.access_token);
+    }
+    return data;
+  },
+
+  async resendEmailCode(email: string): Promise<any> {
+    return request("/api/auth/resend-code", {
+      method: "POST",
+      body: JSON.stringify({ email, code: "" }),
+    });
+  },
+
   async getMe(): Promise<any> {
     return request("/api/auth/me");
   },

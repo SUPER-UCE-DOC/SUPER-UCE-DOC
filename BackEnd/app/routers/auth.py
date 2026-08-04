@@ -2,6 +2,7 @@ import datetime
 import bcrypt
 import urllib.request
 import json
+import random
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from typing import List
 from app.database import get_db
 from app import models, schemas
 from app.config import settings
+from app.services.email_service import email_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -79,12 +81,16 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     # Hash password
     hashed_pwd = get_password_hash(user_in.password)
     
+    # Patients require email verification by OTP code; professional roles are auto-verified
+    is_patient = (user_in.role == "patient")
+    
     # Create main user
     new_user = models.User(
         email=user_in.email,
         hashed_password=hashed_pwd,
         role=user_in.role,
-        full_name=user_in.full_name
+        full_name=user_in.full_name,
+        is_verified=not is_patient
     )
     db.add(new_user)
     db.commit()
@@ -101,6 +107,24 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
             lon=user_in.lon
         )
         db.add(new_patient)
+
+        # Generar código OTP de 6 dígitos con expiración de 15 minutos
+        otp_code = f"{random.randint(100000, 999999):06d}"
+        
+        # Eliminar códigos antiguos para el mismo email si existieran
+        db.query(models.EmailVerificationCode).filter(models.EmailVerificationCode.email == user_in.email).delete()
+        
+        new_code_entry = models.EmailVerificationCode(
+            email=user_in.email,
+            code=otp_code,
+            expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+        )
+        db.add(new_code_entry)
+        db.commit()
+
+        # Disparar envío de correo transaccional
+        email_service.send_verification_code(user_in.email, otp_code)
+
     elif user_in.role == "doctor":
         new_doctor = models.Doctor(
             id=new_user.id,
@@ -136,7 +160,94 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         )
 
     db.commit()
-    return new_user
+
+    resp = schemas.UserResponse.from_orm(new_user)
+    resp.requires_verification = is_patient
+    return resp
+
+
+@router.post("/verify-code", response_model=schemas.VerifyCodeResponse)
+def verify_email_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_db)):
+    """
+    Valida el código OTP de 6 dígitos ingresado por el paciente.
+    Si han transcurrido más de 15 minutos, retorna el error explícito de expiración.
+    """
+    user = db.query(models.User).filter(models.User.email == req.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró ninguna cuenta asociada a este correo electrónico."
+        )
+
+    # Buscar código en BD
+    code_record = db.query(models.EmailVerificationCode).filter(
+        models.EmailVerificationCode.email == req.email,
+        models.EmailVerificationCode.code == req.code.strip()
+    ).first()
+
+    if not code_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Código de verificación incorrecto. Por favor verifique el número ingresado."
+        )
+
+    # Verificar si expiró (más de 15 minutos)
+    if datetime.datetime.utcnow() > code_record.expires_at:
+        db.delete(code_record)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El código ha expirado. Por favor inicie el registro nuevamente."
+        )
+
+    # Código válido: marcar usuario como verificado
+    user.is_verified = True
+    db.delete(code_record)
+    db.commit()
+
+    # Generar Token JWT de acceso
+    access_token = create_access_token(
+        data={"sub": user.email, "role": user.role}
+    )
+
+    user_resp = schemas.UserResponse.from_orm(user)
+    user_resp.is_verified = True
+    user_resp.requires_verification = False
+
+    return schemas.VerifyCodeResponse(
+        message="Correo electrónico verificado exitosamente.",
+        access_token=access_token,
+        token_type="bearer",
+        user=user_resp
+    )
+
+
+@router.post("/resend-code")
+def resend_verification_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == req.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado."
+        )
+
+    if user.is_verified:
+        return {"message": "La cuenta ya se encuentra verificada."}
+
+    # Generar nuevo código OTP
+    otp_code = f"{random.randint(100000, 999999):06d}"
+    db.query(models.EmailVerificationCode).filter(models.EmailVerificationCode.email == req.email).delete()
+
+    new_code_entry = models.EmailVerificationCode(
+        email=req.email,
+        code=otp_code,
+        expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+    )
+    db.add(new_code_entry)
+    db.commit()
+
+    email_service.send_verification_code(req.email, otp_code)
+    return {"message": "Nuevo código de verificación enviado exitosamente."}
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -167,6 +278,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail=f"Esta dirección de correo electrónico ya se encuentra registrada bajo el rol de '{role_label}'. Por favor, seleccione ese perfil para iniciar sesión."
         )
     
+    # 4. Validar si la cuenta requiere verificación de correo
+    if user.role == "patient" and not user.is_verified:
+        # Reenviar un nuevo código para facilidad del usuario
+        otp_code = f"{random.randint(100000, 999999):06d}"
+        db.query(models.EmailVerificationCode).filter(models.EmailVerificationCode.email == user.email).delete()
+        new_code_entry = models.EmailVerificationCode(
+            email=user.email,
+            code=otp_code,
+            expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+        )
+        db.add(new_code_entry)
+        db.commit()
+        email_service.send_verification_code(user.email, otp_code)
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Su cuenta de paciente requiere verificación por correo electrónico. Se ha enviado un código a su correo."
+        )
+
     # Generate token
     access_token = create_access_token(
         data={"sub": user.email, "role": user.role}

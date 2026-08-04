@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare,
   Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2,
-  User, ShieldCheck, Minimize2, Maximize2, MapPin, RefreshCw
+  User, ShieldCheck, Minimize2, Maximize2, MapPin, RefreshCw, GripHorizontal
 } from "lucide-react";
 import { api, getToken } from "../utils/api";
 import {
@@ -152,12 +152,43 @@ function TelemedicinaRoomContent({
   const [videoOff, setVideoOff] = useState(initialVideoOff);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [lseMode, setLseMode] = useState(false);
+  const [isLsaEnabledInSettings, setIsLsaEnabledInSettings] = useState<boolean>(true);
+  const [isVideoSubtitlesEnabled, setIsVideoSubtitlesEnabled] = useState<boolean>(true);
+  const [subtitleSizeSetting, setSubtitleSizeSetting] = useState<string>("Mediano");
   const [showRxMedSuggestions, setShowRxMedSuggestions] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [activeTab, setActiveTab] = useState<"chat" | "subtitles" | "rx" | "notes">("subtitles");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isEndedByDoctor, setIsEndedByDoctor] = useState(false);
   const [isSwapped, setIsSwapped] = useState(false);
+
+  // Sincronización dinámica de preferencias de Configuración (Accesibilidad / LSA / Subtítulos)
+  useEffect(() => {
+    const updateSettings = () => {
+      const lsaPref = localStorage.getItem("lsa_preference") !== "false";
+      setIsLsaEnabledInSettings(lsaPref);
+      setLseMode(lsaPref); // Activar LSA automáticamente si está habilitado en configuración
+
+      const subSize = localStorage.getItem("subtitle_size") || "Mediano";
+      setSubtitleSizeSetting(subSize);
+
+      const videoSubPref = localStorage.getItem("settings_video_subtitles_enabled") !== "false";
+      setIsVideoSubtitlesEnabled(videoSubPref);
+    };
+
+    updateSettings();
+
+    window.addEventListener("lsaPreferenceChanged", updateSettings);
+    window.addEventListener("subtitleSizeChanged", updateSettings);
+    window.addEventListener("videoSubtitlesPreferenceChanged", updateSettings);
+    window.addEventListener("storage", updateSettings);
+    return () => {
+      window.removeEventListener("lsaPreferenceChanged", updateSettings);
+      window.removeEventListener("subtitleSizeChanged", updateSettings);
+      window.removeEventListener("videoSubtitlesPreferenceChanged", updateSettings);
+      window.removeEventListener("storage", updateSettings);
+    };
+  }, []);
 
   // LiveKit Hooks para Tracks de Video
   const cameraTracks = useTracks([Track.Source.Camera]);
@@ -228,7 +259,7 @@ function TelemedicinaRoomContent({
 
       if (pipRef.current) {
         let containerRect: DOMRect | { left: number; top: number; width: number; height: number };
-        
+
         if (isMinimized) {
           // Para calcular en qué cuadrante soltó el usuario, usamos la pantalla completa
           containerRect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
@@ -255,6 +286,13 @@ function TelemedicinaRoomContent({
         else if (!isLeft && !isTop) newCorner = "bottom-right";
 
         setPipCorner(newCorner);
+        setSubtitleAnchor(prev => {
+          if (prev === newCorner) {
+            if (newCorner === "bottom-right" || newCorner === "bottom-left") return "bottom-center";
+            if (newCorner === "top-right" || newCorner === "top-left") return "top-center";
+          }
+          return prev;
+        });
       }
       setDragDelta({ x: 0, y: 0 });
     };
@@ -271,6 +309,151 @@ function TelemedicinaRoomContent({
     e.stopPropagation();
     if (!hasDraggedRef.current) {
       setIsSwapped(!isSwapped);
+    }
+  };
+
+  // Arrastre interactivo y magnetismo multianclaje para la tarjeta de subtítulos en pantalla
+  type SubtitleAnchor = "bottom-center" | "top-center" | "bottom-left" | "bottom-right" | "top-left" | "top-right";
+  const [subtitleAnchor, setSubtitleAnchor] = useState<SubtitleAnchor>("bottom-center");
+  const [isDraggingSub, setIsDraggingSub] = useState(false);
+  const [subDragDelta, setSubDragDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const subCardRef = useRef<HTMLDivElement | null>(null);
+  const subDragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleMouseDownSub = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    subDragStartRef.current = { x: e.clientX, y: e.clientY };
+    setIsDraggingSub(true);
+    setSubDragDelta({ x: 0, y: 0 });
+  };
+
+  useEffect(() => {
+    if (!isDraggingSub) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - subDragStartRef.current.x;
+      const dy = e.clientY - subDragStartRef.current.y;
+      setSubDragDelta({ x: dx, y: dy });
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingSub(false);
+
+      if (subCardRef.current) {
+        let containerRect: DOMRect | { left: number; top: number; width: number; height: number };
+
+        if (mainContainerRef.current) {
+          containerRect = mainContainerRef.current.getBoundingClientRect();
+        } else {
+          containerRect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+        }
+
+        const subRect = subCardRef.current.getBoundingClientRect();
+        const subCenterX = subRect.left + subRect.width / 2;
+        const subCenterY = subRect.top + subRect.height / 2;
+
+        const relativeX = subCenterX - containerRect.left;
+        const relativeY = subCenterY - containerRect.top;
+
+        const thirdWidth = containerRect.width / 3;
+        const halfHeight = containerRect.height / 2;
+
+        let newAnchor: SubtitleAnchor = "bottom-center";
+
+        if (relativeY < halfHeight) {
+          // Zona Superior
+          if (relativeX < thirdWidth) newAnchor = "top-left";
+          else if (relativeX > thirdWidth * 2) newAnchor = "top-right";
+          else newAnchor = "top-center";
+        } else {
+          // Zona Inferior
+          if (relativeX < thirdWidth) newAnchor = "bottom-left";
+          else if (relativeX > thirdWidth * 2) newAnchor = "bottom-right";
+          else newAnchor = "bottom-center";
+        }
+
+        // Prevención de colisión: Si coincide con el anclaje del PIP, esquiva a centro o zona contraria
+        if (newAnchor === pipCorner) {
+          if (newAnchor === "bottom-right" || newAnchor === "bottom-left") newAnchor = "bottom-center";
+          else if (newAnchor === "top-right" || newAnchor === "top-left") newAnchor = "top-center";
+        }
+
+        setSubtitleAnchor(newAnchor);
+      }
+      setSubDragDelta({ x: 0, y: 0 });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingSub]);
+
+  const getSubtitleAnchorStyle = (): React.CSSProperties => {
+    const baseTransition = isDraggingSub
+      ? "none"
+      : "top 350ms cubic-bezier(0.16, 1, 0.3, 1), bottom 350ms cubic-bezier(0.16, 1, 0.3, 1), left 350ms cubic-bezier(0.16, 1, 0.3, 1), right 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1)";
+
+    switch (subtitleAnchor) {
+      case "top-center":
+        return {
+          top: "24px",
+          left: "50%",
+          transform: isDraggingSub
+            ? `translate3d(calc(-50% + ${subDragDelta.x}px), ${subDragDelta.y}px, 0px)`
+            : "translate3d(-50%, 0px, 0px)",
+          transition: baseTransition
+        };
+      case "top-left":
+        return {
+          top: "24px",
+          left: "24px",
+          transform: isDraggingSub
+            ? `translate3d(${subDragDelta.x}px, ${subDragDelta.y}px, 0px)`
+            : "translate3d(0px, 0px, 0px)",
+          transition: baseTransition
+        };
+      case "top-right":
+        return {
+          top: "24px",
+          right: "24px",
+          transform: isDraggingSub
+            ? `translate3d(${subDragDelta.x}px, ${subDragDelta.y}px, 0px)`
+            : "translate3d(0px, 0px, 0px)",
+          transition: baseTransition
+        };
+      case "bottom-left":
+        return {
+          bottom: "75px",
+          left: "24px",
+          transform: isDraggingSub
+            ? `translate3d(${subDragDelta.x}px, ${subDragDelta.y}px, 0px)`
+            : "translate3d(0px, 0px, 0px)",
+          transition: baseTransition
+        };
+      case "bottom-right":
+        return {
+          bottom: "75px",
+          right: "24px",
+          transform: isDraggingSub
+            ? `translate3d(${subDragDelta.x}px, ${subDragDelta.y}px, 0px)`
+            : "translate3d(0px, 0px, 0px)",
+          transition: baseTransition
+        };
+      case "bottom-center":
+      default:
+        return {
+          bottom: "75px",
+          left: "50%",
+          transform: isDraggingSub
+            ? `translate3d(calc(-50% + ${subDragDelta.x}px), ${subDragDelta.y}px, 0px)`
+            : "translate3d(-50%, 0px, 0px)",
+          transition: baseTransition
+        };
     }
   };
 
@@ -292,7 +475,7 @@ function TelemedicinaRoomContent({
     if (subtitlesContainerRef.current) {
       const container = subtitlesContainerRef.current;
       const { scrollTop, scrollHeight, clientHeight } = container;
-      
+
       // Aumentamos el umbral a 400px porque las burbujas de chat son altas con los márgenes
       if (scrollHeight - scrollTop - clientHeight < 400) {
         setTimeout(() => {
@@ -318,41 +501,41 @@ function TelemedicinaRoomContent({
           const isSameSpeakerAndDraft = lastSub && lastSub.is_draft && lastSub.speaker_role === parsed.speaker_role;
 
           if (parsed.is_draft) {
-             if (isSameSpeakerAndDraft) {
-               lastSub.text = lastSub.text.replace("...", "") + ` ${parsed.text}...`;
-               lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-             } else {
-               newList.push({
-                 id: Date.now(),
-                 speaker_name: parsed.speaker_name,
-                 speaker_role: parsed.speaker_role,
-                 text: `${parsed.text}...`,
-                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                 is_draft: true
-               });
-             }
+            if (isSameSpeakerAndDraft) {
+              lastSub.text = lastSub.text.replace("...", "") + ` ${parsed.text}...`;
+              lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else {
+              newList.push({
+                id: Date.now(),
+                speaker_name: parsed.speaker_name,
+                speaker_role: parsed.speaker_role,
+                text: `${parsed.text}...`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                is_draft: true
+              });
+            }
           } else {
-             // Final sentence
-             if (isSameSpeakerAndDraft) {
-               lastSub.text = parsed.text;
-               lastSub.is_draft = false;
-               lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-             } else {
-               newList.push({
-                 id: Date.now(),
-                 speaker_name: parsed.speaker_name,
-                 speaker_role: parsed.speaker_role,
-                 text: parsed.text,
-                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                 is_draft: false
-               });
-             }
+            // Final sentence
+            if (isSameSpeakerAndDraft) {
+              lastSub.text = parsed.text;
+              lastSub.is_draft = false;
+              lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else {
+              newList.push({
+                id: Date.now(),
+                speaker_name: parsed.speaker_name,
+                speaker_role: parsed.speaker_role,
+                text: parsed.text,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                is_draft: false
+              });
+            }
           }
           localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
           return newList;
         });
       }
-    } catch (e) {}
+    } catch (e) { }
   });
 
   // Cargar historial de subtítulos (Híbrido)
@@ -376,7 +559,7 @@ function TelemedicinaRoomContent({
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) setSubtitlesList(parsed);
-          } catch (err) {}
+          } catch (err) { }
         }
       }
     };
@@ -396,7 +579,7 @@ function TelemedicinaRoomContent({
     let stream: MediaStream | null = null;
     let interval: ReturnType<typeof setInterval>;
     let silenceTimer: ReturnType<typeof setTimeout>;
-    
+
     let audioContext: AudioContext;
     let analyser: AnalyserNode;
     let dataArray: Uint8Array;
@@ -404,7 +587,7 @@ function TelemedicinaRoomContent({
 
     navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
       stream = s;
-      
+
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioContext = new AudioContextClass();
       const source = audioContext.createMediaStreamSource(stream);
@@ -424,7 +607,7 @@ function TelemedicinaRoomContent({
         if (chunks.length > 0) {
           const blob = new Blob(chunks, { type: 'audio/webm' });
           chunks = [];
-          if (blob.size > 2000) { 
+          if (blob.size > 2000) {
             try {
               const res = await api.transcribeTelemedicineAudio(blob);
               if (res.text) {
@@ -440,16 +623,16 @@ function TelemedicinaRoomContent({
                   localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
                   return newList;
                 });
-                
+
                 if (sendRef.current) {
-                  sendRef.current(new TextEncoder().encode(JSON.stringify({ 
-                    type: "SUBTITLE", 
-                    speaker_name: userName, 
-                    speaker_role: role, 
-                    text: res.text 
+                  sendRef.current(new TextEncoder().encode(JSON.stringify({
+                    type: "SUBTITLE",
+                    speaker_name: userName,
+                    speaker_role: role,
+                    text: res.text
                   })), { reliable: true });
                 }
-                
+
                 // POST to backend for persistence (Hybrid Architecture)
                 api.postRoomSubtitle(roomCode, {
                   speaker_name: userName,
@@ -469,7 +652,7 @@ function TelemedicinaRoomContent({
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const avg = sum / dataArray.length;
 
-        if (avg > 15) { 
+        if (avg > 15) {
           if (!isSpeaking) {
             isSpeaking = true;
             if (mediaRecorder?.state === "inactive") mediaRecorder.start();
@@ -535,15 +718,15 @@ function TelemedicinaRoomContent({
   const [isPipSpeaking, setIsPipSpeaking] = useState(false);
   const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
   const [isEndingCall, setIsEndingCall] = useState(false);
-  
+
   useEffect(() => {
     if (!room) return;
     const handleActiveSpeakers = (speakers: Participant[]) => {
-       const pipParticipant = isSwapped ? remoteParticipants[0] : localParticipant;
-       setIsPipSpeaking(pipParticipant ? speakers.some(p => p.sid === pipParticipant.sid) : false);
-       
-       const remote = remoteParticipants[0];
-       setIsRemoteSpeaking(remote ? speakers.some(p => p.sid === remote.sid) : false);
+      const pipParticipant = isSwapped ? remoteParticipants[0] : localParticipant;
+      setIsPipSpeaking(pipParticipant ? speakers.some(p => p.sid === pipParticipant.sid) : false);
+
+      const remote = remoteParticipants[0];
+      setIsRemoteSpeaking(remote ? speakers.some(p => p.sid === remote.sid) : false);
     };
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
     return () => { room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers); }
@@ -587,7 +770,7 @@ function TelemedicinaRoomContent({
           }
         } catch (e) { }
       };
-      
+
       const statusKey = `room_status_${roomCode}`;
       const rawStatus = localStorage.getItem(statusKey);
       if (rawStatus) {
@@ -598,7 +781,7 @@ function TelemedicinaRoomContent({
           }
         } catch (e) { }
       }
-      
+
       // Chequeo periódico suave (cada 15s) solo para fallback de estado de cita en BD
       const interval = setInterval(checkAppointment, 15000);
       return () => clearInterval(interval);
@@ -617,7 +800,7 @@ function TelemedicinaRoomContent({
   // ──────────────────────────────────────────────
   useEffect(() => {
     if (!lseMode || role !== "patient") return;
-    
+
     // Obtener la pista de video local del paciente
     const trackPub = localParticipant.getTrackPublication(Track.Source.Camera);
     const mediaStreamTrack = trackPub?.videoTrack?.mediaStreamTrack;
@@ -625,7 +808,7 @@ function TelemedicinaRoomContent({
       console.warn("[ISLR] No se encontró cámara local para el paciente.");
       return;
     }
-    
+
     // Crear elementos ocultos para capturar frames
     const stream = new MediaStream([mediaStreamTrack]);
     const video = document.createElement("video");
@@ -635,19 +818,19 @@ function TelemedicinaRoomContent({
     video.autoplay = true;
     video.playsInline = true;
     video.muted = true;
-    
+
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    
+
     let interval: NodeJS.Timeout;
-    
+
     // Conectar al WebSocket de FastAPI
     const ws = new WebSocket(`ws://localhost:8000/api/sign-language/stream/${roomCode}`);
-    
+
     ws.onopen = () => {
       console.log("[ISLR] Conectado al traductor de señas.");
     };
-    
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -655,12 +838,12 @@ function TelemedicinaRoomContent({
 
         if (data.type === "SIGN_PREDICTED" && data.sign) {
           const signText = data.sign;
-          
+
           setSubtitlesList(prev => {
             const newList = [...prev];
             const lastSub = newList[newList.length - 1];
             const isSameSpeakerAndDraft = lastSub && lastSub.is_draft && lastSub.speaker_role === "patient";
-            
+
             if (isSameSpeakerAndDraft) {
               lastSub.text = lastSub.text.replace("...", "") + ` ${signText}...`;
               lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -680,8 +863,8 @@ function TelemedicinaRoomContent({
 
           // Enviar subtítulo parcial al Doctor usando DataChannel
           if (sendRef.current) {
-            sendRef.current(new TextEncoder().encode(JSON.stringify({ 
-              type: "SUBTITLE", 
+            sendRef.current(new TextEncoder().encode(JSON.stringify({
+              type: "SUBTITLE",
               text: signText,
               speaker_name: speakerName,
               speaker_role: "patient",
@@ -690,12 +873,12 @@ function TelemedicinaRoomContent({
           }
         } else if (data.type === "SENTENCE_PREDICTED" && data.sentence) {
           const sentence = data.sentence;
-          
+
           setSubtitlesList(prev => {
             const newList = [...prev];
             const lastSub = newList[newList.length - 1];
             const isSameSpeakerAndDraft = lastSub && lastSub.is_draft && lastSub.speaker_role === "patient";
-            
+
             if (isSameSpeakerAndDraft) {
               lastSub.text = sentence;
               lastSub.is_draft = false;
@@ -716,8 +899,8 @@ function TelemedicinaRoomContent({
 
           // Enviar subtítulo final al Doctor usando DataChannel
           if (sendRef.current) {
-            sendRef.current(new TextEncoder().encode(JSON.stringify({ 
-              type: "SUBTITLE", 
+            sendRef.current(new TextEncoder().encode(JSON.stringify({
+              type: "SUBTITLE",
               text: sentence,
               speaker_name: speakerName,
               speaker_role: "patient",
@@ -725,17 +908,17 @@ function TelemedicinaRoomContent({
             })), { reliable: true });
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
-    
+
     video.onloadedmetadata = () => {
       video.play().catch(e => console.error("[ISLR] Error playing video:", e));
       console.log("[ISLR] Comenzando a capturar frames...");
-      
+
       // Reducir resolución para no saturar al backend con imágenes gigantes
       canvas.width = 480;
       canvas.height = (video.videoHeight / video.videoWidth) * 480 || 360;
-      
+
       let sentFrames = 0;
       // Capturar a ~15 FPS (66ms) para mantener tiempo real estricto pero reducir lag en el backend
       interval = setInterval(() => {
@@ -744,12 +927,12 @@ function TelemedicinaRoomContent({
           if (ws.bufferedAmount > 50000) {
             return;
           }
-          
+
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           // Bajar calidad JPEG a 0.5 para hacer el payload en base64 súper ligero
           const base64 = canvas.toDataURL("image/jpeg", 0.5);
           ws.send(JSON.stringify({ type: "FRAME", frame: base64 }));
-          
+
           sentFrames++;
           if (sentFrames % 15 === 0) {
             console.log(`[ISLR] ${sentFrames} frames enviados al backend (Optimizado a 15 FPS).`);
@@ -757,7 +940,7 @@ function TelemedicinaRoomContent({
         }
       }, 66);
     };
-    
+
     return () => {
       clearInterval(interval);
       if (ws.readyState === WebSocket.OPEN) {
@@ -897,7 +1080,7 @@ function TelemedicinaRoomContent({
         if (sendRef.current) {
           sendRef.current(new TextEncoder().encode(JSON.stringify({ type: "END_CALL" })), { reliable: true });
         }
-        
+
         let transcript = "";
         if (subtitlesList.length > 0) {
           transcript = subtitlesList.map(s => `${s.speaker_role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}: ${s.text}`).join("\n");
@@ -905,7 +1088,7 @@ function TelemedicinaRoomContent({
         if (!transcript) {
           transcript = "Sin conversación registrada.";
         }
-        
+
         await api.summarizeConsultation(appointmentId, transcript, clinicalNotes.trim());
         await api.updateAppointmentStatus(appointmentId, "completada");
 
@@ -1184,8 +1367,8 @@ function TelemedicinaRoomContent({
                 zIndex: isDraggingPip ? 50 : 20
               }}
               className={`absolute w-[288px] h-[162px] rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center select-none cursor-grab active:cursor-grabbing transition-all duration-300 ${isDraggingPip ? "scale-105 border-[#00C7C0]" : ""} ${(isSwapped && !isCounterpartConnected)
-                  ? "border-amber-500"
-                  : (!isDraggingPip && isPipSpeaking) ? "ring-2 ring-[#00C7C0] border-[#00C7C0]" : "border-[#00A69D]"
+                ? "border-amber-500"
+                : (!isDraggingPip && isPipSpeaking) ? "ring-2 ring-[#00C7C0] border-[#00C7C0]" : "border-[#00A69D]"
                 }`}
               title="Arrastra a cualquier esquina o haz clic para intercambiar pantalla"
             >
@@ -1277,6 +1460,31 @@ function TelemedicinaRoomContent({
               )}
             </div>
 
+            {/* OVERLAY FLOTANTE DE SUBTÍTULOS EN TIEMPO REAL CON ARRASTRE MULTIANCLAJE Y PREVENCIÓN DE COLISIÓN */}
+            {isVideoSubtitlesEnabled && subtitlesList.length > 0 && (
+              <div
+                ref={subCardRef}
+                onMouseDown={handleMouseDownSub}
+                style={getSubtitleAnchorStyle()}
+                className={`absolute z-30 max-w-[85%] sm:max-w-[70%] bg-slate-900/90 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl border border-slate-700/60 shadow-2xl text-center select-none cursor-grab active:cursor-grabbing transition-all duration-300 pointer-events-auto ${
+                  isDraggingSub ? "scale-105 border-[#00C7C0] shadow-teal-500/20" : ""
+                }`}
+                title="Arrastra para mover la barra de subtítulos a cualquier posición de la pantalla"
+              >
+                <span className="text-[11px] text-[#00A69D] font-bold uppercase tracking-wider block mb-1">
+                  {subtitlesList[subtitlesList.length - 1].speaker_name}
+                </span>
+                <p className={`leading-snug text-white ${
+                  subtitleSizeSetting === "Pequeño"
+                    ? "text-sm font-medium"
+                    : subtitleSizeSetting === "Grande"
+                    ? "text-2xl font-extrabold tracking-wide"
+                    : "text-lg font-bold"
+                }`}>
+                  {subtitlesList[subtitlesList.length - 1].text}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* BARRA DE CONTROLES INFERIOR (BOTONES REDONDEADOS CON ESTILO MÉDICO ESTÁNDAR) */}
@@ -1284,8 +1492,8 @@ function TelemedicinaRoomContent({
             <button
               onClick={() => setMuted(!muted)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${muted
-                  ? "bg-red-50 text-red-600 border-red-200"
-                  : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
+                ? "bg-red-50 text-red-600 border-red-200"
+                : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
                 }`}
               title={muted ? "Activar micrófono" : "Desactivar micrófono"}
             >
@@ -1296,8 +1504,8 @@ function TelemedicinaRoomContent({
             <button
               onClick={() => setVideoOff(!videoOff)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${videoOff
-                  ? "bg-red-50 text-red-600 border-red-200"
-                  : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
+                ? "bg-red-50 text-red-600 border-red-200"
+                : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
                 }`}
               title={videoOff ? "Activar cámara" : "Desactivar cámara"}
             >
@@ -1308,26 +1516,25 @@ function TelemedicinaRoomContent({
             <button
               onClick={() => setActiveTab("subtitles")}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${activeTab === "subtitles"
-                  ? "bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]"
-                  : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
+                ? "bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]"
+                : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
                 }`}
             >
               <Captions size={16} />
               <span>Subtítulos Clínicos</span>
             </button>
 
-            {role === "patient" && (
+            {role === "patient" && isLsaEnabledInSettings && (
               <button
                 onClick={() => setLseMode(!lseMode)}
                 title="Activar/Desactivar traductor"
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm hover:bg-gray-50 ${
-                    lseMode
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm hover:bg-gray-50 ${lseMode
                     ? "bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]"
                     : "bg-white text-gray-700 border-gray-100"
                   }`}
               >
                 <Hand size={16} />
-                <span>Traductor LSE</span>
+                <span>Traductor LSA</span>
               </button>
             )}
 
@@ -1354,8 +1561,8 @@ function TelemedicinaRoomContent({
               <button
                 onClick={() => setActiveTab("subtitles")}
                 className={`flex-1 py-3 px-3 text-base font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === "subtitles"
-                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
-                    : "text-gray-500 hover:text-[#203A70]"
+                  ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
+                  : "text-gray-500 hover:text-[#203A70]"
                   }`}
               >
                 <Captions size={18} /> Subtítulos ({subtitlesList.length})
@@ -1364,8 +1571,8 @@ function TelemedicinaRoomContent({
               <button
                 onClick={() => setActiveTab("chat")}
                 className={`flex-1 py-3 px-3 text-base font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === "chat"
-                    ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
-                    : "text-gray-500 hover:text-[#203A70]"
+                  ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
+                  : "text-gray-500 hover:text-[#203A70]"
                   }`}
               >
                 <MessageSquare size={18} /> Chat ({chatMessages.length})
@@ -1376,8 +1583,8 @@ function TelemedicinaRoomContent({
                   <button
                     onClick={() => setActiveTab("rx")}
                     className={`flex-1 py-3 px-3 text-base font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === "rx"
-                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
-                        : "text-gray-500 hover:text-[#203A70]"
+                      ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
+                      : "text-gray-500 hover:text-[#203A70]"
                       }`}
                   >
                     <Pill size={18} /> Receta
@@ -1385,8 +1592,8 @@ function TelemedicinaRoomContent({
                   <button
                     onClick={() => setActiveTab("notes")}
                     className={`flex-1 py-3 px-3 text-base font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === "notes"
-                        ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
-                        : "text-gray-500 hover:text-[#203A70]"
+                      ? "bg-white text-[#203A70] shadow-xs border border-gray-200"
+                      : "text-gray-500 hover:text-[#203A70]"
                       }`}
                   >
                     <FileText size={18} /> Notas
@@ -1418,8 +1625,8 @@ function TelemedicinaRoomContent({
                         )}
                         <div
                           className={`p-3 rounded-2xl text-base max-w-[85%] leading-relaxed ${msg.sender === userName
-                              ? "bg-[#00A69D] text-white rounded-tr-xs shadow-xs font-medium"
-                              : "bg-gray-100 text-gray-800 rounded-tl-xs border border-gray-200 shadow-xs font-medium"
+                            ? "bg-[#00A69D] text-white rounded-tr-xs shadow-xs font-medium"
+                            : "bg-gray-100 text-gray-800 rounded-tl-xs border border-gray-200 shadow-xs font-medium"
                             }`}
                         >
                           {msg.text}
@@ -1490,7 +1697,13 @@ function TelemedicinaRoomContent({
                             {sub.timestamp}
                           </span>
                         </div>
-                        <div className={`text-base leading-relaxed font-normal p-3 rounded-lg border ${sub.is_draft ? 'text-gray-500 bg-gray-50 border-dashed border-gray-300 italic' : 'text-gray-800 bg-white border-gray-100'}`}>
+                        <div className={`${
+                          subtitleSizeSetting === "Pequeño"
+                            ? "text-sm font-normal"
+                            : subtitleSizeSetting === "Grande"
+                            ? "text-xl font-bold"
+                            : "text-base font-normal"
+                        } leading-relaxed p-3 rounded-lg border ${sub.is_draft ? 'text-gray-500 bg-gray-50 border-dashed border-gray-300 italic' : 'text-gray-800 bg-white border-gray-100'}`}>
                           {sub.text}
                           {sub.is_draft && <span className="ml-2 inline-block w-2 h-2 bg-gray-400 rounded-full animate-pulse" />}
                         </div>
@@ -1672,7 +1885,7 @@ function FloatingRoomContent({
   const audioTracks = useTracks([Track.Source.Microphone]);
   const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
-  
+
   const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
   const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
 

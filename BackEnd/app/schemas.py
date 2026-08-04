@@ -58,6 +58,8 @@ class UserResponse(UserBase):
     id: int
     avatar: Optional[str] = None
     created_at: datetime.datetime
+    is_verified: bool = False
+    requires_verification: Optional[bool] = False
     # settings
     available_days: Optional[str] = None
     start_time: Optional[str] = None
@@ -66,6 +68,16 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class VerifyCodeResponse(BaseModel):
+    message: str
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
+    user: Optional[UserResponse] = None
 
 class UserSettingsUpdate(BaseModel):
     available_days: Optional[str] = None

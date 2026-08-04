@@ -64,6 +64,22 @@ def create_prescription(
     db.commit()
     db.refresh(new_rx)
 
+    # Enviar correo de notificación de receta médica al paciente
+    if patient and patient.user and patient.user.email:
+        try:
+            from app.services.email_service import email_service
+            email_service.send_prescription_email(
+                to_email=patient.user.email,
+                patient_name=patient.user.full_name,
+                doctor_name=current_user.full_name,
+                medicine=new_rx.medicine,
+                dose=new_rx.dose,
+                frequency=new_rx.frequency,
+                rx_id=new_rx.id
+            )
+        except Exception as ex:
+            print("Error al enviar correo de receta médica:", ex)
+
     return schemas.PrescriptionResponse(
         id=new_rx.id,
         appointment_id=new_rx.appointment_id,

@@ -12,6 +12,7 @@ class User(Base):
     role = Column(String, nullable=False)  # "patient", "doctor", "pharmacy"
     full_name = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -249,3 +250,14 @@ class DoctorPatientLink(Base):
 
     doctor = relationship("Doctor", foreign_keys=[doctor_id])
     patient = relationship("Patient", foreign_keys=[patient_id])
+
+
+class EmailVerificationCode(Base):
+    __tablename__ = "email_verification_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True, nullable=False)
+    code = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
