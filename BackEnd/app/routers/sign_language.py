@@ -119,13 +119,12 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
             # Detectar pausa al final de una oración completa (3.5s continuos de inactividad tras la última seña)
             current_time = time.time()
             if len(websocket.word_buffer) > 0 and not websocket.is_translating:
-                # El temporizador de oración depende únicamente del tiempo transcurrido desde la última seña confirmada (resiliente a parpadeos de MediaPipe)
+                # El temporizador de oración depende únicamente del tiempo transcurrido desde la última seña confirmada
                 is_timeout = (current_time - websocket.last_sign_time) > 3.5
-                is_silence = getattr(websocket, "silence_trigger", False)
                 
-                if is_timeout or is_silence:
+                if is_timeout:
                     websocket.is_translating = True
-                    reason = "silence_trigger (No Movement Detected)" if is_silence else f"inactivity_timeout ({current_time - websocket.last_sign_time:.2f}s)"
+                    reason = f"inactivity_timeout ({current_time - websocket.last_sign_time:.2f}s)"
                     log_islr_event(f"🚀 DISPARO TRADUCCIÓN UNIFICADA -> Causa: {reason} | Palabras acumuladas: {websocket.word_buffer}")
                     websocket.silence_trigger = False # Reset
                     words_copy = list(websocket.word_buffer)
@@ -212,11 +211,8 @@ async def sign_language_endpoint(websocket: WebSocket, room_id: str):
                             confidence = res.get("confidence", 1.0)
                             
                             if current_sign == "No Movement Detected":
-                                log_islr_event(f"🛑 NO MOVEMENT DETECTED | Buffer actual: {getattr(websocket, 'word_buffer', [])}")
-                                # Detectar silencio explícito para enviar el buffer rápidamente
-                                if hasattr(websocket, "word_buffer") and len(websocket.word_buffer) > 0:
-                                    websocket.silence_trigger = True
-                                # Resetear contador por silencio
+                                log_islr_event(f"🛑 NO MOVEMENT DETECTED (Silencio ignorado para permitir concatenación) | Buffer actual: {getattr(websocket, 'word_buffer', [])}")
+                                # Resetear contador por silencio sin vaciar el buffer de la oración
                                 websocket.last_candidate_sign = ""
                                 websocket.consecutive_count = 0
                             

@@ -69,9 +69,11 @@ class KnowledgeExtractionService:
             
         prompt = (
             "Eres un analista de datos clínicos. Lee el siguiente resumen estructurado de una teleconsulta médica. "
-            "Identifica HECHOS MÉDICOS PERMANENTES y RELEVANTES para el historial del paciente a largo plazo "
-            "(como alergias detectadas, enfermedades crónicas diagnosticadas, síntomas muy persistentes, "
+            "Ten en cuenta que los pacientes pueden ser personas sordas/sordomudas que utilizan lenguaje de señas en vivo (LSE/ASL).\n"
+            "Identifica HECHOS MÉDICOS FÍSICOS PERMANENTES y RELEVANTES para el historial del paciente a largo plazo "
+            "(como alergias detectadas, enfermedades crónicas diagnosticadas, síntomas físicos persistentes, "
             "o medicamentos de uso continuo recetados).\n"
+            "Jamás clasifiques malentendidos de traducción gramatical de señas como patologías psiquiátricas.\n"
             "Ignora recomendaciones genéricas (ej. 'beber agua', 'descansar') o síntomas pasajeros leves que ya pasaron.\n"
             "Si no hay datos clínicos relevantes a largo plazo, devuelve un JSON vacío [].\n"
             "Si los hay, devuelve ESTRICTAMENTE un Array JSON con objetos con este formato:\n"

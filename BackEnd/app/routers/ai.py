@@ -104,19 +104,31 @@ def summarize_consultation(
 
     notes_text = f"\nNotas Clínicas del Especialista:\n{req.clinical_notes}\n" if req.clinical_notes else ""
     
-    # Crear prompt para resumen médico y Triage
+    # Crear prompt para resumen médico y Triage con contexto empático para lenguaje de señas (pacientes sordos)
     prompt = (
-        "Actúa como un transcriptor médico y clasificador de triaje profesional. "
-        "A partir de la siguiente conversación y registros entre el médico y el paciente, "
-        "elabora un Resumen Clínico estructurado con las siguientes secciones: "
-        "SÍNTOMAS DETECTADOS, SUGERENCIA DE DIAGNÓSTICO, y RECOMENDACIONES TRATAMIENTO.\n"
-        "Además, analiza el nivel de urgencia o gravedad del paciente basándote estrictamente en los síntomas descritos y coloca AL FINAL del texto la etiqueta exacta de su estado, que DEBE SER UNA de estas tres: [STATUS: estable], [STATUS: seguimiento] o [STATUS: critico].\n"
+        "Actúa como un transcriptor médico y clasificador de triaje profesional.\n"
+        "CONTEXTO CLÍNICO IMPORTANTE: La plataforma SUPER-UCE DOC atiende a pacientes sordos o sordomudos "
+        "que se comunican mediante traducción de lenguaje de señas en vivo (LSE/ASL). Debido a las limitaciones "
+        "tecnológicas del modelo de visión e IA de traducción de señas, algunas frases de la transcripción del paciente pueden "
+        "resultar telegráficas, cortas, fragmentadas o con estructura gramatical atípica.\n"
+        "INSTRUCCIÓN DE EVALUACIÓN CRÍTICA: Jamás interpretes la brevedad, repetición o incoherencia gramatical de las señas "
+        "como un signo de trastorno mental, confusión psiquiátrica, demencia, desorientación ni 'locura'. Concéntrate "
+        "únicamente en extraer los síntomas físicos u orgánicos reales comunicados (ej. dolor, mareo, fiebre, malestar) y "
+        "las indicaciones del médico.\n\n"
+        "A partir de la conversación y registros entre el médico y el paciente, elabora un Resumen Clínico estructurado "
+        "con las siguientes secciones:\n"
+        "1. SÍNTOMAS DETECTADOS\n"
+        "2. SUGERENCIA DE DIAGNÓSTICO\n"
+        "3. RECOMENDACIONES Y TRATAMIENTO\n\n"
+        "Además, analiza el nivel de urgencia o gravedad del paciente basándote estrictamente en los síntomas físicos "
+        "descritos y coloca AL FINAL del texto la etiqueta exacta de su estado, que DEBE SER UNA de estas tres:\n"
+        "[STATUS: estable], [STATUS: seguimiento] o [STATUS: critico].\n"
         "- estable: Todo está normal, sin riesgo.\n"
         "- seguimiento: Síntomas moderados, infecciones leves, o requiere estar pendiente.\n"
-        "- critico: Dolor agudo, riesgo inminente, o requiere atención inmediata.\n"
-        "Mantén el tono formal y conciso.\n"
+        "- critico: Dolor agudo, riesgo inminente, o requiere atención inmediata.\n\n"
+        "Mantén un tono formal, empático y conciso.\n\n"
         f"Conversación/Registros:\n{req.conversation_transcript}\n"
-        f"{notes_text}"
+        f"{notes_text}\n"
         "Resumen Clínico IA:"
     )
 
