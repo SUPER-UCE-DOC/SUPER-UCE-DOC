@@ -799,20 +799,11 @@ function TelemedicinaRoomContent({
       triggerUpdate();
     };
 
-    // FIX #2 (parte 2): Actualizar estados mic/cámara local directamente desde eventos de room
-    const handleTrackMuted = (pub: any, participant: any) => {
-      if (participant.isLocal) {
-        if (pub.source === Track.Source.Microphone) setIsMicOn(false);
-        if (pub.source === Track.Source.Camera) setIsVideoOn(false);
-      }
+    const handleTrackMuted = () => {
       triggerUpdate();
     };
 
-    const handleTrackUnmuted = (pub: any, participant: any) => {
-      if (participant.isLocal) {
-        if (pub.source === Track.Source.Microphone) setIsMicOn(true);
-        if (pub.source === Track.Source.Camera) setIsVideoOn(true);
-      }
+    const handleTrackUnmuted = () => {
       triggerUpdate();
     };
 
