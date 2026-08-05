@@ -176,7 +176,7 @@ class ControlCenterApp:
         log_header = ttk.Frame(self.tab_server, style="Card.TFrame")
         log_header.pack(fill=tk.X, padx=15, pady=(5, 0))
 
-        tk.Label(log_header, text="📜 Registros del Backend en Vivo (journalctl stream):", bg=self.BG_CARD, fg=self.PRIMARY, font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(log_header, text="📜 Registros del Backend en Vivo (Journalctl / Uvicorn stream):", bg=self.BG_CARD, fg=self.PRIMARY, font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
 
         btn_clear = tk.Button(log_header, text="🧹 Limpiar Consola", bg="#475569", fg="white", font=("Helvetica", 8, "bold"), padx=8, pady=2, relief="flat", command=self.clear_console)
         btn_clear.pack(side=tk.RIGHT, padx=5)
@@ -225,7 +225,27 @@ class ControlCenterApp:
                 except Exception as e:
                     self.log_message(f"Error iniciando transmisión de logs: {e}")
             else:
-                self.log_message("En Windows, los registros se muestran cuando ejecutas comandos del servidor.")
+                # Monitorear archivo backend.log en Windows
+                log_file_path = os.path.join(ROOT_DIR, "BackEnd", "backend.log")
+                self.log_message(f"📡 Monitoreando registros de Windows ({log_file_path})...")
+                while True:
+                    if os.path.exists(log_file_path):
+                        try:
+                            with open(log_file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                f.seek(0, 2)
+                                while True:
+                                    line = f.readline()
+                                    if not line:
+                                        time.sleep(0.4)
+                                        continue
+                                    if self.log_streaming:
+                                        clean_line = line.strip()
+                                        if clean_line:
+                                            self.root.after(0, lambda l=clean_line: (self.console.insert(tk.END, l + "\n"), self.console.see(tk.END)))
+                        except Exception:
+                            time.sleep(1)
+                    else:
+                        time.sleep(2)
 
         threading.Thread(target=stream_worker, daemon=True).start()
 
@@ -249,7 +269,8 @@ class ControlCenterApp:
         if self.is_linux:
             self.run_async_cmd("sudo systemctl start super-uce-backend", "Encender Backend (systemd)")
         else:
-            backend_cmd = f"cd {os.path.join(ROOT_DIR, 'BackEnd')} && python -m uvicorn app.main:app --port 8000"
+            log_file = os.path.join(ROOT_DIR, "BackEnd", "backend.log")
+            backend_cmd = f"cd /d \"{os.path.join(ROOT_DIR, 'BackEnd')}\" && python -m uvicorn app.main:app --port 8000 > \"{log_file}\" 2>&1"
             self.run_async_cmd(backend_cmd, "Encender Backend (Windows Local)")
 
     def cmd_restart_backend(self):
@@ -262,10 +283,10 @@ class ControlCenterApp:
         if self.is_linux:
             self.run_async_cmd("sudo systemctl stop super-uce-backend", "Apagar Backend (systemd)")
         else:
-            self.log_message("En Windows, detén el proceso de Uvicorn desde su terminal.")
+            self.run_async_cmd("taskkill /f /im python.exe", "Apagar Backend (Windows Taskkill)")
 
     def cmd_deploy_vercel(self):
-        cmd = f"cd {ROOT_DIR} && npx vercel --prod"
+        cmd = f"cd /d \"{ROOT_DIR}\" && npx vercel --prod"
         self.run_async_cmd(cmd, "Despliegue a Vercel")
 
     # -------------------------------------------------------------------------
