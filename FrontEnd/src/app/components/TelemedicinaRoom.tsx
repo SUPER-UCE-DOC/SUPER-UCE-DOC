@@ -607,7 +607,7 @@ function TelemedicinaRoomContent({
     sendRef.current = send;
   }, [send]);
 
-  // VAD & Grabación Continua STT (Doctor y Paciente)
+  // VAD & Grabación Continua STT (Doctor y Paciente) - Extraído directamente del Track Nativo de LiveKit
   useEffect(() => {
     if (muted) return;
 
@@ -621,8 +621,12 @@ function TelemedicinaRoomContent({
     let dataArray: Uint8Array;
     let isSpeaking = false;
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
-      stream = s;
+    // Usar la pista de audio local activa de LiveKit directamente (sin invocar getUserMedia secundario)
+    const mediaTrack = localAudioTrack?.publication?.track?.mediaStreamTrack;
+    if (!mediaTrack || mediaTrack.readyState !== "live") return;
+
+    try {
+      stream = new MediaStream([mediaTrack.clone()]);
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioContext = new AudioContextClass();
@@ -632,7 +636,7 @@ function TelemedicinaRoomContent({
       source.connect(analyser);
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      mediaRecorder = new MediaRecorder(s, { mimeType: 'audio/webm' });
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       let chunks: Blob[] = [];
 
       mediaRecorder.ondataavailable = (e) => {
@@ -700,8 +704,9 @@ function TelemedicinaRoomContent({
           }, 1500);
         }
       }, 100);
-
-    }).catch(e => console.error("Mic access denied for STT", e));
+    } catch (e) {
+      console.error("Error inicializando STT desde pista LiveKit", e);
+    }
 
     return () => {
       clearInterval(interval);
@@ -710,7 +715,7 @@ function TelemedicinaRoomContent({
       if (stream) stream.getTracks().forEach(t => t.stop());
       if (audioContext) audioContext.close();
     };
-  }, [muted, role, userName, roomCode]);
+  }, [muted, role, userName, roomCode, localAudioTrack]);
 
 
 

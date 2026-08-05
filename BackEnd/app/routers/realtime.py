@@ -299,8 +299,9 @@ def get_livekit_token(room_id: str, current_user: models.User = Depends(get_curr
     
     grant = VideoGrants(room_join=True, room=room_id)
     
+    user_identity = f"{current_user.email}_{current_user.role}_{current_user.id}"
     access_token = AccessToken(api_key, api_secret)
-    access_token = access_token.with_identity(current_user.email).with_name(current_user.full_name).with_grants(grant)
+    access_token = access_token.with_identity(user_identity).with_name(current_user.full_name).with_grants(grant)
     
     token_str = access_token.to_jwt()
     
