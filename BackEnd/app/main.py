@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime, invitations
+from app.routers import auth, appointments, prescriptions, pharmacies, ai, realtime, invitations, sign_language
 from app.services.sign_translator import sign_translator_service
 from app.services.chatbot import medical_chatbot
 
@@ -32,7 +32,7 @@ app = FastAPI(
 # Habilitar CORS para permitir que el frontend React (Vite) se comunique con el backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos en desarrollo. Modificar para producción.
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,6 +53,13 @@ def on_startup():
     logger.info("Inicializando modelos de Inteligencia Artificial (LSTM & Qwen)...")
     sign_translator_service.load_models()
     
+    logger.info("Precargando traductor de señas MarianMT en RAM...")
+    try:
+        from app.services.llm_translator import _load_model_if_needed
+        _load_model_if_needed()
+    except Exception as e:
+        logger.warning(f"No se pudo precargar MarianMT en el arranque: {e}")
+    
     logger.info("Arranque del servidor SUPER-UCE DOC completado.")
 
 # Registrar routers
@@ -63,6 +70,7 @@ app.include_router(invitations.router)
 app.include_router(pharmacies.router)
 app.include_router(ai.router)
 app.include_router(realtime.router)
+app.include_router(sign_language.router)
 
 @app.get("/")
 def root():

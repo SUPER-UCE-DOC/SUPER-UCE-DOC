@@ -71,7 +71,17 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
           avatar: getAvatarInitials(app.patient_name),
           status: app.status
         }));
-        setAppointmentsList(formatted);
+
+        const isSameDay = (d1: Date, d2: Date) => 
+          d1.getFullYear() === d2.getFullYear() && 
+          d1.getMonth() === d2.getMonth() && 
+          d1.getDate() === d2.getDate();
+
+        const todayApps = formatted.filter((app: any) => 
+          isSameDay(new Date(app.date_time_raw), new Date())
+        );
+
+        setAppointmentsList(todayApps);
       }
     } catch (err) {
       console.error("Error al cargar agenda:", err);
@@ -154,14 +164,31 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
 
               <div className="relative">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)", color: "white", fontWeight: 600 }}>
-                    <Clock size={11} className="inline mr-1" />
-                    Próximo paciente · {nextPatient.time}
+                  <span className="text-sm uppercase tracking-wider text-cyan-200 font-bold flex items-center gap-1.5">
+                    {nextPatient.status === "en_curso" ? (
+                      <>
+                        <span
+                          className="flex h-2.5 w-2.5 rounded-full mr-1"
+                          style={{
+                            background: "#008f87",
+                            boxShadow: "0 0 0 3px rgba(0,166,157,0.2)"
+                          }}
+                        ></span>
+                        Paciente en curso · {nextPatient.time}
+                      </>
+                    ) : (
+                      <>
+                        {nextPatient.status === "pendiente" ? "Paciente en espera de confirmación" : "Próximo paciente"} · {nextPatient.time}
+                      </>
+                    )}
                   </span>
                   {nextPatient.deaf && (
-                    <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(0,199,192,0.25)", color: "#00C7C0", fontWeight: 700 }}>
-                      🤟 LSE requerido
-                    </span>
+                    <>
+                      <span className="text-cyan-200/50">•</span>
+                      <span className="text-sm font-bold text-cyan-300">
+                        LSE requerido
+                      </span>
+                    </>
                   )}
                 </div>
 
@@ -177,24 +204,73 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
                     )}
                   </div>
                   <div>
-                    <h2 className="text-white" style={{ fontSize: "20px", fontWeight: 800 }}>{nextPatient.name}</h2>
-                    <p style={{ color: "rgba(255,255,255,0.70)", fontSize: "14px" }}>{nextPatient.condition}</p>
-                    <p style={{ color: "rgba(255,255,255,0.50)", fontSize: "12px", marginTop: "2px" }}>{nextPatient.type}</p>
+                    <h2 className="text-white text-2xl font-extrabold">{nextPatient.name}</h2>
+                    <p className="text-white/80 text-base font-medium mt-1">Condición: {nextPatient.condition}</p>
+                    <p className="text-white/60 text-sm mt-0.5">{nextPatient.type}</p>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onNavigate("teleconsult")}
-                  className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm transition-all"
-                  style={{ background: "#00A69D", color: "white", fontWeight: 800, fontSize: "15px", boxShadow: "0 4px 14px rgba(0,0,0,0.2)" }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#008f87")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#00A69D")}
-                >
-                  <Video size={18} />
-                  {inCall || nextPatient?.status === "en_curso" || !!localStorage.getItem("doctor_active_teleconsult")
-                    ? "Volver a Sala de Telemedicina"
-                    : "Entrar a Sala de Telemedicina"}
-                </button>
+                {(() => {
+                  const now = new Date();
+                  const appTime = new Date(nextPatient.date_time_raw);
+                  const diffMinutes = (appTime.getTime() - now.getTime()) / 60000;
+                  const isSameDay = (d1: Date, d2: Date) => 
+                    d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+
+                  const isTooEarly = !isSameDay(appTime, now);
+                  
+                  const formatRelativeDate = (date: Date) => {
+                    const today = new Date();
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+
+                    if (isSameDay(date, today)) return "Hoy";
+                    if (isSameDay(date, tomorrow)) return "Mañana";
+                    return `el ${date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
+                  };
+                  
+                  if (isTooEarly) {
+                    return (
+                      <button
+                        disabled
+                        className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-60 cursor-not-allowed"
+                      >
+                        <Clock size={18} />
+                        Disponible {formatRelativeDate(appTime)} a las {appTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </button>
+                    );
+                  }
+                  
+                  if (nextPatient.status === "pendiente") {
+                    return (
+                      <button
+                        onClick={() => onNavigate("teleconsult")}
+                        className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm transition-all"
+                        style={{ background: "#F59E0B", color: "white", fontWeight: 800, fontSize: "15px", boxShadow: "0 4px 14px rgba(0,0,0,0.2)" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#D97706")}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#F59E0B")}
+                      >
+                        <Video size={18} />
+                        Cita Pendiente (Gestionar en Sala de Espera)
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      onClick={() => onNavigate("teleconsult")}
+                      className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm transition-all"
+                      style={{ background: "#00A69D", color: "white", fontWeight: 800, fontSize: "15px", boxShadow: "0 4px 14px rgba(0,0,0,0.2)" }}
+                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#008f87")}
+                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#00A69D")}
+                    >
+                      <Video size={18} />
+                      {inCall || nextPatient?.status === "en_curso" || !!localStorage.getItem("doctor_active_teleconsult")
+                        ? "Volver a Sala de Telemedicina"
+                        : "Entrar a Sala de Telemedicina"}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           ) : (

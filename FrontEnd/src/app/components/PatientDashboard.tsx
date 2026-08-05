@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api, UploadedDocument } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
-  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square, ChevronDown, Calendar, Sun, Sunset
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
@@ -114,33 +115,37 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
   const renderViewContent = () => {
     if (pharmacyMedicine) return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
     if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
-    if (currentView === "teleconsult") return <TelemedicinaSala userName={userName} userAvatar={userAvatar} activeCallDoc={activeCallDoc} onEndCall={handleEndCall} />;
     if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
-    if (currentView === "appointments") return <CitasView onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "appointments") return <CitasView key="appointments" onJoinCall={handleJoinCall} inCall={inCall} />;
+    if (currentView === "appointments_new") return <CitasView key="appointments_new" onJoinCall={handleJoinCall} inCall={inCall} initialOpenModal={true} />;
     if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
     if (currentView === "settings") return <SettingsView role="patient" userName={userName} />;
     return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
   };
 
   return (
-    <>
-      {renderViewContent()}
-      {inCall && currentView !== "teleconsult" && (
-        <GlobalFloatingCallWidget
-          role="patient"
-          counterpartName={activeCallDoc?.name || "Dr. Jose Matos"}
-          counterpartAvatar={activeCallDoc?.avatar}
-          counterpartSpecialty={activeCallDoc?.specialty || "Cardiología Clínica"}
-          appointmentId={activeCallDoc?.id || 1}
-          onReturnToCall={() => navigate("teleconsult")}
-        />
+    <div className="flex-1 flex flex-col w-full h-full relative">
+      <div style={{ display: currentView === "teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
+        {renderViewContent()}
+      </div>
+      {inCall && (
+        <div style={currentView === "teleconsult" ? { display: "flex", flexDirection: "column", flex: 1, height: "100%" } : {}}>
+          <TelemedicinaSala
+            userName={userName}
+            userAvatar={userAvatar}
+            activeCallDoc={activeCallDoc}
+            onEndCall={handleEndCall}
+            isMinimized={currentView !== "teleconsult"}
+            onReturnToCall={() => navigate("teleconsult")}
+          />
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
 /* ─── SALA DE TELEMEDICINA — unificada y dinámica ─── */
-function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: () => void }) {
+function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMinimized, onReturnToCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: () => void; isMinimized?: boolean; onReturnToCall?: () => void; }) {
   const [resolvedDoc, setResolvedDoc] = useState<any>(activeCallDoc);
 
   useEffect(() => {
@@ -174,6 +179,8 @@ function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall }: { 
         if (onEndCall) onEndCall();
         else window.history.back();
       }}
+      isMinimized={isMinimized}
+      onReturnToCall={onReturnToCall}
     />
   );
 }
@@ -192,8 +199,11 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
             id: rx.id,
             medicine: rx.medicine,
             doctor: rx.doctor_name,
-            doses: `${rx.dose} · ${rx.frequency}`,
-            status: rx.status
+            dose: rx.dose,
+            frequency: rx.frequency,
+            status: rx.status,
+            issued_at: rx.issued_at,
+            expires_at: rx.expires_at
           }));
           setPrescriptionsList(formatted);
         }
@@ -205,6 +215,18 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
     }
     loadRx();
   }, []);
+
+  const formatDateSafe = (dateString?: string) => {
+    if (!dateString) return "No disponible";
+    try {
+      return new Date(dateString).toLocaleString("es-DO", {
+        day: "numeric", month: "numeric", year: "2-digit",
+        hour: "numeric", minute: "2-digit", hour12: true
+      });
+    } catch {
+      return "Inválida";
+    }
+  };
 
   return (
     <div className="p-6 space-y-5 anim-fade-in">
@@ -218,31 +240,54 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
           prescriptionsList.map((rx, rxIdx) => (
           <div
             key={rx.id}
-            className="bg-white rounded-xl p-5 anim-fade-in-up"
+            className="bg-white rounded-xl p-5 anim-fade-in-up flex flex-col justify-between"
             style={{
               boxShadow: "0 1px 6px rgba(0,0,0,0.07)",
               opacity: rx.status === "vencida" ? 0.65 : 1,
               animationDelay: `${120 + rxIdx * 60}ms`,
             }}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#F0FFFE" }}>
-                <Pill size={22} style={{ color: rx.status === "activa" ? "#00A69D" : "#9CA3AF" }} />
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#F0FFFE" }}>
+                  <Pill size={22} style={{ color: rx.status === "activa" ? "#00A69D" : "#9CA3AF" }} />
+                </div>
+                <span
+                  className={`text-sm px-4 py-1.5 rounded-lg font-bold border ${
+                    rx.status === "activa"
+                      ? "bg-green-50 text-green-600 border-green-200"
+                      : "bg-gray-50 text-gray-500 border-gray-200"
+                  }`}
+                >
+                  {rx.status === "activa" ? "Activa" : "Vencida"}
+                </span>
               </div>
-              <span
-                className="text-xs px-2 py-1 rounded-full"
-                style={{
-                  background: rx.status === "activa" ? "#DCFCE7" : "#F3F4F6",
-                  color: rx.status === "activa" ? "#10B981" : "#9CA3AF",
-                  fontWeight: 600,
-                }}
-              >
-                {rx.status === "activa" ? "✓ Activa" : "✗ Vencida"}
-              </span>
+              <p style={{ color: "#203A70", fontWeight: 700 }}>{rx.medicine}</p>
+              <p className="text-sm mt-1 mb-3" style={{ color: "#9CA3AF" }}>{rx.doctor}</p>
+              
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block mb-0.5">Dosis:</span>
+                  <span className="text-sm text-[#00A69D] font-medium leading-snug block">{rx.dose}</span>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block mb-0.5">Frecuencia:</span>
+                  <span className="text-sm text-[#00A69D] font-medium leading-snug block">{rx.frequency}</span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100 text-sm">
+                <div>
+                  <div className="text-gray-400 font-medium mb-0.5">Emitida el</div>
+                  <div className="font-semibold text-gray-700">{formatDateSafe(rx.issued_at)}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400 font-medium mb-0.5">Válida hasta</div>
+                  <div className="font-semibold text-gray-700">{formatDateSafe(rx.expires_at)}</div>
+                </div>
+              </div>
             </div>
-            <p style={{ color: "#203A70", fontWeight: 700 }}>{rx.medicine}</p>
-            <p className="text-sm mt-1" style={{ color: "#9CA3AF" }}>{rx.doctor}</p>
-            <p className="text-sm mt-0.5" style={{ color: "#00A69D", fontWeight: 500 }}>{rx.doses}</p>
+            
             {rx.status === "activa" && (
               <button
                   onClick={() => onFindPharmacy(rx.medicine)}
@@ -307,7 +352,7 @@ function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
 
   return (
     <span
-      className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-cyan-200"
+      className="px-3 py-1.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border border-cyan-200"
       style={{ background: "#E0F2FE", color: "#0284C7" }}
     >
       <span className="w-2 h-2 rounded-full bg-[#0284C7]" />
@@ -316,20 +361,143 @@ function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
   );
 }
 
+/* ─── CALENDARIO PERSONALIZADO ─── */
+function MonthCalendar({ selectedDate, onSelectDate, availableDaysStr, minDate }: { selectedDate: string; onSelectDate: (d: string) => void; availableDaysStr: string; minDate?: string }) {
+  const [currentDate, setCurrentDate] = useState(() => {
+    return selectedDate ? new Date(selectedDate) : new Date();
+  });
+
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const dayMap: Record<number, string> = { 1: 'L', 2: 'M', 3: 'X', 4: 'J', 5: 'V', 6: 'S', 0: 'D' };
+  const availableDaysArr = availableDaysStr ? availableDaysStr.split(",") : ["L","M","X","J","V"];
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+  const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+
+  // Week starts on Sunday as per the screenshot (DOM LUN MAR MIE JUE VIE SAB)
+  const days = [];
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+  // Pad the rest to always have exactly 42 cells (6 rows) to keep height stable
+  while (days.length < 42) {
+    days.push(null);
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let minDateObj = minDate ? new Date(minDate + "T00:00:00") : today;
+  let maxDateObj = new Date(today);
+  maxDateObj.setDate(maxDateObj.getDate() + 30); // Permitir agendar hasta 30 días en el futuro
+
+  return (
+    <div className="bg-transparent rounded-2xl pt-3" style={{ width: "100%", maxWidth: "340px", margin: "0 auto" }}>
+      <div className="flex justify-between items-center mb-4 px-2">
+        <button type="button" onClick={prevMonth} className="text-gray-400 font-bold hover:text-[#203A70]">&lt;</button>
+        <span className="font-bold text-[17px]" style={{ color: "#203A70" }}>
+          {monthNames[currentDate.getMonth()]} De {currentDate.getFullYear()}
+        </span>
+        <button type="button" onClick={nextMonth} className="text-gray-400 font-bold hover:text-[#203A70]">&gt;</button>
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+        {["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"].map(day => (
+          <div key={day} className="text-[10px] font-bold text-gray-400">{day}</div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {days.map((day, idx) => {
+          if (!day) return <div key={idx} className="w-9 h-9"></div>;
+          
+          const dateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+          const dateStr = dateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD local
+          
+          const isSelected = selectedDate === dateStr;
+          const dayLetter = dayMap[dateObj.getDay()];
+          const isAvailable = availableDaysArr.includes(dayLetter) && dateObj.getTime() >= minDateObj.getTime() && dateObj.getTime() <= maxDateObj.getTime();
+
+          return (
+            <button
+              key={idx}
+              type="button"
+              disabled={!isAvailable}
+              onClick={() => onSelectDate(dateStr)}
+              className="w-9 h-9 mx-auto flex items-center justify-center text-sm font-bold rounded-xl transition-all"
+              style={{
+                background: isSelected ? "#203A70" : "transparent",
+                color: isSelected ? "white" : isAvailable ? "#4B5563" : "#D1D5DB",
+                cursor: isAvailable ? "pointer" : "not-allowed"
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── CITAS ─── */
-function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; inCall?: boolean }) {
+function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt: any) => void; inCall?: boolean; initialOpenModal?: boolean }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(initialOpenModal || false);
   const [myDoctors, setMyDoctors] = useState<any[]>([]);
   const [form, setForm] = useState({ doctor_id: "", date: "", time: "", type: "Teleconsulta", reason: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [doctorSearchName, setDoctorSearchName] = useState("");
+  const doctorDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (myDoctors.length > 0 && form.doctor_id) {
+      const doc = myDoctors.find(d => d.id.toString() === form.doctor_id);
+      if (doc) setDoctorSearchName(`${doc.full_name} (${doc.specialty})`);
+      
+      // Obtener las horas bloqueadas para este doctor
+      api.getDoctorBookedSlots(form.doctor_id).then(slots => {
+        setBookedSlots(slots);
+      }).catch(err => console.error("Error fetching booked slots", err));
+    } else {
+      setBookedSlots([]);
+    }
+  }, [myDoctors, form.doctor_id]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
+        setShowDoctorDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredDoctors = myDoctors.filter(d => 
+    d.full_name.toLowerCase().includes(doctorSearchName.toLowerCase()) || 
+    d.specialty.toLowerCase().includes(doctorSearchName.toLowerCase())
+  );
 
   const loadAppointments = async () => {
     try {
       setLoading(true);
       const data = await api.getAppointments();
       if (Array.isArray(data)) {
+        data.sort((a: any, b: any) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime());
         setAppointmentsList(data);
       }
     } catch (err) {
@@ -345,6 +513,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
       try {
         const data = await api.getAppointments();
         if (Array.isArray(data)) {
+          data.sort((a: any, b: any) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime());
           setAppointmentsList(data);
         }
       } catch (e) {
@@ -373,9 +542,21 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
     }
   };
 
+  useEffect(() => {
+    if (initialOpenModal && myDoctors.length === 0) {
+      handleOpenModal();
+    }
+  }, [initialOpenModal]);
+
   const handleCreateAppointment = async () => {
     if (!form.doctor_id || !form.date || !form.time || !form.reason.trim()) {
       alert("Por favor completa la fecha, hora, médico y motivo de consulta.");
+      return;
+    }
+
+    const selectedDateTime = new Date(`${form.date}T${form.time}:00`);
+    if (selectedDateTime < new Date()) {
+      alert("No puedes agendar una cita para una fecha/hora que ya ha pasado.");
       return;
     }
 
@@ -407,7 +588,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
           style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
         >
-          <Plus size={16} /> Solicitar Cita
+          <Plus size={16} /> Agendar Cita
         </button>
       </div>
 
@@ -415,7 +596,7 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
         <div className="text-center py-8 text-gray-500 text-sm">Cargando mis citas...</div>
       ) : appointmentsList.length === 0 ? (
         <div className="text-center py-8 text-gray-500 text-sm bg-white rounded-2xl shadow-sm border border-gray-100">
-          No tienes citas agendadas aún. Haz clic en "Solicitar Cita" para programar una.
+          No tienes citas agendadas aún. Haz clic en "Agendar Cita" para programar una.
         </div>
       ) : (
         <div className="space-y-3">
@@ -439,53 +620,64 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
                 <div className="flex items-center gap-2 flex-wrap">
                   <p style={{ color: "#203A70", fontWeight: 700 }}>{apt.doctor_name || "Doctor"}</p>
                   {(apt.doctor_specialty || apt.specialty) && (
-                    <span className="text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                    <span className="px-4 py-1.5 rounded-lg text-sm font-bold border bg-teal-50 text-teal-600 border-teal-200">
                       {apt.doctor_specialty || apt.specialty}
                     </span>
                   )}
                 </div>
                 <p className="text-sm mt-0.5" style={{ color: "#6B7280" }}>
-                  {apt.type || "Teleconsulta"} · {formatDateSafe(apt.date_time)}
+                  {apt.type || "Teleconsulta"} · Agendada para {formatDateSafe(apt.date_time)}
                 </p>
-                {apt.reason && (
-                  <p className="text-xs mt-1 text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                    <strong>Motivo:</strong> {apt.reason}
-                  </p>
-                )}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(apt.real_start_time || apt.real_end_time) && (
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
+                      {!apt.real_end_time && (
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                        </span>
+                      )}
+                      <span>
+                        {apt.real_start_time && apt.real_end_time 
+                          ? `Atendida de ${new Date(new Date(apt.real_start_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})} a ${new Date(new Date(apt.real_end_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})}`
+                          : apt.real_start_time 
+                          ? `Iniciada a las ${new Date(new Date(apt.real_start_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})} (En curso)`
+                          : `Finalizada a las ${new Date(new Date(apt.real_end_time).getTime() - 4 * 60 * 60 * 1000).toLocaleTimeString('es-DO', {hour: 'numeric', minute:'2-digit', hour12: true})}`
+                        }
+                      </span>
+                    </div>
+                  )}
+                  {apt.reason && (
+                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                      {(apt.real_start_time || apt.real_end_time) && <span className="opacity-50">•</span>}
+                      <span>{apt.reason}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {apt.status === "en_curso" ? (
-                  <>
-                    <LiveElapsedBadge roomCode={apt.id} />
-                    <button
-                      onClick={() => onJoinCall?.(apt)}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
-                      style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
-                    >
-                      <Video size={15} /> {inCall ? "Volver a la Consulta" : "Unirse a Consulta"}
-                    </button>
-                  </>
+                  <button
+                    onClick={() => onJoinCall?.(apt)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-95 shadow-md cursor-pointer"
+                    style={{ background: "#00A69D", boxShadow: "0 3px 12px rgba(0,166,157,0.3)" }}
+                  >
+                    <Video size={15} /> {inCall ? "Volver a la Consulta" : "Unirse a Consulta"}
+                  </button>
                 ) : (
                   <>
                     <span
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold"
-                      style={{
-                        background: apt.status === "confirmada" ? "#DCFCE7" : apt.status === "completada" ? "#F3F4F6" : apt.status === "pendiente" ? "#FEF3C7" : "#FEE2E2",
-                        color: apt.status === "confirmada" ? "#10B981" : apt.status === "completada" ? "#6B7280" : apt.status === "pendiente" ? "#D97706" : "#EF4444",
-                      }}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-bold border ${
+                        apt.status === "confirmada" ? "bg-teal-50 text-teal-600 border-teal-200" : 
+                        apt.status === "completada" ? "bg-gray-50 text-gray-500 border-gray-200" : 
+                        apt.status === "pendiente" ? "bg-amber-50 text-amber-600 border-amber-200" : 
+                        "bg-red-50 text-red-600 border-red-200"
+                      }`}
                     >
-                      {apt.status === "confirmada" ? "✓ Confirmada" : apt.status === "completada" ? "✓ Finalizada" : apt.status === "pendiente" ? "⏳ Pendiente" : "✗ Rechazada"}
+                      {apt.status === "confirmada" ? "Confirmada" : apt.status === "completada" ? "Finalizada" : apt.status === "pendiente" ? "Pendiente" : "Rechazada"}
                     </span>
 
-                    {apt.status === "confirmada" && (
-                      <button
-                        onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel para iniciar la consulta. Tan pronto la inicie, se activará el botón 'Unirse' para ti.")}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[#203A70] text-xs font-bold bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-all duration-200 active:scale-95 cursor-pointer shadow-xs"
-                        title="Esperando a que el doctor inicie la videollamada"
-                      >
-                        <Clock size={14} className="text-[#00A69D]" /> Esperando Médico
-                      </button>
-                    )}
+
                   </>
                 )}
               </div>
@@ -494,12 +686,12 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
         </div>
       )}
 
-      {/* Modal Solicitar Cita */}
-      {showModal && (
+      {/* Modal Agendar Cita */}
+      {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowModal(false)}>
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Solicitar Cita Médica</h3>
+              <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Agendar Cita Médica</h3>
               <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
                 <Trash2 size={18} />
               </button>
@@ -507,80 +699,310 @@ function CitasView({ onJoinCall, inCall }: { onJoinCall?: (apt: any) => void; in
 
             <div className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Médico asignado</label>
+                <label className="block text-sm font-semibold text-gray-600 mb-1">Médico asignado</label>
                 {myDoctors.length === 0 ? (
-                  <div className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                  <div className="text-sm text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
                     No tienes médicos vinculados en tu lista. Primero debes aceptar una invitación de tu doctor.
                   </div>
                 ) : (
-                  <select
-                    value={form.doctor_id}
-                    onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-xl outline-none focus:border-[#00A69D]"
-                  >
-                    {myDoctors.map(doc => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.full_name} ({doc.specialty})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={doctorDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDoctorDropdown(!showDoctorDropdown)}
+                      className="w-full px-4 py-3 border rounded-xl flex items-center justify-between outline-none focus:border-[#00A69D] text-left transition-colors bg-white shadow-sm hover:bg-gray-50"
+                      style={{ borderColor: "#E5E7EB" }}
+                    >
+                      {form.doctor_id ? (
+                        (() => {
+                          const doc = myDoctors.find(d => d.id.toString() === form.doctor_id);
+                          if (!doc) return <span className="text-gray-400">Seleccionar médico...</span>;
+                          return (
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
+                                {doc.avatar && (doc.avatar.startsWith("http") || doc.avatar.startsWith("data:")) ? (
+                                  <img src={doc.avatar} alt={doc.full_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  getInitialsSafe(doc.full_name)
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-sm font-semibold" style={{ color: "#203A70", lineHeight: 1.2 }}>{doc.full_name}</div>
+                                <div className="text-sm text-gray-500 mt-0.5">{doc.specialty}</div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-gray-400">Seleccionar médico...</span>
+                      )}
+                      <ChevronDown size={18} className="text-gray-400" />
+                    </button>
+                    
+                    {showDoctorDropdown && myDoctors.length > 0 && (
+                      <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto anim-fade-in-up">
+                        {myDoctors.map(doc => (
+                          <div
+                            key={doc.id}
+                            onClick={() => {
+                              setDoctorSearchName(`${doc.full_name} (${doc.specialty})`);
+                              setForm({ ...form, doctor_id: doc.id.toString() });
+                              setShowDoctorDropdown(false);
+                            }}
+                            className="flex items-center gap-3 p-3 hover:bg-[#F0FFFE] cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                          >
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-sm overflow-hidden shadow-sm" style={{ background: "#203A70" }}>
+                              {doc.avatar && (doc.avatar.startsWith("http") || doc.avatar.startsWith("data:")) ? (
+                                <img src={doc.avatar} alt={doc.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                getInitialsSafe(doc.full_name)
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold" style={{ color: "#203A70" }}>{doc.full_name}</div>
+                              <div className="text-sm text-gray-500">{doc.specialty}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha</label>
-                  <input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Hora</label>
-                  <input
-                    type="time"
-                    value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
-                  />
-                </div>
-              </div>
+              {/* Custom Date & Time Picker */}
+              <div className="space-y-4">
+                {form.doctor_id ? (
+                  (() => {
+                    const doc = myDoctors.find(d => d.id.toString() === form.doctor_id);
+                    if (!doc) return null;
+                    
+                    const availableDaysStr = doc.available_days || "L,M,X,J,V";
+                    const startTimeStr = doc.start_time || "08:00";
+                    const endTimeStr = doc.end_time || "17:00";
+                    
+                    const dayMap: Record<number, string> = { 1: 'L', 2: 'M', 3: 'X', 4: 'J', 5: 'V', 6: 'S', 0: 'D' };
+                    const availableDaysArr = availableDaysStr.split(",");
+                    
+                    // Generate time slots for selected date
+                    const timeSlots = [];
+                    if (form.date) {
+                      const [sH, sM] = startTimeStr.split(":").map(Number);
+                      const [eH, eM] = endTimeStr.split(":").map(Number);
+                      let currentMinutes = sH * 60 + sM;
+                      const endMinutes = eH * 60 + eM;
+                      
+                      const selectedDateObj = new Date(form.date);
+                      const now = new Date();
+                      // Force time to 0 to compare dates accurately
+                      const isToday = selectedDateObj.toISOString().split("T")[0] === now.toISOString().split("T")[0];
+                      const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo de consulta</label>
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D]"
-                >
-                  <option value="Teleconsulta">Teleconsulta (Videollamada)</option>
-                  <option value="Presencial">Presencial en Consultorio</option>
-                </select>
-              </div>
+                      while (currentMinutes < endMinutes) {
+                        // If it's today, only show future time slots (at least 30 mins from now)
+                        if (!isToday || currentMinutes > nowMinutes + 15) {
+                          const h = Math.floor(currentMinutes / 60).toString().padStart(2, '0');
+                          const m = (currentMinutes % 60).toString().padStart(2, '0');
+                          
+                          // Check if slot is booked
+                          const slotPrefixT = `${form.date}T${h}:${m}`;
+                          const slotPrefixSpace = `${form.date} ${h}:${m}`;
+                          const isBooked = bookedSlots.some(slot => slot.startsWith(slotPrefixT) || slot.startsWith(slotPrefixSpace));
+                          
+                          if (!isBooked) {
+                            timeSlots.push(`${h}:${m}`);
+                          }
+                        }
+                        currentMinutes += 30; // 30 min intervals
+                      }
+                    }
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo de la consulta</label>
-                <textarea
-                  value={form.reason}
-                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                  placeholder="Describe tus síntomas o el motivo de la cita (ej. dolor de cabeza continuo)..."
-                  className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none"
-                />
-              </div>
+                    return (
+                      <div className="space-y-4">
+                        {!form.date ? (
+                          <div className="anim-fade-in-up">
+                            <label className="block text-sm font-semibold text-gray-600 mb-2">Paso 1: Selecciona un día</label>
+                            <div className="border rounded-2xl p-1 bg-white shadow-sm" style={{ borderColor: "#E5E7EB" }}>
+                              <MonthCalendar
+                                selectedDate={form.date}
+                                onSelectDate={(d) => setForm({ ...form, date: d, time: "" })}
+                                availableDaysStr={availableDaysStr}
+                                minDate={new Date().toLocaleDateString('en-CA')}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="anim-fade-in space-y-4">
+                            <div 
+                              onClick={() => setForm({ ...form, date: "", time: "" })}
+                              className="flex justify-between items-center p-3 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[#0284C7]">
+                                  <Calendar size={16} />
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Día seleccionado</div>
+                                  <div className="font-bold text-sm text-[#203A70] capitalize">
+                                    {new Date(form.date + "T00:00:00").toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-sm font-bold text-[#00A69D]">Cambiar</span>
+                            </div>
 
-              <button
-                onClick={handleCreateAppointment}
-                disabled={isSubmitting || myDoctors.length === 0}
-                className="w-full py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md"
-                style={{ background: "#00A69D" }}
-              >
-                {isSubmitting ? "Enviando solicitud..." : "Enviar Solicitud de Cita"}
-              </button>
+                            {!form.time ? (
+                              <div className="anim-fade-in-up">
+                                <label className="block text-sm font-semibold text-gray-600 mb-2">Paso 2: Selecciona la hora</label>
+                                {timeSlots.length === 0 ? (
+                                  <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                                    No hay horarios disponibles para este día.
+                                  </div>
+                                ) : (
+                                  <div className="bg-white p-4 rounded-2xl border shadow-sm max-h-64 overflow-y-auto" style={{ borderColor: "#E5E7EB" }}>
+                                    {(() => {
+                                      const format12Hour = (time24: string) => {
+                                        const [h, m] = time24.split(":").map(Number);
+                                        const ampm = h >= 12 ? 'PM' : 'AM';
+                                        const h12 = h % 12 || 12;
+                                        return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                      };
+                                      
+                                      const morningSlots = timeSlots.filter(t => parseInt(t.split(":")[0]) < 12);
+                                      const afternoonSlots = timeSlots.filter(t => parseInt(t.split(":")[0]) >= 12);
+
+                                      return (
+                                        <>
+                                          {morningSlots.length > 0 && (
+                                            <div className="mb-5">
+                                              <div className="flex items-center gap-2 mb-3 text-[#203A70]">
+                                                <Sun size={16} />
+                                                <span className="font-bold text-sm">Mañana</span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                {morningSlots.map(time => (
+                                                  <button
+                                                    key={time}
+                                                    type="button"
+                                                    onClick={() => setForm({ ...form, time })}
+                                                    className="py-2.5 text-sm rounded-xl font-bold transition-all border hover:border-[#00A69D]"
+                                                    style={{
+                                                      background: form.time === time ? "#203A70" : "white",
+                                                      color: form.time === time ? "white" : "#4B5563",
+                                                      borderColor: form.time === time ? "#203A70" : "#E5E7EB"
+                                                    }}
+                                                  >
+                                                    {format12Hour(time)}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {afternoonSlots.length > 0 && (
+                                            <div>
+                                              <div className="flex items-center gap-2 mb-3 text-[#203A70]">
+                                                <Sunset size={16} />
+                                                <span className="font-bold text-sm">Tarde</span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                {afternoonSlots.map(time => (
+                                                  <button
+                                                    key={time}
+                                                    type="button"
+                                                    onClick={() => setForm({ ...form, time })}
+                                                    className="py-2.5 text-sm rounded-xl font-bold transition-all border hover:border-[#00A69D]"
+                                                    style={{
+                                                      background: form.time === time ? "#203A70" : "white",
+                                                      color: form.time === time ? "white" : "#4B5563",
+                                                      borderColor: form.time === time ? "#203A70" : "#E5E7EB"
+                                                    }}
+                                                  >
+                                                    {format12Hour(time)}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="anim-fade-in-up">
+                                <div 
+                                  onClick={() => setForm({ ...form, time: "" })}
+                                  className="flex justify-between items-center p-3 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors mb-4"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[#0284C7]">
+                                      <Clock size={16} />
+                                    </div>
+                                    <div>
+                                      <div className="text-sm text-gray-500">Hora seleccionada</div>
+                                      <div className="font-bold text-sm text-[#203A70]">
+                                        {(() => {
+                                          const [h, m] = form.time.split(":").map(Number);
+                                          const ampm = h >= 12 ? 'PM' : 'AM';
+                                          const h12 = h % 12 || 12;
+                                          return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                        })()}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="text-sm font-bold text-[#00A69D]">Cambiar</span>
+                                </div>
+
+                                <div className="space-y-4 bg-white p-4 rounded-2xl border shadow-sm" style={{ borderColor: "#E5E7EB" }}>
+                                  <label className="block text-sm font-semibold text-[#203A70] mb-2 border-b pb-2">Paso 3: Detalles de consulta</label>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-semibold text-gray-600 mb-1">Tipo de consulta</label>
+                                    <select
+                                      value={form.type}
+                                      onChange={(e) => setForm({ ...form, type: e.target.value })}
+                                      className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] bg-gray-50 text-sm"
+                                    >
+                                      <option value="Teleconsulta">Teleconsulta (Videollamada)</option>
+                                      <option value="Presencial">Presencial en Consultorio</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-semibold text-gray-600 mb-1">Motivo de la consulta</label>
+                                    <textarea
+                                      value={form.reason}
+                                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                                      placeholder="Describe tus síntomas (ej. dolor de cabeza continuo)..."
+                                      className="w-full px-3 py-2 border rounded-xl outline-none focus:border-[#00A69D] h-20 resize-none bg-gray-50 text-sm"
+                                    />
+                                  </div>
+
+                                  <button
+                                    onClick={handleCreateAppointment}
+                                    disabled={isSubmitting || !form.reason.trim()}
+                                    className="w-full mt-2 py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+                                    style={{ background: "#00A69D" }}
+                                  >
+                                    {isSubmitting ? "Enviando..." : "Confirmar Cita"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-sm text-gray-400 italic">Selecciona un médico para ver su disponibilidad.</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1024,7 +1446,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ minWidth: `${sidebarWidth}px` }}>
-          <p className="text-xs font-bold px-2 py-2" style={{ color: "#9CA3AF" }}>Tus consultas</p>
+          <p className="text-sm font-bold px-2 py-2" style={{ color: "#9CA3AF" }}>Tus consultas</p>
           {sessions.map(s => (
             <div
               key={s.id}
@@ -1153,7 +1575,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                       <div key={doc.doc_id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[13px] text-gray-700 shadow-2xs transition-all hover:bg-gray-100/70">
                         <FileText size={15} className="text-[#203A70] shrink-0" />
                         <span className="font-medium max-w-[190px] truncate" title={doc.filename}>{doc.filename}</span>
-                        <span className="text-[11px] text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200 uppercase font-semibold tracking-wider">Procesado</span>
+                        <span className="text-sm text-gray-500 bg-white px-2 py-1 rounded-lg border border-gray-200 uppercase font-semibold tracking-wider">Procesado</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveFile(doc.doc_id)}

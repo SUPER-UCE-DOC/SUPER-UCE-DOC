@@ -111,3 +111,15 @@ button, [role="button"], a {
 .anim-scale-out {
   animation: custom-scale-out 0.25s ease-out forwards;
 }
+
+/* Alto Contraste para Accesibilidad */
+body.high-contrast-mode {
+  filter: contrast(118%);
+}
+body.high-contrast-mode p, 
+body.high-contrast-mode span, 
+body.high-contrast-mode h1, 
+body.high-contrast-mode h2, 
+body.high-contrast-mode h3 {
+  font-weight: 600 !important;
+}

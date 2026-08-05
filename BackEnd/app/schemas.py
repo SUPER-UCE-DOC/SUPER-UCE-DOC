@@ -58,9 +58,32 @@ class UserResponse(UserBase):
     id: int
     avatar: Optional[str] = None
     created_at: datetime.datetime
+    is_verified: bool = False
+    requires_verification: Optional[bool] = False
+    # settings
+    available_days: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    firma: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class VerifyCodeResponse(BaseModel):
+    message: str
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
+    user: Optional[UserResponse] = None
+
+class UserSettingsUpdate(BaseModel):
+    available_days: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    firma: Optional[str] = None
 
 class AvatarUpdateRequest(BaseModel):
     avatar_url: str
@@ -90,6 +113,11 @@ class DoctorResponse(BaseModel):
     lon: float
     full_name: str
     email: str
+    avatar: Optional[str] = None
+    available_days: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    firma: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -150,6 +178,8 @@ class AppointmentResponse(BaseModel):
     doctor_specialty: Optional[str] = None
     patient_avatar: Optional[str] = None
     doctor_avatar: Optional[str] = None
+    real_start_time: Optional[datetime.datetime] = None
+    real_end_time: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
@@ -163,6 +193,7 @@ class PrescriptionCreate(BaseModel):
     dose: str
     frequency: str
     expires_in_days: int = 30
+    expires_at_date: Optional[str] = None
 
 class PrescriptionResponse(BaseModel):
     id: str
@@ -219,6 +250,7 @@ class TranslationResponse(BaseModel):
 class SummarizeRequest(BaseModel):
     appointment_id: int
     conversation_transcript: str
+    clinical_notes: Optional[str] = None
 
 class SummarizeResponse(BaseModel):
     summary: str

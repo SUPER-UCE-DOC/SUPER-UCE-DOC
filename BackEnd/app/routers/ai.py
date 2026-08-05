@@ -36,6 +36,55 @@ def translate_sign_language(
     )
 
 
+@router.post("/telemedicina-stt")
+def telemedicina_stt(
+    audio: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Recibe audio en tiempo real de la sala de telemedicina (Doctor o Paciente)
+    y devuelve la transcripción ultra rápida usando Deepgram Nova-3.
+    """
+    import requests
+    import re
+    from app.config import settings
+    import logging
+    logger = logging.getLogger("telemedicina_stt")
+    
+    if not settings.OPENROUTER_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY no configurada")
+        
+    try:
+        audio_bytes = audio.file.read()
+        mime_type = audio.content_type or "audio/webm"
+        
+        files = {
+            "file": ("audio.webm", audio_bytes, mime_type)
+        }
+        data = {
+            "model": "deepgram/nova-3",
+            "language": "es"
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            "HTTP-Referer": "http://localhost:3000",
+            "X-Title": "SUPER-UCE DOC"
+        }
+        
+        res = requests.post("https://openrouter.ai/api/v1/audio/transcriptions", headers=headers, files=files, data=data, timeout=10)
+        
+        if res.status_code == 200:
+            transcription = res.json().get("text", "").strip()
+            transcription = re.sub(r'^(Transcripción(:|\s)|Respuesta:)\s*', '', transcription, flags=re.IGNORECASE).strip(' "')
+            return {"text": transcription}
+        else:
+            logger.error(f"Error STT: {res.status_code} {res.text}")
+            return {"text": ""}
+            
+    except Exception as e:
+        logger.error(f"Error procesando audio STT: {e}")
+        return {"text": ""}
 @router.post("/summarize", response_model=schemas.SummarizeResponse)
 def summarize_consultation(
     req: schemas.SummarizeRequest,
@@ -53,23 +102,47 @@ def summarize_consultation(
             detail="Cita no encontrada."
         )
 
-    # Crear prompt para resumen médico
+    notes_text = f"\nNotas Clínicas del Especialista:\n{req.clinical_notes}\n" if req.clinical_notes else ""
+    
+    # Crear prompt para resumen médico y Triage con contexto empático para lenguaje de señas (pacientes sordos)
     prompt = (
-        "Actúa como un transcriptor médico profesional. "
-        "A partir de la siguiente conversación y registros entre el médico y el paciente sordo, "
-        "elabora un Resumen Clínico estructurado con las siguientes secciones: "
-        "SÍNTOMAS DETECTADOS, SUGERENCIA DE DIAGNÓSTICO, y RECOMENDACIONES TRATAMIENTO. "
-        "Mantén el tono formal y conciso.\n"
+        "Actúa como un transcriptor médico y clasificador de triaje profesional.\n"
+        "CONTEXTO CLÍNICO IMPORTANTE: La plataforma SUPER-UCE DOC atiende a pacientes sordos o sordomudos "
+        "que se comunican mediante traducción de lenguaje de señas en vivo (LSE/ASL). Debido a las limitaciones "
+        "tecnológicas del modelo de visión e IA de traducción de señas, algunas frases de la transcripción del paciente pueden "
+        "resultar telegráficas, cortas, fragmentadas o con estructura gramatical atípica.\n"
+        "INSTRUCCIÓN DE EVALUACIÓN CRÍTICA: Jamás interpretes la brevedad, repetición o incoherencia gramatical de las señas "
+        "como un signo de trastorno mental, confusión psiquiátrica, demencia, desorientación ni 'locura'. Concéntrate "
+        "únicamente en extraer los síntomas físicos u orgánicos reales comunicados (ej. dolor, mareo, fiebre, malestar) y "
+        "las indicaciones del médico.\n\n"
+        "A partir de la conversación y registros entre el médico y el paciente, elabora un Resumen Clínico estructurado "
+        "con las siguientes secciones:\n"
+        "1. SÍNTOMAS DETECTADOS\n"
+        "2. SUGERENCIA DE DIAGNÓSTICO\n"
+        "3. RECOMENDACIONES Y TRATAMIENTO\n\n"
+        "Además, analiza el nivel de urgencia o gravedad del paciente basándote estrictamente en los síntomas físicos "
+        "descritos y coloca AL FINAL del texto la etiqueta exacta de su estado, que DEBE SER UNA de estas tres:\n"
+        "[STATUS: estable], [STATUS: seguimiento] o [STATUS: critico].\n"
+        "- estable: Todo está normal, sin riesgo.\n"
+        "- seguimiento: Síntomas moderados, infecciones leves, o requiere estar pendiente.\n"
+        "- critico: Dolor agudo, riesgo inminente, o requiere atención inmediata.\n\n"
+        "Mantén un tono formal, empático y conciso.\n\n"
         f"Conversación/Registros:\n{req.conversation_transcript}\n"
+        f"{notes_text}\n"
         "Resumen Clínico IA:"
     )
 
-    summary_text = ""
+    if (not req.conversation_transcript or req.conversation_transcript == "Sin conversación registrada.") and not req.clinical_notes:
+        summary_text = "No se registró ninguna conversación de voz ni se añadieron notas clínicas durante esta consulta.\n\n[STATUS: estable]"
+    else:
+        summary_text = ""
+        
     # Usar OpenRouter o HuggingFace para resumir
     from app.config import settings
     import requests
+    import re
     
-    if settings.OPENROUTER_API_KEY:
+    if not summary_text and settings.OPENROUTER_API_KEY:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
@@ -77,10 +150,11 @@ def summarize_consultation(
                 "HTTP-Referer": "http://localhost:3000",
                 "X-Title": "SUPER-UCE DOC"
             }
+            # Utilizando el mismo modelo que el chat de IA
             payload = {
-                "model": settings.OPENROUTER_MODEL,
+                "model": settings.OPENROUTER_MODEL, 
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2
+                "temperature": 0.1
             }
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=10)
             if res.status_code == 200:
@@ -107,22 +181,68 @@ def summarize_consultation(
     if not summary_text:
         summary_text = (
             "Resumen no disponible. No se pudo generar la transcripción o el análisis automático debido a "
-            "un error de conexión con la IA. El especialista deberá revisar manualmente el registro de la cita."
+            "un error de conexión con la IA. El especialista deberá revisar manualmente el registro de la cita.\n[STATUS: seguimiento]"
         )
 
+    # Extraer el STATUS del summary_text
+    risk_status = "estable" # Default
+    status_match = re.search(r'\[STATUS:\s*(estable|seguimiento|critico)\]', summary_text, re.IGNORECASE)
+    if status_match:
+        risk_status = status_match.group(1).lower()
+        # Remover el tag del texto final del resumen
+        summary_text = re.sub(r'\[STATUS:\s*(estable|seguimiento|critico)\]', '', summary_text, flags=re.IGNORECASE).strip()
+
+    # Actualizar estado del paciente
+    patient = db.query(models.Patient).filter(models.Patient.id == appointment.patient_id).first()
+    if patient:
+        patient.risk_status = risk_status
+        db.commit()
+
     # Guardar en expediente clínico
+    final_translation = req.conversation_transcript
+    if req.clinical_notes:
+        final_translation += f"\n\n--- NOTAS CLÍNICAS DEL DOCTOR ---\n{req.clinical_notes}"
+        
     new_record = models.ClinicalHistory(
         patient_id=appointment.patient_id,
         doctor_id=appointment.doctor_id,
         date=datetime.datetime.utcnow(),
         gestures_detected="Conversación grabada",
-        translation_text=req.conversation_transcript[:500],
+        translation_text=final_translation,
         summary_ia=summary_text
     )
     db.add(new_record)
+    db.commit()
+    
+    # --- Agentic Memory: Extracción de Aprendizaje Continuo ---
+    def extract_and_save():
+        try:
+            from app.database import SessionLocal
+            from app.services.knowledge_extraction_service import knowledge_extraction_service
+            from app.services.patient_memory_service import patient_memory_service
+            
+            bg_db = SessionLocal()
+            facts = knowledge_extraction_service.extract_from_medical_summary(summary_text)
+            for fact in facts:
+                patient_memory_service.upsert_memory(
+                    db=bg_db,
+                    patient_id=appointment.patient_id,
+                    memory_type=fact.get("type", "dato_clinico"),
+                    value=fact.get("value", ""),
+                    origin="teleconsulta"
+                )
+            bg_db.close()
+        except Exception as e:
+            print(f"Error en extracción asíncrona de resumen médico: {e}")
+            
+    import threading
+    threading.Thread(target=extract_and_save).start()
+    # -----------------------------------------------------------
     
     # Actualizar cita a completada
     appointment.status = "completada"
+    if not appointment.real_end_time:
+        appointment.real_end_time = datetime.datetime.utcnow()
     
     # Cambiar estado del médico a libre
     doc = db.query(models.Doctor).filter(models.Doctor.id == appointment.doctor_id).first()
@@ -220,8 +340,9 @@ def medical_chatbot_query(
         chat_history = [{"role": m.role, "content": m.content} for m in db_messages]
 
     # Extraer contexto directo de la base de datos para inyectarlo en el LLM (RAG Personalizado)
-    now = datetime.datetime.now()
-    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    # Usar huso horario de República Dominicana (UTC-4) para evitar discrepancias
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-4)))
+    now_str = now.strftime("%Y-%m-%d %I:%M %p")
     user_context = f"FECHA Y HORA ACTUAL DEL SISTEMA: {now_str}\n"
     user_context += f"Nombre del paciente: {current_user.full_name}\n\n"
     
@@ -249,39 +370,56 @@ def medical_chatbot_query(
                 doc_prof = db.query(models.Doctor).filter(models.Doctor.id == appt.doctor_id).first()
                 doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
                 doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
-                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                # appt.date_time is already stored in local time
+                local_time = appt.date_time 
+                date_str = local_time.strftime("%d/%m/%Y a las %I:%M %p")
                 st_lbl = "Confirmada (agendada)" if appt.status == "confirmada" else "Pendiente de aprobación"
                 user_context += f"- Cita FUTURA PROGRAMADA #{appt.id}: Fecha: {date_str}, Médico: {doc_name}, Tipo: {appt.type}, Estado: {st_lbl}. Motivo: {appt.reason or 'Sin especificar'}\n"
         else:
             user_context += "EL PACIENTE TIENE CERO (0) CITAS FUTURAS O PENDIENTES. NO TIENE NINGUNA CITA PRÓXIMA PROGRAMADA EN EL SISTEMA.\n"
 
-        user_context += "\n--- CONSULTAS PASADAS Y FINALIZADAS (YA SE LLEVARON A CABO) ---\n"
+        user_context += "\n--- CONSULTAS PASADAS Y FINALIZADAS CON SUS RESÚMENES CLÍNICOS ---\n"
+        
+        histories = db.query(models.ClinicalHistory).filter(
+            models.ClinicalHistory.patient_id == current_user.id
+        ).order_by(models.ClinicalHistory.date.desc()).all()
+
         if past_completed_apps:
             for appt in past_completed_apps:
                 doc_user = db.query(models.User).filter(models.User.id == appt.doctor_id).first()
                 doc_prof = db.query(models.Doctor).filter(models.Doctor.id == appt.doctor_id).first()
                 doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
                 doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
-                date_str = appt.date_time.strftime("%d/%m/%Y a las %I:%M %p")
+                
+                local_time = appt.date_time 
+                date_str = local_time.strftime("%d/%m/%Y a las %I:%M %p")
+                
                 linked_rxs = db.query(models.Prescription).filter(models.Prescription.appointment_id == appt.id).all()
-                rx_str = " | Recetado en esta cita: " + ", ".join([f"{p.medicine} ({p.dose})" for p in linked_rxs]) if linked_rxs else " | Recetado en esta cita: Ninguno"
-                user_context += f"- Consulta REALIZADA el {date_str} con el {doc_name}. Motivo: {appt.reason or 'Sin especificar'}{rx_str}\n"
+                rx_str = " | Recetado: " + ", ".join([f"{p.medicine} ({p.dose})" for p in linked_rxs]) if linked_rxs else " | Recetado: Ninguno"
+                
+                matched_summary = "No disponible"
+                for h in histories:
+                    if h.doctor_id == appt.doctor_id:
+                        local_h_date = h.date - datetime.timedelta(hours=4)
+                        if abs((local_h_date - local_time).total_seconds()) < 86400:
+                            matched_summary = h.summary_ia or h.translation_text
+                            histories.remove(h)
+                            break
+                            
+                time_info = f"Programada para el {date_str}"
+                if appt.real_start_time:
+                    real_start_local = appt.real_start_time - datetime.timedelta(hours=4)
+                    time_info += f" (Iniciada realmente a las {real_start_local.strftime('%I:%M %p')}"
+                    if appt.real_end_time:
+                        real_end_local = appt.real_end_time - datetime.timedelta(hours=4)
+                        time_info += f", finalizada a las {real_end_local.strftime('%I:%M %p')})"
+                    else:
+                        time_info += ")"
+                    
+                user_context += f"- Consulta: {time_info} con el {doc_name}. Motivo: {appt.reason or 'Sin especificar'}{rx_str}\n"
+                user_context += f"  Resumen Clínico y Notas: {matched_summary}\n\n"
         else:
-            user_context += "EL PACIENTE AÚN NO HA TENIDO NINGUNA CONSULTA REALIZADA O FINALIZADA (0 CONSULTAS PASADAS).\n"
-
-        # 3. Resúmenes clínicos detallados de consultas finalizadas
-        histories = db.query(models.ClinicalHistory).filter(
-            models.ClinicalHistory.patient_id == current_user.id
-        ).order_by(models.ClinicalHistory.date.desc()).all()
-        if histories:
-            user_context += "\nRESÚMENES CLÍNICOS DE CONSULTAS FINALIZADAS:\n"
-            for h in histories:
-                doc_user = db.query(models.User).filter(models.User.id == h.doctor_id).first()
-                doc_prof = db.query(models.Doctor).filter(models.Doctor.id == h.doctor_id).first()
-                doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
-                doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
-                h_date = h.date.strftime("%d/%m/%Y a las %I:%M %p")
-                user_context += f"- Consulta realizada el {h_date} con {doc_name}:\n  Resumen Clínico: {h.summary_ia or h.translation_text}\n"
+            user_context += "EL PACIENTE AÚN NO HA TENIDO NINGUNA CONSULTA REALIZADA O FINALIZADA.\n"
 
         # 4. Recetas y Medicamentos asignados al paciente en el sistema
         all_rxs = db.query(models.Prescription).filter(
@@ -295,9 +433,11 @@ def medical_chatbot_query(
                 doc_prof = db.query(models.Doctor).filter(models.Doctor.id == rx.doctor_id).first()
                 doc_spec = doc_prof.specialty if doc_prof else "Medicina General"
                 doc_name = f"{doc_user.full_name} ({doc_spec})" if doc_user else "Doctor"
-                issued_str = rx.issued_at.strftime("%d/%m/%Y") if rx.issued_at else "Sin fecha"
+                issued_str = rx.issued_at.strftime("%d/%m/%Y a las %I:%M %p") if rx.issued_at else "Sin fecha"
+                expires_str = rx.expires_at.strftime("%d/%m/%Y a las %I:%M %p") if rx.expires_at else "Sin fecha"
                 
-                is_expired = (rx.expires_at and now > rx.expires_at)
+                now_utc = datetime.datetime.utcnow()
+                is_expired = (rx.expires_at and now_utc > rx.expires_at)
                 if rx.status == "despachada":
                     st_desc = "DESPACHADA Y VENCIDA (El paciente YA la consiguió / retiró en la farmacia. YA NO ESTÁ ACTIVA ni vigente para volver a reclamar)."
                 elif rx.status == "vencida" or is_expired:
@@ -305,7 +445,7 @@ def medical_chatbot_query(
                 else:
                     st_desc = "ACTIVA Y VIGENTE (Pendiente de ser despachada/retirada en farmacia)."
 
-                user_context += f"- Receta #{rx.id}: Medicamento {rx.medicine} ({rx.dose}), Frecuencia: {rx.frequency}. Estado actual: {st_desc}. Emitida el {issued_str} por {doc_name}.\n"
+                user_context += f"- Receta #{rx.id}: Medicamento {rx.medicine} ({rx.dose}), Frecuencia: {rx.frequency}. Estado actual: {st_desc}. Emitida el {issued_str} por {doc_name}. Válida hasta {expires_str}.\n"
         else:
             user_context += "EL PACIENTE TIENE CERO (0) RECETAS O MEDICAMENTOS REGISTRADOS EN LA PLATAFORMA.\n"
 

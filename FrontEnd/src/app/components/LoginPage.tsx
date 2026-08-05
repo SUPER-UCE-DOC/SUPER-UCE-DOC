@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } from "lucide-react";
 import { api } from "../utils/api";
+import { EmailVerificationModal } from "./EmailVerificationModal";
 
 const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
 
@@ -194,6 +195,8 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
   const [phone, setPhone] = useState("");
   const [doctorGender, setDoctorGender] = useState<"M" | "F">("M");
   const [regStep, setRegStep] = useState<1 | 2>(1);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,7 +231,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           fullNameToSend = `${prefix} ${cleanName}`;
         }
 
-        await api.register({
+        const regRes = await api.register({
           email,
           password,
           full_name: fullNameToSend,
@@ -247,16 +250,37 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           lat: 18.46,
           lon: -69.30
         });
+
+        if (regRes && regRes.requires_verification) {
+          setLoading(false);
+          setVerificationEmail(email);
+          setShowVerificationModal(true);
+          return;
+        }
       }
 
       // Realizar login pasando el rol solicitado
       await api.login(email, password, selectedRole);
       const profile = await api.getMe();
 
+      if (profile.role === "patient") {
+        if (localStorage.getItem("lsa_preference") === null) {
+          localStorage.setItem("lsa_preference", "true");
+        }
+        if (localStorage.getItem("settings_video_subtitles_enabled") === null) {
+          localStorage.setItem("settings_video_subtitles_enabled", "true");
+        }
+      }
+
       setLoading(false);
       onLogin(profile.role as Role, profile.full_name, profile.avatar);
     } catch (err: any) {
-      setError(err.message || "Ocurrió un error en la autenticación.");
+      if (err.message && (err.message.includes("verificación") || err.message.includes("verificar"))) {
+        setVerificationEmail(email);
+        setShowVerificationModal(true);
+      } else {
+        setError(err.message || "Ocurrió un error en la autenticación.");
+      }
       setLoading(false);
     }
   };
@@ -940,6 +964,16 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
         <p className="text-center mt-6 text-xs" style={{ color: "#9CA3AF" }}>
           © 2026 SUPER-UCE DOC · Universidad Central del Este
         </p>
+
+        <EmailVerificationModal
+          isOpen={showVerificationModal}
+          email={verificationEmail}
+          onClose={() => setShowVerificationModal(false)}
+          onSuccess={(user) => {
+            setShowVerificationModal(false);
+            onLogin(user.role as Role, user.full_name, user.avatar);
+          }}
+        />
       </div>
     </div>
   );

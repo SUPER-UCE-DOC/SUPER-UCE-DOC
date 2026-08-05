@@ -206,6 +206,13 @@ def end_room_session(room_id: str):
     session["status"] = "ended"
     session["doctor_time"] = 0
     session["patient_time"] = 0
+    
+    # Limpiar estado en memoria para que no persista si se reutiliza el room_id
+    if clean_room in room_subtitles_store:
+        room_subtitles_store.pop(clean_room, None)
+    if clean_room in room_comments_store:
+        room_comments_store.pop(clean_room, None)
+        
     return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
 
 from pydantic import BaseModel
@@ -273,3 +280,31 @@ def post_room_subtitle(room_id: str, payload: SubtitlePayload):
     
     room_subtitles_store[clean_room].append(sub_dict)
     return {"status": "ok", "subtitles": room_subtitles_store[clean_room]}
+
+from fastapi import Depends
+from app.routers.auth import get_current_user
+from app import models
+import os
+
+try:
+    from livekit.api import AccessToken, VideoGrants
+except ImportError:
+    pass
+
+@router.get("/livekit-token/{room_id}")
+def get_livekit_token(room_id: str, current_user: models.User = Depends(get_current_user)):
+    # You can customize these from environment variables or config
+    api_key = os.environ.get("LIVEKIT_API_KEY", "devkey")
+    api_secret = os.environ.get("LIVEKIT_API_SECRET", "mi_super_secreto_largo_para_livekit_de_32_letras")
+    
+    grant = VideoGrants(room_join=True, room=room_id)
+    
+    access_token = AccessToken(api_key, api_secret)
+    access_token = access_token.with_identity(current_user.email).with_name(current_user.full_name).with_grants(grant)
+    
+    token_str = access_token.to_jwt()
+    
+    # Get or create session to get the definitive start_time
+    session = get_or_create_session(room_id)
+    
+    return {"token": token_str, "start_time": session["start_time"]}

@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, Maximize2 } from "lucide-react";
+import { api } from "../utils/api";
+import {
+  LiveKitRoom,
+  VideoTrack,
+  useTracks,
+  useRemoteParticipants,
+  RoomAudioRenderer
+} from "@livekit/components-react";
+import { Track } from "livekit-client";
 
 interface GlobalFloatingCallWidgetProps {
   role: "doctor" | "patient";
@@ -23,71 +32,35 @@ export function GlobalFloatingCallWidget({
   const [isDragging, setIsDragging] = useState(false);
   const [dragDelta, setDragDelta] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Estado de medios sincronizado en tiempo real (FastAPI + LocalStorage)
-  const [isCounterpartMuted, setIsCounterpartMuted] = useState(false);
-  const [isCounterpartVideoOff, setIsCounterpartVideoOff] = useState(false);
-  const [isCounterpartConnected, setIsCounterpartConnected] = useState(true);
+  const [tokenToUse, setTokenToUse] = useState<string>("");
+  const [initialVideoOn, setInitialVideoOn] = useState(true);
+  const [initialAudioOn, setInitialAudioOn] = useState(true);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const dragStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasDraggedRef = useRef<boolean>(false);
 
   const roomCode = String(appointmentId || "1");
-  const counterpartRoleKey = role === "doctor" ? "patient" : "doctor";
-  const counterpartMediaKey = `room_media_${roomCode}_${counterpartRoleKey}`;
 
-  // Sincronización continua de la presencia y estado de medios en tiempo real
   useEffect(() => {
-    const syncFromStorage = () => {
-      const rawMedia = localStorage.getItem(counterpartMediaKey);
-      if (rawMedia) {
-        try {
-          const parsed = JSON.parse(rawMedia);
-          if (parsed.videoOff !== undefined) setIsCounterpartVideoOff(Boolean(parsed.videoOff));
-          if (parsed.muted !== undefined) setIsCounterpartMuted(Boolean(parsed.muted));
-        } catch (e) {}
-      }
-    };
+    const savedVideoOff = localStorage.getItem("local_video_off") === "true";
+    const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
+    setInitialVideoOn(!savedVideoOff);
+    setInitialAudioOn(!savedAudioMuted);
+  }, []);
 
-    // Sincronización vía API REST de FastAPI
-    const fetchPresence = async () => {
-      syncFromStorage();
+  // Fetch LiveKit Token
+  useEffect(() => {
+    const fetchToken = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}/${role}?muted=false&video_off=false`, {
-          method: "POST"
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.counterpart_muted !== undefined) {
-            setIsCounterpartMuted(Boolean(data.counterpart_muted));
-          }
-          if (data.counterpart_video_off !== undefined) {
-            setIsCounterpartVideoOff(Boolean(data.counterpart_video_off));
-          }
-          if (data.connected !== undefined) {
-            setIsCounterpartConnected(Boolean(data.connected));
-          } else {
-            setIsCounterpartConnected(true);
-          }
-        }
-      } catch (err) {}
-    };
-
-    fetchPresence();
-    const interval = setInterval(fetchPresence, 500);
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === counterpartMediaKey) {
-        syncFromStorage();
+        const res = await api.getLiveKitToken(roomCode);
+        setTokenToUse(res.token);
+      } catch (err) {
+        console.error("Error fetching LiveKit token in PiP:", err);
       }
     };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [roomCode, role, counterpartMediaKey]);
+    fetchToken();
+  }, [roomCode]);
 
   const getInitials = (name?: string) => {
     if (!name) return "US";
@@ -188,51 +161,99 @@ export function GlobalFloatingCallWidget({
         <Maximize2 size={13} className="text-[#00C7C0]" />
       </div>
 
-      {/* ESTRUCTURA IDÉNTICA A LA SALA DE TELEMEDICINA CON SINCRONIZACIÓN DE MEDIOS EN TIEMPO REAL */}
-      {!isCounterpartConnected ? (
-        <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
-          <div className="relative mb-1">
-            <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60 opacity-60">
-              {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
-                <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
-              ) : (
-                getInitials(counterpartName)
-              )}
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-amber-500" title="Desconectado" />
-          </div>
-          <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
-          <span className="text-[10px] text-amber-400 font-semibold mt-0.5">Desconectado</span>
-        </div>
-      ) : isCounterpartVideoOff ? (
-        /* CÁMARA APAGADA: ESTRUCTURA IDÉNTICA A TELEMEDICINAROOM CON AVATAR CENTRADO */
-        <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
-          <div className="relative mb-1">
-            <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60">
-              {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
-                <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
-              ) : (
-                getInitials(counterpartName)
-              )}
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-[#00A69D]" title="Conectado" />
-          </div>
-          <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
-          {isCounterpartMuted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
-        </div>
+      {tokenToUse ? (
+        <LiveKitRoom
+          serverUrl="ws://127.0.0.1:7880"
+          token={tokenToUse}
+          connect={true}
+          video={initialVideoOn}
+          audio={initialAudioOn}
+          className="w-full h-full"
+        >
+          <FloatingRoomContent
+            counterpartAvatar={counterpartAvatar}
+            counterpartName={counterpartName}
+            getInitials={getInitials}
+          />
+          <RoomAudioRenderer />
+        </LiveKitRoom>
       ) : (
-        /* CÁMARA PRENDIDA: ESTRUCTURA IDÉNTICA CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
-        <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2">
-          <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
-            <span className="truncate">{counterpartName}</span>
-            {isCounterpartMuted ? (
-              <MicOff size={11} className="text-red-400 flex-shrink-0" title="Micrófono Desactivado" />
-            ) : (
-              <Mic size={11} className="text-white/80 flex-shrink-0" title="Micrófono Activo" />
-            )}
-          </div>
+        <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+           <div className="w-5 h-5 rounded-full border-2 border-[#00A69D] border-t-transparent animate-spin mb-2"></div>
+           <span className="text-[10px] text-white font-bold">Conectando...</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function FloatingRoomContent({
+  counterpartAvatar,
+  counterpartName,
+  getInitials
+}: any) {
+  const remoteParticipants = useRemoteParticipants();
+  const isCounterpartConnected = remoteParticipants.length > 0;
+
+  const cameraTracks = useTracks([Track.Source.Camera]);
+  const audioTracks = useTracks([Track.Source.Microphone]);
+  const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
+  const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
+  
+  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
+  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
+
+  if (!isCounterpartConnected) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+        <div className="relative mb-1">
+          <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60 opacity-60">
+            {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+              <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+            ) : (
+              getInitials(counterpartName)
+            )}
+          </div>
+          <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-amber-500" title="Desconectado" />
+        </div>
+        <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+        <span className="text-[10px] text-amber-400 font-semibold mt-0.5">Desconectado</span>
+      </div>
+    );
+  }
+
+  if (isCounterpartVideoOff) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+        <div className="relative mb-1">
+          <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60">
+            {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+              <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+            ) : (
+              getInitials(counterpartName)
+            )}
+          </div>
+          <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 bg-[#00A69D]" title="Conectado" />
+        </div>
+        <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+        {isCounterpartMuted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
+      {remoteCameraTrack && (
+        <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
+        <span className="truncate">{counterpartName}</span>
+        {isCounterpartMuted ? (
+          <MicOff size={11} className="text-red-400 flex-shrink-0" title="Micrófono Desactivado" />
+        ) : (
+          <Mic size={11} className="text-white/80 flex-shrink-0" title="Micrófono Activo" />
+        )}
+      </div>
     </div>
   );
 }

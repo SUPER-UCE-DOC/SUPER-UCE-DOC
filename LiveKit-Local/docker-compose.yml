@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    ports:
+      - "7880:7880" # HTTP / WebSocket API
+      - "7881:7881" # TCP fallback
+      - "3478:3478/udp" # TURN UDP
+      - "60000-60050:60000-60050/udp" # WebRTC ICE ports
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml

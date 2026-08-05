@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { SettingsView } from "./SettingsView";
 import { api } from "../utils/api";
 import {
@@ -91,7 +92,8 @@ function RecetasEntrantes({ userName }: { userName: string }) {
         id: rx.id,
         patient: rx.patient_name,
         medicine: rx.medicine,
-        dose: `${rx.dose} · ${rx.frequency}`,
+        dose: rx.dose,
+        frequency: rx.frequency,
         doctor: rx.doctor_name,
         issuedAt: new Date(rx.issued_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         urgent: rx.medicine.includes("Sertralina") || rx.medicine.includes("Furosemida"),
@@ -246,7 +248,14 @@ function RecetasEntrantes({ userName }: { userName: string }) {
                   <Pill size={13} style={{ color: "#00A69D", flexShrink: 0 }} />
                   <span className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{rx.medicine}</span>
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>{rx.dose}</div>
+                <div className="flex flex-col gap-0.5 mt-1.5">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Dosis</div>
+                  <div className="text-sm font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.dose}</div>
+                </div>
+                <div className="flex flex-col gap-0.5 mt-2.5">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Frecuencia</div>
+                  <div className="text-sm font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.frequency}</div>
+                </div>
               </div>
 
               {/* Médico */}
@@ -298,7 +307,16 @@ function RecetasEntrantes({ userName }: { userName: string }) {
               <Pill size={14} style={{ color: "#00A69D" }} />
               <span className="text-sm" style={{ color: "#203A70", fontWeight: 600 }}>{rx.medicine}</span>
             </div>
-            <div className="text-xs mb-0.5" style={{ color: "#9CA3AF" }}>{rx.dose}</div>
+            <div className="grid grid-cols-2 gap-2 mt-2 mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Dosis</div>
+                <div className="text-xs font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.dose}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Frecuencia</div>
+                <div className="text-xs font-medium" style={{ color: "#00A69D", lineHeight: 1.2 }}>{rx.frequency}</div>
+              </div>
+            </div>
             <div className="text-xs mb-3" style={{ color: "#6B7280" }}>{rx.doctor}</div>
             {rx.dispatched ? (
               <div className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs" style={{ background: "#DCFCE7", color: "#10B981", fontWeight: 600 }}>
@@ -564,7 +582,7 @@ function PedidosView() {
 function OrderDetailModal({ order, onClose, onUpdateStatus }: { order: Order; onClose: () => void; onUpdateStatus: (id: string, status: OrderStatus) => void }) {
   const conf = statusConfig[order.status];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/40 backdrop-blur-sm anim-fade-in" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-5 anim-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b pb-3">
@@ -640,7 +658,8 @@ function OrderDetailModal({ order, onClose, onUpdateStatus }: { order: Order; on
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -790,7 +809,7 @@ function NewOrderModal({ onClose, onCreated, initialMed }: { onClose: () => void
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50 backdrop-blur-sm anim-fade-in overflow-y-auto"
       onClick={onClose}
@@ -990,7 +1009,8 @@ function NewOrderModal({ onClose, onCreated, initialMed }: { onClose: () => void
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1234,7 +1254,7 @@ function AddInventoryItemModal({ onClose, onAdded }: { onClose: () => void; onAd
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50 backdrop-blur-sm anim-fade-in" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
@@ -1314,7 +1334,8 @@ function AddInventoryItemModal({ onClose, onAdded }: { onClose: () => void; onAd
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
