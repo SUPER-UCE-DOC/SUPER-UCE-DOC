@@ -274,17 +274,20 @@ function PreCallLobby({
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-24 h-24 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-3xl mb-4 shadow-md">
+                <div className="w-24 h-24 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-3xl mb-3 shadow-md">
                   {props.userAvatar && (props.userAvatar.startsWith("http") || props.userAvatar.startsWith("data:")) ? (
                     <img src={props.userAvatar} alt={props.userName} className="w-full h-full object-cover rounded-full" />
                   ) : (
                     getInitials(props.userName)
                   )}
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">{props.userName} (Tú)</h3>
-                <span className="text-xs text-gray-300 font-medium px-4 py-1.5 rounded-full bg-slate-800/90 border border-slate-700">
-                  {!hasCameraDevice ? "Sin cámara detectada" : "Cámara Desactivada"}
-                </span>
+                <h3 className="text-lg font-bold text-white">{props.userName} (Tú)</h3>
+                {!audioOn && <span className="text-xs text-red-400 font-bold mt-1">Micrófono Desactivado</span>}
+                {!videoOn && (
+                  <span className="text-xs text-slate-400 font-medium mt-1">
+                    {!hasCameraDevice ? "Sin cámara detectada" : "Cámara Desactivada"}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -384,39 +387,26 @@ function PreCallLobby({
             </div>
           </div>
 
-          {/* Resumen de Dispositivos Seleccionados */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
-              <span className="flex items-center gap-2 text-gray-700">
-                {audioOn ? <Mic size={16} className="text-[#00A69D]" /> : <MicOff size={16} className="text-red-500" />}
-                Micrófono
-              </span>
-              <span className={audioOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
-                {audioOn ? "Activado" : "Desactivado"}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
-              <span className="flex items-center gap-2 text-gray-700">
-                {videoOn ? <Video size={16} className="text-[#00A69D]" /> : <VideoOff size={16} className="text-red-500" />}
-                Cámara
-              </span>
-              <span className={!hasCameraDevice ? "text-gray-400 font-bold" : videoOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
-                {!hasCameraDevice ? "Sin cámara" : videoOn ? "Activada" : "Desactivada"}
-              </span>
-            </div>
-
-            {props.role === "patient" && (
-              <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
-                <span className="flex items-center gap-2 text-gray-700">
-                  <Hand size={16} className={lsaOn ? "text-[#00A69D]" : "text-gray-400"} />
-                  Traductor LSA
-                </span>
-                <span className={lsaOn ? "text-emerald-600 font-bold" : "text-gray-500 font-bold"}>
-                  {lsaOn ? "Activado" : "Desactivado"}
-                </span>
-              </div>
-            )}
+          {/* Recomendaciones y Lista de Verificación Antes de Ingresar */}
+          <div className="flex flex-col gap-2.5 bg-[#F0FFFE] p-4 rounded-2xl border border-[#CCFBF6]">
+            <h4 className="text-xs font-bold text-[#00A69D] uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck size={15} className="text-[#00A69D]" />
+              Recomendaciones de Consulta
+            </h4>
+            <ul className="space-y-2 text-xs text-gray-600 font-medium">
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00A69D] mt-1.5 flex-shrink-0" />
+                <span>Usa buena iluminación de frente a tu rostro.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00A69D] mt-1.5 flex-shrink-0" />
+                <span>Se recomiendan audífonos para mayor claridad de audio.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00A69D] mt-1.5 flex-shrink-0" />
+                <span>Videollamada médica cifrada e integrada.</span>
+              </li>
+            </ul>
           </div>
 
           {/* Botones de Acción Estilo Estándar */}

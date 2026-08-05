@@ -1720,10 +1720,12 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
   }, [userAvatar]);
 
   useEffect(() => {
-    if (!resolvedDoc || !resolvedDoc.id) {
+    if (activeAppointment && (activeAppointment.patient_name || activeAppointment.patient || activeAppointment.id)) {
+      setResolvedDoc(activeAppointment);
+    } else {
       api.getAppointments().then((apts) => {
         if (Array.isArray(apts) && apts.length > 0) {
-          const active = apts.find((a: any) => a.status === "en_curso");
+          const active = apts.find((a: any) => a.status === "en_curso") || apts.find((a: any) => a.status === "confirmada") || apts[0];
           if (active) {
             setResolvedDoc(active);
           }
@@ -1732,16 +1734,22 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
     }
   }, [activeAppointment]);
 
+  const counterpartName = resolvedDoc?.patient_name || resolvedDoc?.patient || activePatient || activeAppointment?.patient_name || activeAppointment?.patient || "Paciente Registrado";
+  const counterpartAvatar = resolvedDoc?.patient_avatar || activeAppointment?.patient_avatar;
+  const patientId = resolvedDoc?.patient_id || activeAppointment?.patient_id;
+  const appointmentId = resolvedDoc?.id || activeAppointment?.id;
+  const appointmentReason = resolvedDoc?.reason || activeAppointment?.reason;
+
   return (
     <TelemedicinaRoom
       role="doctor"
       userName={userName || "Dr. Jose Matos"}
       userAvatar={doctorAvatar || userAvatar}
-      counterpartName={resolvedDoc?.patient_name || resolvedDoc?.patient || activePatient || activeAppointment?.patient_name || activeAppointment?.patient || "Paciente"}
-      counterpartAvatar={resolvedDoc?.patient_avatar}
-      patientId={resolvedDoc?.patient_id}
-      appointmentId={resolvedDoc?.id}
-      appointmentReason={resolvedDoc?.reason}
+      counterpartName={counterpartName}
+      counterpartAvatar={counterpartAvatar}
+      patientId={patientId}
+      appointmentId={appointmentId}
+      appointmentReason={appointmentReason}
       onEndCall={onEndCall}
       isMinimized={isMinimized}
       onReturnToCall={onReturnToCall}
