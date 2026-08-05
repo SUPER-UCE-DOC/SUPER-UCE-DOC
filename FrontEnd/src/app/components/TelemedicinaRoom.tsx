@@ -1526,7 +1526,7 @@ function TelemedicinaRoomContent({
                         getInitials(userName)
                       )}
                     </div>
-                    <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName}</span>
+                    <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName} (Tú)</span>
                     {muted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
                   </div>
                 ) : (
@@ -1543,7 +1543,7 @@ function TelemedicinaRoomContent({
                             getInitials(userName)
                           )}
                         </div>
-                        <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName}</span>
+                        <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName} (Tú)</span>
                         {muted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
                       </div>
                     )}
