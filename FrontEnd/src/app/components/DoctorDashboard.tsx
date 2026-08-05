@@ -1737,7 +1737,7 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
       role="doctor"
       userName={userName || "Dr. Jose Matos"}
       userAvatar={doctorAvatar || userAvatar}
-      counterpartName={resolvedDoc?.patient_name || activePatient || "Paciente"}
+      counterpartName={resolvedDoc?.patient_name || resolvedDoc?.patient || activePatient || activeAppointment?.patient_name || activeAppointment?.patient || "Paciente"}
       counterpartAvatar={resolvedDoc?.patient_avatar}
       patientId={resolvedDoc?.patient_id}
       appointmentId={resolvedDoc?.id}
