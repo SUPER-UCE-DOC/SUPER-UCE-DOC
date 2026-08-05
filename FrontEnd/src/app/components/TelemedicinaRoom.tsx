@@ -1572,7 +1572,7 @@ function TelemedicinaRoomContent({
               : "top 350ms cubic-bezier(0.16, 1, 0.3, 1), left 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1)",
             zIndex: 9999
           }}
-          className={`fixed w-[288px] h-[162px] rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-300 ${isDraggingPip ? "scale-105 border-[#00C7C0]" : ""} ${(!isDraggingPip && isRemoteSpeaking) ? "ring-2 ring-[#00C7C0] border-[#00C7C0]" : "border-[#00A69D]"}`}
+          className={`fixed w-[288px] h-[162px] rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-300 pointer-events-auto ${isDraggingPip ? "scale-105 border-[#00C7C0]" : ""} ${(!isDraggingPip && isRemoteSpeaking) ? "ring-2 ring-[#00C7C0] border-[#00C7C0]" : "border-[#00A69D]"}`}
           title="Haz clic para volver a la videollamada o arrastra a cualquier esquina"
         >
           <div className="absolute top-2 right-2 p-1.5 bg-black/70 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center justify-center shadow-md">
