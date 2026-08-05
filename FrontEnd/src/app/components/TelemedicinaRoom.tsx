@@ -67,25 +67,29 @@ const ragMedicines = [
 export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [tokenToUse, setTokenToUse] = useState<string>("");
   const [roomStartTime, setRoomStartTime] = useState<number>(0);
-  const [initialVideoOn, setInitialVideoOn] = useState(true);
-  const [initialAudioOn, setInitialAudioOn] = useState(true);
+  const tokenFetchedRef = useRef(false);
+
+  // Read hardware prefs once at mount time (NOT inside the appointmentId effect,
+  // to avoid re-renders that change video/audio props on <LiveKitRoom> after it mounts)
+  const savedVideoOff = localStorage.getItem("local_video_off") === "true";
+  const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
+  const [initialVideoOn] = useState(!savedVideoOff);
+  const [initialAudioOn] = useState(!savedAudioMuted);
 
   useEffect(() => {
     // Force sidebar collapse when entering live room
     sessionStorage.setItem("mainSidebarCollapsed", "true");
     window.dispatchEvent(new Event("force-sidebar-collapse"));
 
-    // Cleanup: force sidebar expand when leaving live room
     const cleanupSidebar = () => {
       sessionStorage.setItem("mainSidebarCollapsed", "false");
       window.dispatchEvent(new Event("force-sidebar-expand"));
     };
 
-    // Read local hardware preferences
-    const savedVideoOff = localStorage.getItem("local_video_off") === "true";
-    const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
-    setInitialVideoOn(!savedVideoOff);
-    setInitialAudioOn(!savedAudioMuted);
+    // FIX: Only fetch token once — guard with ref to prevent re-fetch
+    // when parent re-renders and appointmentId changes from undefined → value
+    if (tokenFetchedRef.current) return cleanupSidebar;
+    tokenFetchedRef.current = true;
 
     const fetchToken = async () => {
       try {
@@ -97,6 +101,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
         }
       } catch (err) {
         console.error("Error fetching LiveKit token:", err);
+        tokenFetchedRef.current = false; // Allow retry on error
       }
     };
     fetchToken();
