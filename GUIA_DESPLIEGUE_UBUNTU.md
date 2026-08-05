@@ -16,10 +16,13 @@ Esta guía te explicará de forma clara y sin complicaciones cómo instalar y po
 ## 🗄️ PASO 1: Configurar la Base de Datos en Supabase
 
 1. Entra a [Supabase.com](https://supabase.com) e inicia sesión.
-2. Si no has creado el proyecto, haz clic en **New Project**, ponle nombre `super-uce-doc` y asigna la contraseña de la base de datos: `SuperUceDoc2026`.
-3. Ve a **Project Settings** -> **Database** y copia la cadena de conexión URI. Debe ser igual o similar a esta:
+2. Si no has creado el proyecto, haz clic en **New Project**, ponle nombre `super-uce-doc` y asigna la contraseña de la base de datos (por ejemplo: `SuperUceDoc2026`).
+3. Para obtener tu cadena de conexión URI:
+   - Haz clic en el botón verde/destacado **Connect** situado en la barra superior de tu proyecto (o haz clic en el ícono de **Database** 🗄️ —el 4.° ícono del menú lateral izquierdo).
+   - En la ventana modal que se abre, selecciona la opción **Direct Connection** o **Transaction Pooler** (formato **URI / SQLAlchemy**).
+   - Copia la cadena de conexión y asegúrate de reemplazar `[YOUR-PASSWORD]` por la contraseña de tu base de datos. Debe ser igual o similar a esta:
    ```text
-   postgresql+psycopg2://postgres:SuperUceDoc2026@db.qfdbhhsqmwumuouftwkc.supabase.co:5432/postgres
+   postgresql+psycopg2://postgres:SuperUceDoc2026@db.xxxxxx.supabase.co:5432/postgres
    ```
 *(¡Listo! La base de datos creará las tablas automáticamente tan pronto tu backend en Ubuntu inicie por primera vez).*
 
@@ -34,32 +37,50 @@ Abre una terminal en tu PC con Ubuntu (`Ctrl + Alt + T`) y sigue estos bloques d
 # 1. Actualizar repositorios
 sudo apt update && sudo apt upgrade -y
 
-# 2. Instalar Python, Git, Nginx, Certbot y Docker (en Linux se usa python3)
+# 2. Si te da error de conflicto con containerd.io, ejecuta primero:
+# sudo apt remove -y containerd.io containerd
+
+# 3. Instalar Python, Git, Nginx, Certbot y Docker
 sudo apt install -y python3 python3-pip python3-venv git nginx certbot python3-certbot-nginx docker.io docker-compose
 
-# 3. Encender Docker y darle permisos a tu usuario
+# 4. Encender Docker y darle permisos a tu usuario
 sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
 ```
 
 ---
 
-### 2.2 Descargar tu proyecto y configurar el Backend
+### 2.2 Copiar o clonar tu proyecto y configurar el Backend
+
+#### OPCIÓN A: Si ya tienes la carpeta del proyecto descargada en tu carpeta Downloads (Descargas):
 ```bash
-# 1. Entra a la carpeta de sitios web
-cd /var/www
+# 1. Crear el directorio de aplicaciones web si no existe
+sudo mkdir -p /var/www
 
-# 2. Clona tu repositorio de GitHub (reemplaza con tu enlace de GitHub)
-sudo git clone https://github.com/TU_USUARIO/SUPER-UCE-DOC.git super-uce-doc
+# 2. Copiar la carpeta descargada a /var/www/super-uce-doc
+sudo cp -r ~/Downloads/SUPER-UCE-DOC /var/www/super-uce-doc
 
-# 3. Dar permisos a tu carpeta
+# 3. Asignar los permisos a tu usuario actual
 sudo chown -R $USER:$USER /var/www/super-uce-doc
+```
 
-# 4. Entrar a la carpeta del Backend y crear el entorno virtual de Python
+#### OPCIÓN B: Si vas a clonar desde GitHub:
+```bash
+# 1. Entrar a la carpeta de sitios web y clonar
+cd /var/www
+sudo git clone https://github.com/TU_USUARIO/SUPER-UCE-DOC.git super-uce-doc
+sudo chown -R $USER:$USER /var/www/super-uce-doc
+```
+
+---
+
+#### Configurar el Entorno de Python:
+```bash
+# 1. Entrar a la carpeta del Backend y crear el entorno virtual de Python
 cd /var/www/super-uce-doc/BackEnd
 python3 -m venv venv
 
-# 5. Activar el entorno virtual e instalar las librerías necesarias
+# 2. Activar el entorno virtual e instalar las librerías necesarias
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
