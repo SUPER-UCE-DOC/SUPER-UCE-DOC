@@ -67,7 +67,7 @@ const ragMedicines = [
 export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [tokenToUse, setTokenToUse] = useState<string>("");
   const [roomStartTime, setRoomStartTime] = useState<number>(0);
-  const tokenFetchedRef = useRef(false);
+  const lastFetchedIdRef = useRef<string | null>(null);
 
   // Pre-call Lobby State (Teams / Meet style)
   const [hasJoined, setHasJoined] = useState(false);
@@ -85,20 +85,22 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       window.dispatchEvent(new Event("force-sidebar-expand"));
     };
 
-    if (tokenFetchedRef.current) return cleanupSidebar;
-    tokenFetchedRef.current = true;
+    const targetRoomCode = props.appointmentId ? String(props.appointmentId) : "global";
+    if (lastFetchedIdRef.current === targetRoomCode && tokenToUse) {
+      return cleanupSidebar;
+    }
+    lastFetchedIdRef.current = targetRoomCode;
 
     const fetchToken = async () => {
       try {
-        const roomCode = props.appointmentId ? String(props.appointmentId) : "global";
-        const res = await api.getLiveKitToken(roomCode);
+        const res = await api.getLiveKitToken(targetRoomCode);
         setTokenToUse(res.token);
         if (res.start_time) {
           setRoomStartTime(res.start_time);
         }
       } catch (err) {
         console.error("Error fetching LiveKit token:", err);
-        tokenFetchedRef.current = false; // Allow retry on error
+        lastFetchedIdRef.current = null; // Allow retry on error
       }
     };
     fetchToken();
