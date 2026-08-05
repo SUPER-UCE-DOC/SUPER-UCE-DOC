@@ -115,7 +115,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
 
   return (
     <LiveKitRoom
-      serverUrl={(import.meta as any).env?.VITE_LIVEKIT_URL || "ws://127.0.0.1:7880"}
+      serverUrl={(import.meta as any).env?.VITE_LIVEKIT_URL || "wss://superucedoc-livekit.duckdns.org"}
       token={tokenToUse}
       connect={true}
       video={initialVideoOn}
@@ -190,9 +190,9 @@ function TelemedicinaRoomContent({
     };
   }, []);
 
-  // LiveKit Hooks para Tracks de Video
-  const cameraTracks = useTracks([Track.Source.Camera]);
-  const audioTracks = useTracks([Track.Source.Microphone]);
+  // LiveKit Hooks para Tracks de Video y Audio con Sincronización Inmediata
+  const cameraTracks = useTracks([Track.Source.Camera], { onlySubscribed: false });
+  const audioTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
   const localCameraTrack = cameraTracks.find(t => t.participant.isLocal);
   const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
@@ -201,8 +201,8 @@ function TelemedicinaRoomContent({
   // Sincronizar estado local de controles con LiveKit y LocalStorage
   useEffect(() => {
     if (localParticipant) {
-      localParticipant.setMicrophoneEnabled(!muted);
-      localParticipant.setCameraEnabled(!videoOff);
+      localParticipant.setMicrophoneEnabled(!muted).catch(() => {});
+      localParticipant.setCameraEnabled(!videoOff).catch(() => {});
     }
     localStorage.setItem("local_audio_muted", muted ? "true" : "false");
     localStorage.setItem("local_video_off", videoOff ? "true" : "false");
@@ -718,22 +718,47 @@ function TelemedicinaRoomContent({
   const [isPipSpeaking, setIsPipSpeaking] = useState(false);
   const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
   const [isEndingCall, setIsEndingCall] = useState(false);
+  const [, setRtcUpdateCounter] = useState(0);
 
   useEffect(() => {
     if (!room) return;
+    const triggerUpdate = () => setRtcUpdateCounter(c => c + 1);
+
     const handleActiveSpeakers = (speakers: Participant[]) => {
       const pipParticipant = isSwapped ? remoteParticipants[0] : localParticipant;
       setIsPipSpeaking(pipParticipant ? speakers.some(p => p.sid === pipParticipant.sid) : false);
 
       const remote = remoteParticipants[0];
       setIsRemoteSpeaking(remote ? speakers.some(p => p.sid === remote.sid) : false);
+      triggerUpdate();
     };
+
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
-    return () => { room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers); }
+    room.on(RoomEvent.TrackMuted, triggerUpdate);
+    room.on(RoomEvent.TrackUnmuted, triggerUpdate);
+    room.on(RoomEvent.TrackPublished, triggerUpdate);
+    room.on(RoomEvent.TrackUnpublished, triggerUpdate);
+    room.on(RoomEvent.TrackSubscribed, triggerUpdate);
+    room.on(RoomEvent.TrackUnsubscribed, triggerUpdate);
+    room.on(RoomEvent.ParticipantConnected, triggerUpdate);
+    room.on(RoomEvent.ParticipantDisconnected, triggerUpdate);
+
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+      room.off(RoomEvent.TrackMuted, triggerUpdate);
+      room.off(RoomEvent.TrackUnmuted, triggerUpdate);
+      room.off(RoomEvent.TrackPublished, triggerUpdate);
+      room.off(RoomEvent.TrackUnpublished, triggerUpdate);
+      room.off(RoomEvent.TrackSubscribed, triggerUpdate);
+      room.off(RoomEvent.TrackUnsubscribed, triggerUpdate);
+      room.off(RoomEvent.ParticipantConnected, triggerUpdate);
+      room.off(RoomEvent.ParticipantDisconnected, triggerUpdate);
+    };
   }, [room, isSwapped, remoteParticipants, localParticipant]);
+
   const isCounterpartConnected = remoteParticipants.length > 0;
-  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
-  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
+  const isCounterpartVideoOff = !remoteCameraTrack || !remoteCameraTrack.publication || remoteCameraTrack.publication.isMuted || remoteCameraTrack.publication.isSubscribed === false || remoteCameraTrack.participant?.isCameraEnabled === false;
+  const isCounterpartMuted = !remoteAudioTrack || !remoteAudioTrack.publication || remoteAudioTrack.publication.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
   const [presenceToast, setPresenceToast] = useState<string | null>(null);
   const prevConnectedRef = useRef(false);
 
@@ -1299,8 +1324,20 @@ function TelemedicinaRoomContent({
                 ) : (
                   /* CÁMARA REMOTA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
-                    {remoteCameraTrack && (
+                    {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
                       <VideoTrack trackRef={remoteCameraTrack} className="w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-24 h-24 rounded-full bg-slate-800 border border-slate-700/80 text-white flex items-center justify-center font-bold text-2xl mb-2 overflow-hidden shadow-md animate-pulse">
+                          {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                            <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(counterpartName)
+                          )}
+                        </div>
+                        <h3 className="text-base font-bold text-white">{counterpartName}</h3>
+                        <span className="text-xs text-[#00C7C0] font-semibold mt-1">Conectando Cámara...</span>
+                      </div>
                     )}
                     <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
                       }`}>
@@ -1334,8 +1371,20 @@ function TelemedicinaRoomContent({
                 ) : (
                   /* CÁMARA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
-                    {localCameraTrack && (
+                    {localCameraTrack && localCameraTrack.publication?.track ? (
                       <VideoTrack trackRef={localCameraTrack} className="w-full h-full object-cover -scale-x-100" disablePictureInPicture={true} translate="no" />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-24 h-24 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-2xl mb-2 overflow-hidden shadow-md animate-pulse">
+                          {userAvatar && (userAvatar.startsWith("http") || userAvatar.startsWith("data:")) ? (
+                            <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(userName)
+                          )}
+                        </div>
+                        <h3 className="text-base font-bold text-white">{userName} (Tú)</h3>
+                        <span className="text-xs text-[#00C7C0] font-semibold mt-1">Conectando Cámara...</span>
+                      </div>
                     )}
                     <div className={`absolute z-10 font-bold text-xs text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all duration-300 ease-out ${pipCorner === "bottom-left" ? "bottom-4 right-4" : "bottom-4 left-4"
                       }`}>
@@ -1395,8 +1444,20 @@ function TelemedicinaRoomContent({
                 ) : (
                   /* CÁMARA PRENDIDA EN PIP: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2 overflow-hidden rounded-xl">
-                    {localCameraTrack && (
+                    {localCameraTrack && localCameraTrack.publication?.track ? (
                       <VideoTrack trackRef={localCameraTrack} className="absolute inset-0 w-full h-full object-cover -scale-x-100" disablePictureInPicture={true} translate="no" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+                        <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-xs mb-1 overflow-hidden shadow-md border border-slate-700/60 animate-pulse">
+                          {userAvatar && (userAvatar.startsWith("http") || userAvatar.startsWith("data:")) ? (
+                            <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(userName)
+                          )}
+                        </div>
+                        <span className="text-xs text-white font-bold truncate max-w-[130px]">{userName}</span>
+                        {muted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+                      </div>
                     )}
                     <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
                       <span className="truncate">{userName} (Tú)</span>
@@ -1444,8 +1505,20 @@ function TelemedicinaRoomContent({
                 ) : (
                   /* PIP CÁMARA DEL INTERLOCUTOR PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2 overflow-hidden rounded-xl">
-                    {remoteCameraTrack && (
+                    {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
                       <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+                        <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs mb-1 overflow-hidden shadow-md border border-slate-700/60 animate-pulse">
+                          {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+                            <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(counterpartName)
+                          )}
+                        </div>
+                        <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+                        {isCounterpartMuted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+                      </div>
                     )}
                     <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
                       <span className="truncate">{counterpartName}</span>
@@ -1881,13 +1954,13 @@ function FloatingRoomContent({
   const remoteParticipants = useRemoteParticipants();
   const isCounterpartConnected = remoteParticipants.length > 0;
 
-  const cameraTracks = useTracks([Track.Source.Camera]);
-  const audioTracks = useTracks([Track.Source.Microphone]);
+  const cameraTracks = useTracks([Track.Source.Camera], { onlySubscribed: false });
+  const audioTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
   const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
 
-  const isCounterpartVideoOff = !remoteCameraTrack || remoteCameraTrack.publication?.isMuted || remoteCameraTrack.participant?.isCameraEnabled === false;
-  const isCounterpartMuted = !remoteAudioTrack || remoteAudioTrack.publication?.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
+  const isCounterpartVideoOff = !remoteCameraTrack || !remoteCameraTrack.publication || remoteCameraTrack.publication.isMuted || remoteCameraTrack.publication.isSubscribed === false || remoteCameraTrack.participant?.isCameraEnabled === false;
+  const isCounterpartMuted = !remoteAudioTrack || !remoteAudioTrack.publication || remoteAudioTrack.publication.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
 
   if (!isCounterpartConnected) {
     return (
@@ -1929,8 +2002,20 @@ function FloatingRoomContent({
 
   return (
     <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
-      {remoteCameraTrack && (
+      {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
         <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
+          <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60 animate-pulse">
+            {counterpartAvatar && (counterpartAvatar.startsWith("http") || counterpartAvatar.startsWith("data:")) ? (
+              <img src={counterpartAvatar} alt={counterpartName} className="w-full h-full object-cover" />
+            ) : (
+              getInitials(counterpartName)
+            )}
+          </div>
+          <span className="text-xs text-white font-bold truncate max-w-[130px]">{counterpartName}</span>
+          {isCounterpartMuted && <span className="text-[9px] text-red-400 font-bold mt-0.5">Micrófono Desactivado</span>}
+        </div>
       )}
       <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
         <span className="truncate">{counterpartName}</span>
