@@ -456,7 +456,9 @@ def login_google(req_data: schemas.GoogleLoginRequest, db: Session = Depends(get
         
         if avatar_url and user.avatar != avatar_url:
             user.avatar = avatar_url
-            db.commit()
+        if not user.is_verified:
+            user.is_verified = True
+        db.commit()
 
         access_token = create_access_token(data={"sub": user.email, "role": user.role})
         return {"access_token": access_token, "token_type": "bearer", "is_new": False}
@@ -478,7 +480,8 @@ def login_google(req_data: schemas.GoogleLoginRequest, db: Session = Depends(get
         hashed_password=random_pwd,
         role=req_data.role,
         full_name=full_name,
-        avatar=avatar_url
+        avatar=avatar_url,
+        is_verified=True
     )
     db.add(new_user)
     db.commit()
