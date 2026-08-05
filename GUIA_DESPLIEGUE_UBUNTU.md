@@ -145,8 +145,9 @@ En la misma PC con Ubuntu, entra a la carpeta `BackEnd` y ejecuta LiveKit con Do
 ```bash
 cd /var/www/super-uce-doc/BackEnd
 
-# Levantar el contenedor en segundo plano
-docker-compose -f docker-compose.livekit.yml up -d
+# Levantar el contenedor en segundo plano (usa con espacio o con guion)
+docker compose -f docker-compose.livekit.yml up -d
+# Si la versión de tu sistema requiere el paquete clásico: sudo apt install docker-compose -y
 
 # Verificar que el contenedor esté activo
 docker ps
