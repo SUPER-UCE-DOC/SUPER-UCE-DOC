@@ -129,7 +129,7 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
         {renderViewContent()}
       </div>
       {inCall && (
-        <div style={currentView === "teleconsult" ? { display: "flex", flexDirection: "column", flex: 1, height: "100%" } : {}}>
+        <div className={currentView === "teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}>
           <TelemedicinaSala
             userName={userName}
             userAvatar={userAvatar}

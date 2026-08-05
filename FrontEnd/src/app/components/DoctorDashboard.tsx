@@ -211,7 +211,7 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
         {renderViewContent()}
       </div>
       {(inCall || currentView === "live_teleconsult") && (
-        <div style={currentView === "live_teleconsult" ? { display: "flex", flexDirection: "column", flex: 1, height: "100%" } : { display: "none" }}>
+        <div className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}>
           <DoctorLiveRoom
             userName={userName}
             userAvatar={userAvatar}

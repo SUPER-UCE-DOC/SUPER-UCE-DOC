@@ -69,11 +69,25 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [roomStartTime, setRoomStartTime] = useState<number>(0);
   const lastFetchedIdRef = useRef<string | null>(null);
 
+  const roomAppId = props.appointmentId ? String(props.appointmentId) : "global";
+  const joinKey = `has_joined_teleconsult_${roomAppId}`;
+
   // Pre-call Lobby State (Teams / Meet style)
-  const [hasJoined, setHasJoined] = useState(false);
+  const [hasJoined, setHasJoinedState] = useState(() => {
+    return sessionStorage.getItem(joinKey) === "true";
+  });
   const [joinedVideoOn, setJoinedVideoOn] = useState(true);
   const [joinedAudioOn, setJoinedAudioOn] = useState(true);
   const [joinedLsaOn, setJoinedLsaOn] = useState(true);
+
+  const setHasJoined = (val: boolean) => {
+    if (val) {
+      sessionStorage.setItem(joinKey, "true");
+    } else {
+      sessionStorage.removeItem(joinKey);
+    }
+    setHasJoinedState(val);
+  };
 
   useEffect(() => {
     // Force sidebar collapse when entering live room
@@ -1528,6 +1542,7 @@ function TelemedicinaRoomContent({
       localStorage.removeItem("local_audio_muted");
       localStorage.removeItem(`teleconsult_subtitles_${roomCode}`);
       localStorage.removeItem(`teleconsult_chat_${roomCode}`);
+      sessionStorage.removeItem(`has_joined_teleconsult_${roomCode}`);
       onEndCall();
     }
   };
