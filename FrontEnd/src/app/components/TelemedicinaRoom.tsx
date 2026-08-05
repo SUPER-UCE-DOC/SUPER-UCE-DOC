@@ -1466,12 +1466,12 @@ function TelemedicinaRoomContent({
                 ref={subCardRef}
                 onMouseDown={handleMouseDownSub}
                 style={getSubtitleAnchorStyle()}
-                className={`absolute z-30 max-w-[85%] sm:max-w-[70%] bg-slate-900/90 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl border border-slate-700/60 shadow-2xl text-center select-none cursor-grab active:cursor-grabbing transition-all duration-300 pointer-events-auto ${
-                  isDraggingSub ? "scale-105 border-[#00C7C0] shadow-teal-500/20" : ""
+                className={`absolute z-30 max-w-[85%] sm:max-w-[70%] bg-slate-800/95 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl border-2 border-[#00A69D] text-center select-none cursor-grab active:cursor-grabbing transition-all duration-300 pointer-events-auto ${
+                  isDraggingSub ? "scale-105 border-[3.5px] border-[#00C7C0]" : ""
                 }`}
                 title="Arrastra para mover la barra de subtítulos a cualquier posición de la pantalla"
               >
-                <span className="text-[11px] text-[#00A69D] font-bold uppercase tracking-wider block mb-1">
+                <span className="text-[11px] text-[#00C7C0] font-bold uppercase tracking-wider block mb-1">
                   {subtitlesList[subtitlesList.length - 1].speaker_name}
                 </span>
                 <p className={`leading-snug text-white ${

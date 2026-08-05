@@ -365,6 +365,8 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
         "full_name": current_user.full_name,
         "role": current_user.role,
         "avatar": current_user.avatar,
+        "specialty": profile_data.get("specialty"),
+        "exequatur": profile_data.get("exequatur"),
         "profile": profile_data
     }
 

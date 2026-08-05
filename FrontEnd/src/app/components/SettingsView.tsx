@@ -423,7 +423,28 @@ function PatientSettings({ userName }: { userName: string }) {
 
   return (
     <>
-      <Card title="Accesibilidad" icon={<Eye size={16} />} delay={60}>
+      <Card title="Cuenta y Datos Personales" icon={<User size={16} />} delay={60}>
+        <div className="py-4 space-y-4">
+          <ProfileImageUpload userName={nombre || userName} />
+          <FieldInput
+            label="Nombre Completo"
+            value={nombre || userName}
+            onChange={setNombre}
+            disabled={true}
+            placeholder="Tu nombre completo"
+          />
+          <FieldInput
+            label="Correo Electrónico"
+            value={email}
+            onChange={setEmail}
+            disabled={true}
+            placeholder="correo@ejemplo.com"
+            type="email"
+          />
+        </div>
+      </Card>
+
+      <Card title="Accesibilidad" icon={<Eye size={16} />} delay={120}>
         <ToggleRow
           label="Alto Contraste"
           desc="Aumenta el contraste de colores para mayor legibilidad"
@@ -451,27 +472,6 @@ function PatientSettings({ userName }: { userName: string }) {
         />
       </Card>
 
-      <Card title="Cuenta y Datos Personales" icon={<User size={16} />} delay={120}>
-        <div className="py-4 space-y-4">
-          <ProfileImageUpload userName={nombre || userName} />
-          <FieldInput
-            label="Nombre Completo"
-            value={nombre || userName}
-            onChange={setNombre}
-            disabled={true}
-            placeholder="Tu nombre completo"
-          />
-          <FieldInput
-            label="Correo Electrónico"
-            value={email}
-            onChange={setEmail}
-            disabled={true}
-            placeholder="correo@ejemplo.com"
-            type="email"
-          />
-        </div>
-      </Card>
-
       <Card title="Notificaciones" icon={<Bell size={16} />} delay={180}>
         <ToggleRow
           label="Email al confirmar o cancelar una cita"
@@ -492,24 +492,28 @@ function PatientSettings({ userName }: { userName: string }) {
 
 /* ── Doctor ─────────────────────────────────────────────── */
 function DoctorSettings({ userName }: { userName: string }) {
+  const [nombre, setNombre] = useState(userName);
   const [especialidad, setEspecialidad] = useState("Cardiología");
   const [exequatur, setExequatur] = useState("EX-2019-00487");
   const [firma, setFirma] = useState("");
   const [horaInicio, setHoraInicio] = useState("08:00");
   const [horaFin, setHoraFin] = useState("17:00");
-  const [iaSpeed, setIaSpeed] = useState("Normal");
-  const [iaAuto, setIaAuto] = useState(true);
-  const [iaSubtitles, setIaSubtitles] = useState(true);
+  const [altoContraste, setAltoContraste] = useState(false);
+  const [videoSubtitlesOverlay, setVideoSubtitlesOverlay] = useState(true);
+  const [subtitleSize, setSubtitleSize] = useState("Mediano");
   const [days, setDays] = useState<Record<string, boolean>>({
     L: true, M: true, X: true, J: true, V: true, S: false, D: false,
   });
   const dayNames: Record<string, string> = { L: "Lunes", M: "Martes", X: "Miércoles", J: "Jueves", V: "Viernes", S: "Sábado", D: "Domingo" };
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState("");
-
   useEffect(() => {
+    // 1. Cargar perfil del doctor desde la API
     api.getMe().then(user => {
+      if (user.full_name) setNombre(user.full_name);
+      const spec = user.specialty || user.profile?.specialty;
+      if (spec) setEspecialidad(spec);
+      const exeq = user.exequatur || user.profile?.exequatur;
+      if (exeq) setExequatur(exeq);
       if (user.profile) {
         if (user.profile.firma) setFirma(user.profile.firma);
         if (user.profile.start_time) setHoraInicio(user.profile.start_time);
@@ -523,39 +527,111 @@ function DoctorSettings({ userName }: { userName: string }) {
           setDays(newDaysState);
         }
       }
-    }).catch(err => console.error("Error loading settings:", err));
+    }).catch(err => console.error("Error cargando configuración del doctor:", err));
+
+    // 2. Cargar preferencias de Accesibilidad desde localStorage
+    if (localStorage.getItem("settings_video_subtitles_enabled") === null) {
+      localStorage.setItem("settings_video_subtitles_enabled", "true");
+    }
+
+    const savedAltoContraste = localStorage.getItem("settings_alto_contraste") === "true";
+    const savedSubtitleSize = localStorage.getItem("subtitle_size") || "Mediano";
+    const savedVideoSubtitlesOverlay = localStorage.getItem("settings_video_subtitles_enabled") !== "false";
+
+    setAltoContraste(savedAltoContraste);
+    setSubtitleSize(savedSubtitleSize);
+    setVideoSubtitlesOverlay(savedVideoSubtitlesOverlay);
+
+    if (savedAltoContraste) {
+      document.body.classList.add("high-contrast-mode");
+    }
   }, []);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveMessage("");
-    try {
-      const activeDays = Object.keys(days).filter(k => days[k]).join(",");
-      await api.updateSettings({
-        available_days: activeDays,
-        start_time: horaInicio,
-        end_time: horaFin,
-        firma: firma
-      });
-      setSaveMessage("Configuración guardada exitosamente");
-      setTimeout(() => setSaveMessage(""), 3000);
-    } catch (err) {
-      setSaveMessage("Error al guardar la configuración");
-    } finally {
-      setIsSaving(false);
+  // Función helper de autoguardado de configuración de consultorio en backend
+  const autoSaveSettings = (newDays: Record<string, boolean>, start: string, end: string, firmaTxt: string) => {
+    const activeDays = Object.keys(newDays).filter(k => newDays[k]).join(",");
+    api.updateSettings({
+      available_days: activeDays,
+      start_time: start,
+      end_time: end,
+      firma: firmaTxt
+    }).catch(err => console.error("Error al autoguardar configuración del doctor:", err));
+  };
+
+  const handleAltoContrasteChange = (val: boolean) => {
+    setAltoContraste(val);
+    localStorage.setItem("settings_alto_contraste", String(val));
+    if (val) {
+      document.body.classList.add("high-contrast-mode");
+    } else {
+      document.body.classList.remove("high-contrast-mode");
     }
   };
 
-  const toggleDay = (key: string) => setDays((prev) => ({ ...prev, [key]: !prev[key] }));
+  const handleVideoSubtitlesOverlayChange = (val: boolean) => {
+    setVideoSubtitlesOverlay(val);
+    localStorage.setItem("settings_video_subtitles_enabled", String(val));
+    window.dispatchEvent(new Event("videoSubtitlesPreferenceChanged"));
+  };
+
+  const handleSubtitleSizeChange = (val: string) => {
+    setSubtitleSize(val);
+    localStorage.setItem("subtitle_size", val);
+    window.dispatchEvent(new Event("subtitleSizeChanged"));
+  };
+
+  const toggleDay = (key: string) => {
+    setDays((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      autoSaveSettings(updated, horaInicio, horaFin, firma);
+      return updated;
+    });
+  };
+
+  const handleHoraInicioChange = (val: string) => {
+    setHoraInicio(val);
+    autoSaveSettings(days, val, horaFin, firma);
+  };
+
+  const handleHoraFinChange = (val: string) => {
+    setHoraFin(val);
+    autoSaveSettings(days, horaInicio, val, firma);
+  };
+
+  const handleFirmaChange = (val: string) => {
+    setFirma(val);
+  };
+
+  const handleFirmaBlur = () => {
+    autoSaveSettings(days, horaInicio, horaFin, firma);
+  };
 
   return (
     <>
       <Card title="Perfil Profesional" icon={<Stethoscope size={16} />} delay={60}>
         <div className="py-4 space-y-4">
-          <ProfileImageUpload userName={userName} />
-          <FieldInput label="Nombre" value={userName} onChange={() => { }} placeholder="Dr. Nombre Apellido" />
-          <FieldInput label="Especialidad Médica" value={especialidad} onChange={setEspecialidad} placeholder="Ej: Cardiología" />
-          <FieldInput label="N.º de Exequátur / Licencia" value={exequatur} onChange={setExequatur} placeholder="EX-YYYY-00000" />
+          <ProfileImageUpload userName={nombre || userName} />
+          <FieldInput
+            label="Nombre"
+            value={nombre || userName}
+            onChange={setNombre}
+            disabled={true}
+            placeholder="Dr. Nombre Apellido"
+          />
+          <FieldInput
+            label="Especialidad Médica"
+            value={especialidad}
+            onChange={setEspecialidad}
+            disabled={true}
+            placeholder="Ej: Cardiología"
+          />
+          <FieldInput
+            label="N.º de Exequátur / Licencia"
+            value={exequatur}
+            onChange={setExequatur}
+            disabled={true}
+            placeholder="EX-YYYY-00000"
+          />
           <div>
             <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 600 }}>
               Firma Digital
@@ -565,19 +641,45 @@ function DoctorSettings({ userName }: { userName: string }) {
             </label>
             <textarea
               value={firma}
-              onChange={(e) => setFirma(e.target.value)}
+              onChange={(e) => handleFirmaChange(e.target.value)}
+              onBlur={handleFirmaBlur}
               placeholder="Dr. García · Cardiología · EX-2019-00487"
               rows={2}
-              className="w-full px-4 py-2.5 rounded-lg border outline-none resize-none text-sm transition-all"
-              style={{ borderColor: "#E5E7EB", color: "#374151", fontFamily: "Georgia, serif", background: "white" }}
+              className="w-full px-4 py-2.5 rounded-xl border outline-none resize-none text-sm transition-all bg-white text-gray-800"
+              style={{ borderColor: "#E5E7EB", fontFamily: "Georgia, serif" }}
               onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
-              onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#E5E7EB";
+                handleFirmaBlur();
+              }}
             />
           </div>
         </div>
       </Card>
 
-      <Card title="Consultorio Virtual" icon={<Clock size={16} />} delay={120}>
+      <Card title="Accesibilidad" icon={<Eye size={16} />} delay={120}>
+        <ToggleRow
+          label="Alto Contraste"
+          desc="Aumenta el contraste de colores para mayor legibilidad"
+          checked={altoContraste}
+          onChange={handleAltoContrasteChange}
+        />
+        <ToggleRow
+          label="Subtítulos en Pantalla de Video"
+          desc="Muestra la barra de subtítulos en tiempo real sobre la cámara durante la teleconsulta"
+          checked={videoSubtitlesOverlay}
+          onChange={handleVideoSubtitlesOverlayChange}
+        />
+        <SegmentedControl
+          label="Tamaño de Subtítulos"
+          desc="Tamaño del texto en subtítulos de teleconsulta"
+          options={["Pequeño", "Mediano", "Grande"]}
+          value={subtitleSize}
+          onChange={handleSubtitleSizeChange}
+        />
+      </Card>
+
+      <Card title="Consultorio Virtual" icon={<Clock size={16} />} delay={180}>
         <div className="py-4 space-y-5">
           {/* Days picker */}
           <div>
@@ -591,7 +693,7 @@ function DoctorSettings({ userName }: { userName: string }) {
                   type="button"
                   onClick={() => toggleDay(key)}
                   title={dayNames[key]}
-                  className="w-10 h-10 rounded-xl text-sm transition-all"
+                  className="w-10 h-10 rounded-xl text-sm transition-all cursor-pointer"
                   style={{
                     background: days[key] ? "#00A69D" : "#F3F4F6",
                     color: days[key] ? "white" : "#6B7280",
@@ -611,9 +713,9 @@ function DoctorSettings({ userName }: { userName: string }) {
               <input
                 type="time"
                 value={horaInicio}
-                onChange={(e) => setHoraInicio(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border outline-none text-sm"
-                style={{ borderColor: "#E5E7EB", color: "#374151", background: "white" }}
+                onChange={(e) => handleHoraInicioChange(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border outline-none text-sm bg-white text-gray-800"
+                style={{ borderColor: "#E5E7EB" }}
                 onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
                 onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
               />
@@ -623,59 +725,16 @@ function DoctorSettings({ userName }: { userName: string }) {
               <input
                 type="time"
                 value={horaFin}
-                onChange={(e) => setHoraFin(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border outline-none text-sm"
-                style={{ borderColor: "#E5E7EB", color: "#374151", background: "white" }}
+                onChange={(e) => handleHoraFinChange(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border outline-none text-sm bg-white text-gray-800"
+                style={{ borderColor: "#E5E7EB" }}
                 onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
                 onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
               />
             </div>
           </div>
         </div>
-
-        {/* IA translator */}
-        <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: "4px" }}>
-          <p className="text-xs mt-3 mb-0.5" style={{ color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Traductor IA LSE
-          </p>
-          <SegmentedControl
-            label="Velocidad de procesamiento"
-            desc="Equilibrio entre rapidez y precisión de la traducción"
-            options={["Rápido", "Normal", "Preciso"]}
-            value={iaSpeed}
-            onChange={setIaSpeed}
-          />
-          <ToggleRow
-            label="Activar traductor automáticamente"
-            desc="El módulo LSE inicia solo al comenzar una teleconsulta"
-            checked={iaAuto}
-            onChange={setIaAuto}
-          />
-          <ToggleRow
-            label="Subtítulos visibles al paciente"
-            desc="Muestra los subtítulos en la pantalla del paciente durante la consulta"
-            checked={iaSubtitles}
-            onChange={setIaSubtitles}
-          />
-        </div>
       </Card>
-
-      {/* Botón Guardar (Global para el rol) */}
-      <div className="flex items-center justify-end gap-4 mt-6">
-        {saveMessage && (
-          <span className="text-sm font-medium" style={{ color: saveMessage.includes("Error") ? "#EF4444" : "#00A69D" }}>
-            {saveMessage}
-          </span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-6 py-3 rounded-lg text-white font-bold shadow-md hover:shadow-lg transition-all"
-          style={{ background: "#00A69D", opacity: isSaving ? 0.7 : 1 }}
-        >
-          {isSaving ? "Guardando..." : "Guardar Configuración"}
-        </button>
-      </div>
     </>
   );
 }
