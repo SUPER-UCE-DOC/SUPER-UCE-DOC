@@ -527,7 +527,8 @@ function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt
     setShowModal(true);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/my-doctors", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${apiBase}/api/invitations/my-doctors`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {

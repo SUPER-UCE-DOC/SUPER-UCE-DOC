@@ -1794,7 +1794,8 @@ function RecetasView() {
     async function loadPatients() {
       try {
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+        const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
+        const res = await fetch(`${apiBase}/api/invitations/my-patients`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
