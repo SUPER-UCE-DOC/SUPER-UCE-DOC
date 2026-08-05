@@ -38,7 +38,8 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
   const loadNotifications = async () => {
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/all-notifications", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/all-notifications`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {

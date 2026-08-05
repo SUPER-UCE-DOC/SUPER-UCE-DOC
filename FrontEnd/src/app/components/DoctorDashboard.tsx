@@ -635,7 +635,8 @@ function PatientsView() {
     setInviteStatus(null);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/invitations/search-patient?name=${encodeURIComponent(inviteSearchName)}`, {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/search-patient?name=${encodeURIComponent(inviteSearchName)}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -654,7 +655,8 @@ function PatientsView() {
   const handleInvite = async (patientId: number) => {
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/send", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/send`, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -1169,7 +1171,8 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
     setShowScheduleModal(true);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/my-patients`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -1794,7 +1797,7 @@ function RecetasView() {
     async function loadPatients() {
       try {
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
+        const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
         const res = await fetch(`${apiBase}/api/invitations/my-patients`, {
           headers: { "Authorization": `Bearer ${token}` }
         });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { api, getToken, removeToken } from "./utils/api";
+import { api, getToken, removeToken, API_BASE_URL } from "./utils/api";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { Sidebar } from "./components/Sidebar";
@@ -50,7 +50,7 @@ export default function App() {
     if (!user) return;
     try {
       const token = getToken();
-      const res = await fetch("http://localhost:8000/api/invitations/all-notifications", {
+      const res = await fetch(`${API_BASE_URL}/api/invitations/all-notifications`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -90,7 +90,7 @@ export default function App() {
   const handleInvitationAction = async (rawId: number, action: "accept" | "reject") => {
     try {
       const token = getToken();
-      const res = await fetch(`http://localhost:8000/api/invitations/${rawId}/${action}`, {
+      const res = await fetch(`${API_BASE_URL}/api/invitations/${rawId}/${action}`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -166,8 +166,8 @@ export default function App() {
     localStorage.setItem("patient_user_left_call", "true");
 
     try {
-      fetch("http://localhost:8000/api/realtime/leave/global/patient", { method: "POST" });
-      fetch("http://localhost:8000/api/realtime/leave/global/doctor", { method: "POST" });
+      fetch(`${API_BASE_URL}/api/realtime/leave/global/patient`, { method: "POST" });
+      fetch(`${API_BASE_URL}/api/realtime/leave/global/doctor`, { method: "POST" });
     } catch (e) {}
 
     setUser(null);

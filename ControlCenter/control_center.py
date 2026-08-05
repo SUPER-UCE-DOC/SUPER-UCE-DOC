@@ -253,13 +253,19 @@ class ControlCenterApp:
         def worker():
             self.log_message(f"Ejecutando: {description}...")
             try:
-                proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                stdout, stderr = proc.communicate()
-                if stdout:
-                    self.log_message(stdout.strip())
-                if stderr:
-                    self.log_message(f"[ERROR] {stderr.strip()}")
-                self.log_message(f"✅ {description} finalizado con código {proc.returncode}.")
+                proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                if proc.stdout:
+                    for line in iter(proc.stdout.readline, ''):
+                        if not line:
+                            break
+                        clean_line = line.strip()
+                        if clean_line:
+                            self.log_message(clean_line)
+                proc.wait()
+                if proc.returncode == 0:
+                    self.log_message(f"✅ {description} completado exitosamente.")
+                else:
+                    self.log_message(f"⚠️ {description} finalizó con código {proc.returncode}.")
             except Exception as e:
                 self.log_message(f"❌ Error al ejecutar {description}: {e}")
             self.refresh_health_status()

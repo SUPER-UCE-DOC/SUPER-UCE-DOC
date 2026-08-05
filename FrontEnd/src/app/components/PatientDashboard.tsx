@@ -331,7 +331,8 @@ function LiveElapsedBadge({ roomCode }: { roomCode: number }) {
   useEffect(() => {
     const fetchStart = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/realtime/presence/${roomCode}`);
+        const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+        const res = await fetch(`${apiBase}/api/realtime/presence/${roomCode}`);
         if (res.ok) {
           const data = await res.json();
           if (data.start_time) {
@@ -527,7 +528,7 @@ function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt
     setShowModal(true);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
       const res = await fetch(`${apiBase}/api/invitations/my-doctors`, {
         headers: { "Authorization": `Bearer ${token}` }
       });

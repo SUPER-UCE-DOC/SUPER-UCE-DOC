@@ -5,7 +5,7 @@ import {
   Captions, Hand, Send, Pill, FileText, Clock, CheckCircle2,
   User, ShieldCheck, Minimize2, Maximize2, MapPin, RefreshCw, GripHorizontal
 } from "lucide-react";
-import { api, getToken } from "../utils/api";
+import { api, getToken, API_BASE_URL } from "../utils/api";
 import {
   LiveKitRoom,
   VideoTrack,
@@ -758,7 +758,7 @@ function TelemedicinaRoomContent({
       const checkAppointment = async () => {
         try {
           const token = getToken();
-          const res = await fetch(`http://localhost:8000/api/appointments`, {
+          const res = await fetch(`${API_BASE_URL}/api/appointments`, {
             headers: { "Authorization": `Bearer ${token}` }
           });
           if (res.ok) {
@@ -962,7 +962,7 @@ function TelemedicinaRoomContent({
 
     const loadComments = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`);
+        const res = await fetch(`${API_BASE_URL}/api/realtime/comments/${roomCode}`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -1039,7 +1039,7 @@ function TelemedicinaRoomContent({
     } catch (e) { }
 
     try {
-      await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`, {
+      await fetch(`${API_BASE_URL}/api/realtime/comments/${roomCode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newMsg)
@@ -1097,8 +1097,8 @@ function TelemedicinaRoomContent({
         localStorage.setItem(statusKey, JSON.stringify({ status: "completada", endedBy: "doctor", endedAt: new Date().toISOString() }));
 
         try {
-          await fetch(`http://localhost:8000/api/realtime/end/${roomCode}`, { method: "POST" });
-          await fetch(`http://localhost:8000/api/realtime/comments/${roomCode}`, {
+          await fetch(`${API_BASE_URL}/api/realtime/end/${roomCode}`, { method: "POST" });
+          await fetch(`${API_BASE_URL}/api/realtime/comments/${roomCode}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1112,7 +1112,7 @@ function TelemedicinaRoomContent({
       } else if (role === "patient") {
         // El paciente abandona explícitamente la teleconsulta
         try {
-          await fetch(`http://localhost:8000/api/realtime/leave/${roomCode}/patient`, { method: "POST" });
+          await fetch(`${API_BASE_URL}/api/realtime/leave/${roomCode}/patient`, { method: "POST" });
         } catch (e) { }
       }
     } catch (err) {
