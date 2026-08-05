@@ -153,22 +153,38 @@ function TelemedicinaRoomContent({
   initialVideoOff,
   initialAudioMuted
 }: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean }) {
-  // FIX #2: Fuente única de verdad para estados mic/cámara — únicamente desde eventos RoomEvent
-  // Eliminado el doble estado optimista que creaba race condition con el async de WebRTC
+  // Fuente única de verdad para estados mic/cámara — desde eventos RoomEvent
   const roomCode = appointmentId ? String(appointmentId) : "global";
   const { localParticipant } = useLocalParticipant();
   const [isMicOn, setIsMicOn] = useState(!initialAudioMuted);
   const [isVideoOn, setIsVideoOn] = useState(!initialVideoOff);
+  const [hasCameraDevice, setHasCameraDevice] = useState(true); // optimista; se corrige tras enumerateDevices
+  const [hasMicDevice, setHasMicDevice] = useState(true);
+
+  // Detectar dispositivos disponibles al montar
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const hasVideo = devices.some(d => d.kind === "videoinput");
+      const hasAudio = devices.some(d => d.kind === "audioinput");
+      setHasCameraDevice(hasVideo);
+      setHasMicDevice(hasAudio);
+      // Si no hay cámara, forzar estado visual a apagado
+      if (!hasVideo) setIsVideoOn(false);
+      if (!hasAudio) setIsMicOn(false);
+    }).catch(() => {
+      // Sin permiso aún — no cambiar estado, lo maneja LiveKit
+    });
+  }, []);
 
   const muted = !isMicOn;
   const videoOff = !isVideoOn;
 
   const handleToggleMic = async () => {
     if (!localParticipant) return;
+    if (!hasMicDevice) return; // Sin micrófono disponible
     try {
       const nextMic = !localParticipant.isMicrophoneEnabled;
       await localParticipant.setMicrophoneEnabled(nextMic);
-      // El estado se actualiza solo vía el evento TrackMuted/TrackUnmuted del room
     } catch (err) {
       console.warn("Error en micrófono:", err);
     }
@@ -176,12 +192,17 @@ function TelemedicinaRoomContent({
 
   const handleToggleCamera = async () => {
     if (!localParticipant) return;
+    if (!hasCameraDevice) {
+      // Sin cámara: marcar como apagada explícitamente para limpiar el estado "conectando"
+      setIsVideoOn(false);
+      return;
+    }
     try {
       const nextVideo = !localParticipant.isCameraEnabled;
       await localParticipant.setCameraEnabled(nextVideo);
-      // El estado se actualiza solo vía el evento TrackMuted/TrackUnmuted del room
     } catch (err) {
       console.warn("Error en cámara:", err);
+      setIsVideoOn(false); // Forzar apagado visual si falla
     }
   };
 
@@ -1643,14 +1664,21 @@ function TelemedicinaRoomContent({
 
             <button
               onClick={handleToggleCamera}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${videoOff
-                ? "bg-red-50 text-red-600 border-red-200"
-                : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
-                }`}
-              title={videoOff ? "Activar cámara" : "Desactivar cámara"}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm ${
+                !hasCameraDevice
+                  ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                  : videoOff
+                    ? "bg-red-50 text-red-600 border-red-200 cursor-pointer"
+                    : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50 cursor-pointer"
+              }`}
+              title={
+                !hasCameraDevice
+                  ? "Sin cámara detectada en este equipo"
+                  : videoOff ? "Activar cámara" : "Desactivar cámara"
+              }
             >
-              {videoOff ? <VideoOff size={16} /> : <Video size={16} />}
-              <span>Cámara</span>
+              <VideoOff size={16} className={!hasCameraDevice ? "text-gray-400" : videoOff ? "text-red-600" : "text-gray-600"} />
+              <span>{!hasCameraDevice ? "Sin cámara" : "Cámara"}</span>
             </button>
 
             <button
