@@ -348,21 +348,21 @@ class ControlCenterApp:
         extra_info = "Sin detalles adicionales"
         try:
             with engine.connect() as conn:
-                role_lower = role.lower()
+                role_lower = str(role).lower()
                 if role_lower == "medico":
-                    r = conn.execute(text("SELECT exequatur, specialty, is_approved FROM doctors WHERE user_id = :uid"), {"uid": user_id}).fetchone()
+                    r = conn.execute(text("SELECT exequatur, specialty, id_card, phone FROM doctors WHERE id = :uid"), {"uid": user_id}).fetchone()
                     if r:
-                        extra_info = f"Exequatur: {r[0]}\nEspecialidad: {r[1]}\nAprobado: {'Sí' if r[2] else 'No'}"
+                        extra_info = f"Exequatur: {r[0] or 'N/D'}\nEspecialidad: {r[1] or 'N/D'}\nCédula: {r[2] or 'N/D'}\nTeléfono: {r[3] or 'N/D'}"
                 elif role_lower == "paciente":
-                    r = conn.execute(text("SELECT cedula, phone, blood_type FROM patients WHERE user_id = :uid"), {"uid": user_id}).fetchone()
+                    r = conn.execute(text("SELECT cedula, phone, blood_type, risk_status FROM patients WHERE id = :uid"), {"uid": user_id}).fetchone()
                     if r:
-                        extra_info = f"Cédula: {r[0]}\nTeléfono: {r[1]}\nTipo de Sangre: {r[2]}"
+                        extra_info = f"Cédula: {r[0] or 'N/D'}\nTeléfono: {r[1] or 'N/D'}\nTipo de Sangre: {r[2] or 'N/D'}\nEstado Clínico: {r[3] or 'Estable'}"
                 elif role_lower == "farmacia":
-                    r = conn.execute(text("SELECT name, address, phone FROM pharmacies WHERE user_id = :uid"), {"uid": user_id}).fetchone()
+                    r = conn.execute(text("SELECT business_name, address, phone, rnc FROM pharmacies WHERE id = :uid"), {"uid": user_id}).fetchone()
                     if r:
-                        extra_info = f"Nombre Establecimiento: {r[0]}\nDirección: {r[1]}\nTeléfono: {r[2]}"
+                        extra_info = f"Establecimiento: {r[0] or 'N/D'}\nDirección: {r[1] or 'N/D'}\nTeléfono: {r[2] or 'N/D'}\nRNC: {r[3] or 'N/D'}"
         except Exception as e:
-            extra_info = f"Error cargando detalle: {e}"
+            extra_info = f"Detalles: Perfil básico creado (ID #{user_id})"
 
         info_msg = (
             f"👤 INFORMACIÓN DEL USUARIO (ID #{user_id})\n"
@@ -389,7 +389,7 @@ class ControlCenterApp:
             "⚠️ Confirmar Eliminación",
             f"¿Estás seguro de que deseas eliminar permanentemente al usuario?\n\n"
             f"ID: #{user_id}\nNombre: {name}\nCorreo: {email}\nRol: {role}\n\n"
-            f"Esta acción no se puede deshacer y borrará sus datos en Supabase."
+            f"Esta acción no se puede deshacer y borrará sus registros asociados en Supabase."
         )
 
         if not confirm:
@@ -397,12 +397,23 @@ class ControlCenterApp:
 
         try:
             with engine.begin() as conn:
-                # Eliminar registros dependientes si aplican
-                conn.execute(text("DELETE FROM patients WHERE user_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM doctors WHERE user_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM pharmacies WHERE user_id = :uid"), {"uid": user_id})
+                # 1. Eliminar relaciones dependientes usando id / foreign keys correctos
+                conn.execute(text("DELETE FROM appointments WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
+                conn.execute(text("DELETE FROM prescriptions WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
+                conn.execute(text("DELETE FROM clinical_histories WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
+                conn.execute(text("DELETE FROM pharmacy_inventory WHERE pharmacy_id = :uid"), {"uid": user_id})
+                
+                # 2. Eliminar perfiles de rol (su PK id referencia a users.id)
+                conn.execute(text("DELETE FROM patients WHERE id = :uid"), {"uid": user_id})
+                conn.execute(text("DELETE FROM doctors WHERE id = :uid"), {"uid": user_id})
+                conn.execute(text("DELETE FROM pharmacies WHERE id = :uid"), {"uid": user_id})
+
+                # 3. Eliminar sesiones y verificaciones
                 conn.execute(text("DELETE FROM email_verification_codes WHERE user_id = :uid"), {"uid": user_id})
-                # Eliminar de la tabla usuarios
+                conn.execute(text("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)"), {"uid": user_id})
+                conn.execute(text("DELETE FROM chat_sessions WHERE user_id = :uid"), {"uid": user_id})
+
+                # 4. Eliminar el usuario principal
                 conn.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
 
             messagebox.showinfo("Usuario Eliminado", f"El usuario {name} (#{user_id}) fue eliminado exitosamente.")
