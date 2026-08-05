@@ -179,12 +179,26 @@ function PreCallLobby({
   const [videoOn, setVideoOn] = useState(!savedVideoOff);
   const [audioOn, setAudioOn] = useState(!savedAudioMuted);
   const [lsaOn, setLsaOn] = useState(savedLsaPref);
+  const [hasCameraDevice, setHasCameraDevice] = useState(true);
+  const [hasMicDevice, setHasMicDevice] = useState(true);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Detectar dispositivos de hardware al montar el Lobby
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const hasVideo = devices.some(d => d.kind === "videoinput");
+      const hasAudio = devices.some(d => d.kind === "audioinput");
+      setHasCameraDevice(hasVideo);
+      setHasMicDevice(hasAudio);
+      if (!hasVideo) setVideoOn(false);
+      if (!hasAudio) setAudioOn(false);
+    }).catch(() => {});
+  }, []);
+
   // Previsualización local de la cámara en el Lobby
   useEffect(() => {
-    if (!videoOn) {
+    if (!videoOn || !hasCameraDevice) {
       if (previewStream) {
         previewStream.getTracks().forEach(t => t.stop());
         setPreviewStream(null);
@@ -209,7 +223,7 @@ function PreCallLobby({
     return () => {
       active = false;
     };
-  }, [videoOn]);
+  }, [videoOn, hasCameraDevice]);
 
   useEffect(() => {
     if (videoRef.current && previewStream) {
@@ -244,13 +258,13 @@ function PreCallLobby({
   };
 
   return (
-    <div className="h-full w-full bg-[#F9FAFB] flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto relative font-sans">
+    <div className="h-full w-full bg-[#F9FAFB] flex flex-col items-center justify-center p-6 md:p-10 overflow-y-auto relative font-sans">
       {/* Área Central: Vista Previa y Configuración de Entrada */}
-      <div className="w-full max-w-5xl my-auto flex flex-col lg:flex-row items-stretch justify-center gap-6 py-2">
-        {/* Columna Izquierda: Vista previa de cámara */}
-        <div className="flex-1 w-full bg-white rounded-2xl p-5 md:p-6 border border-gray-100 shadow-sm flex flex-col items-center justify-between gap-4">
-          <div className="relative aspect-video min-h-[340px] md:min-h-[400px] w-full bg-[#111827] rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
-            {videoOn && previewStream ? (
+      <div className="w-full max-w-6xl my-auto flex flex-col lg:flex-row items-stretch justify-center gap-8 py-4">
+        {/* Columna Izquierda: Vista previa de cámara (Ampliada) */}
+        <div className="flex-1 w-full bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm flex flex-col items-center justify-between gap-6">
+          <div className="relative aspect-video min-h-[380px] md:min-h-[440px] w-full bg-[#111827] rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+            {videoOn && hasCameraDevice && previewStream ? (
               <video
                 ref={videoRef}
                 autoPlay
@@ -259,84 +273,100 @@ function PreCallLobby({
                 className="w-full h-full object-cover -scale-x-100"
               />
             ) : (
-              <div className="flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-20 h-20 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-24 h-24 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-3xl mb-4 shadow-md">
                   {props.userAvatar && (props.userAvatar.startsWith("http") || props.userAvatar.startsWith("data:")) ? (
                     <img src={props.userAvatar} alt={props.userName} className="w-full h-full object-cover rounded-full" />
                   ) : (
                     getInitials(props.userName)
                   )}
                 </div>
-                <h3 className="text-base font-bold text-white mb-1.5">{props.userName} (Tú)</h3>
-                <span className="text-xs text-gray-300 font-medium px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700">
-                  Cámara Desactivada
+                <h3 className="text-lg font-bold text-white mb-2">{props.userName} (Tú)</h3>
+                <span className="text-xs text-gray-300 font-medium px-4 py-1.5 rounded-full bg-slate-800/90 border border-slate-700">
+                  {!hasCameraDevice ? "Sin cámara detectada" : "Cámara Desactivada"}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Barra de Controles Dedicada (Debajo de la cámara, sin encimarse al video) */}
-          <div className="flex items-center justify-center gap-3 py-2.5 px-4 bg-gray-50 rounded-xl border border-gray-100 w-full flex-wrap">
+          {/* Barra de Controles Dedicada (Debajo de la cámara, ampliada y sin cortes) */}
+          <div className="flex items-center justify-center gap-4 py-3.5 px-6 bg-gray-50/80 rounded-2xl border border-gray-100 w-full flex-wrap">
             <button
-              onClick={() => setAudioOn(!audioOn)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${
-                !audioOn
-                  ? "bg-red-50 text-red-600 border-red-200"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+              onClick={() => {
+                if (!hasMicDevice) return;
+                setAudioOn(!audioOn);
+              }}
+              disabled={!hasMicDevice}
+              className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all border shadow-sm ${
+                !hasMicDevice
+                  ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                  : !audioOn
+                    ? "bg-red-50 text-red-600 border-red-200 cursor-pointer"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100 cursor-pointer"
               }`}
-              title={audioOn ? "Desactivar micrófono" : "Activar micrófono"}
+              title={!hasMicDevice ? "Sin micrófono detectado" : audioOn ? "Desactivar micrófono" : "Activar micrófono"}
             >
-              {audioOn ? <Mic size={16} /> : <MicOff size={16} />}
-              <span>{audioOn ? "Micrófono Activado" : "Micrófono Desactivado"}</span>
+              {audioOn ? <Mic size={18} /> : <MicOff size={18} />}
+              <span>{!hasMicDevice ? "Sin micrófono" : audioOn ? "Micrófono Activado" : "Micrófono Desactivado"}</span>
             </button>
 
             <button
-              onClick={() => setVideoOn(!videoOn)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${
-                !videoOn
-                  ? "bg-red-50 text-red-600 border-red-200"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+              onClick={() => {
+                if (!hasCameraDevice) return;
+                setVideoOn(!videoOn);
+              }}
+              disabled={!hasCameraDevice}
+              className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all border shadow-sm ${
+                !hasCameraDevice
+                  ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                  : !videoOn
+                    ? "bg-red-50 text-red-600 border-red-200 cursor-pointer"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100 cursor-pointer"
               }`}
-              title={videoOn ? "Desactivar cámara" : "Activar cámara"}
+              title={
+                !hasCameraDevice
+                  ? "Sin cámara detectada en este equipo"
+                  : videoOn ? "Desactivar cámara" : "Activar cámara"
+              }
             >
-              {videoOn ? <Video size={16} /> : <VideoOff size={16} />}
-              <span>{videoOn ? "Cámara Activada" : "Cámara Desactivada"}</span>
+              <VideoOff size={18} className={!hasCameraDevice ? "text-gray-400" : !videoOn ? "text-red-600" : "text-gray-600"} />
+              <span>{!hasCameraDevice ? "Sin cámara" : videoOn ? "Cámara Activada" : "Cámara Desactivada"}</span>
             </button>
 
             {props.role === "patient" && (
               <button
                 onClick={() => setLsaOn(!lsaOn)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${
+                className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${
                   lsaOn
                     ? "bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]"
                     : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
                 }`}
                 title="Activar/Desactivar Traductor de Lenguaje de Señas (LSA)"
               >
-                <Hand size={16} />
+                <Hand size={18} />
                 <span>{lsaOn ? "Traductor LSA Activado" : "Traductor LSA Desactivado"}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Columna Derecha: Tarjeta de Ingreso e Información */}
-        <div className="w-full lg:w-[380px] bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between gap-6 flex-shrink-0">
+        {/* Columna Derecha: Tarjeta de Ingreso e Información (Ampliada) */}
+        <div className="w-full lg:w-[420px] bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm flex flex-col justify-between gap-6 flex-shrink-0">
           <div>
-            <div className="inline-block px-3 py-1 rounded-full bg-teal-50 text-[#00A69D] font-bold text-xs mb-2.5 border border-teal-100">
+            <div className="inline-block px-3.5 py-1 rounded-full bg-teal-50 text-[#00A69D] font-bold text-xs mb-3 border border-teal-100">
               {props.role === "doctor" ? "Panel del Médico" : "Paciente"}
             </div>
-            <h2 className="text-xl font-bold text-[#203A70]">¿Listo para la consulta?</h2>
-            <p className="text-xs text-gray-500 mt-1">
+            <h2 className="text-2xl font-bold text-[#203A70]">¿Listo para la consulta?</h2>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
               {props.role === "doctor"
-                ? `Atención virtual con ${props.counterpartName}`
+                ? `Atención médica virtual con ${props.counterpartName}`
                 : `Consulta médica con el ${props.counterpartName}`}
             </p>
           </div>
 
           {/* Tarjeta del Interlocutor (Paciente o Doctor Registrado) */}
-          <div className="flex items-center gap-3.5 p-4 rounded-xl bg-gray-50/80 border border-gray-100">
-            <div className="w-12 h-12 rounded-full bg-[#203A70] text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-4 p-4.5 rounded-2xl bg-gray-50/90 border border-gray-100">
+            <div className="w-14 h-14 rounded-full bg-[#203A70] text-white flex items-center justify-center font-bold text-base overflow-hidden flex-shrink-0 shadow-sm">
               {props.counterpartAvatar && (props.counterpartAvatar.startsWith("http") || props.counterpartAvatar.startsWith("data:")) ? (
                 <img src={props.counterpartAvatar} alt={props.counterpartName} className="w-full h-full object-cover" />
               ) : (
@@ -344,21 +374,21 @@ function PreCallLobby({
               )}
             </div>
             <div className="overflow-hidden">
-              <h4 className="text-sm font-bold text-[#203A70] truncate">{props.counterpartName}</h4>
-              <p className="text-xs text-[#00A69D] font-semibold truncate">
+              <h4 className="text-base font-bold text-[#203A70] truncate">{props.counterpartName}</h4>
+              <p className="text-xs text-[#00A69D] font-semibold truncate mt-0.5">
                 {props.counterpartSpecialty || (props.role === "doctor" ? "Paciente Registrado" : "Médico Especialista")}
               </p>
               {props.appointmentReason && (
-                <p className="text-[11px] text-gray-500 truncate mt-0.5">Motivo: {props.appointmentReason}</p>
+                <p className="text-xs text-gray-500 truncate mt-1">Motivo: {props.appointmentReason}</p>
               )}
             </div>
           </div>
 
           {/* Resumen de Dispositivos Seleccionados */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
               <span className="flex items-center gap-2 text-gray-700">
-                {audioOn ? <Mic size={15} className="text-[#00A69D]" /> : <MicOff size={15} className="text-red-500" />}
+                {audioOn ? <Mic size={16} className="text-[#00A69D]" /> : <MicOff size={16} className="text-red-500" />}
                 Micrófono
               </span>
               <span className={audioOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
@@ -366,20 +396,20 @@ function PreCallLobby({
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+            <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
               <span className="flex items-center gap-2 text-gray-700">
-                {videoOn ? <Video size={15} className="text-[#00A69D]" /> : <VideoOff size={15} className="text-red-500" />}
+                {videoOn ? <Video size={16} className="text-[#00A69D]" /> : <VideoOff size={16} className="text-red-500" />}
                 Cámara
               </span>
-              <span className={videoOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
-                {videoOn ? "Activada" : "Desactivada"}
+              <span className={!hasCameraDevice ? "text-gray-400 font-bold" : videoOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
+                {!hasCameraDevice ? "Sin cámara" : videoOn ? "Activada" : "Desactivada"}
               </span>
             </div>
 
             {props.role === "patient" && (
-              <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+              <div className="flex items-center justify-between text-xs font-semibold p-3.5 rounded-xl bg-gray-50/80 border border-gray-100">
                 <span className="flex items-center gap-2 text-gray-700">
-                  <Hand size={15} className={lsaOn ? "text-[#00A69D]" : "text-gray-400"} />
+                  <Hand size={16} className={lsaOn ? "text-[#00A69D]" : "text-gray-400"} />
                   Traductor LSA
                 </span>
                 <span className={lsaOn ? "text-emerald-600 font-bold" : "text-gray-500 font-bold"}>
@@ -390,10 +420,10 @@ function PreCallLobby({
           </div>
 
           {/* Botones de Acción Estilo Estándar */}
-          <div className="flex flex-col gap-2.5 pt-1">
+          <div className="flex flex-col gap-3 pt-2">
             <button
               onClick={handleJoinClick}
-              className="w-full py-3 px-5 rounded-xl bg-[#00A69D] hover:bg-[#008f87] text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-6 rounded-xl bg-[#00A69D] hover:bg-[#008f87] text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer"
             >
               <Video size={18} />
               <span>Unirse a la Teleconsulta</span>
@@ -401,7 +431,7 @@ function PreCallLobby({
 
             <button
               onClick={props.onEndCall}
-              className="w-full py-2.5 px-5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs transition-all text-center cursor-pointer"
+              className="w-full py-3 px-6 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs transition-all text-center cursor-pointer"
             >
               Cancelar y salir
             </button>
