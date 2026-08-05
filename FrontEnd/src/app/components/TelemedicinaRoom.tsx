@@ -148,7 +148,8 @@ function TelemedicinaRoomContent({
   initialVideoOff,
   initialAudioMuted
 }: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean }) {
-  // Call Controls State (Optimistas con respuesta visual en 0ms y sincronización nativa LiveKit)
+  // FIX #2: Fuente única de verdad para estados mic/cámara — únicamente desde eventos RoomEvent
+  // Eliminado el doble estado optimista que creaba race condition con el async de WebRTC
   const roomCode = appointmentId ? String(appointmentId) : "global";
   const { localParticipant } = useLocalParticipant();
   const [isMicOn, setIsMicOn] = useState(!initialAudioMuted);
@@ -157,37 +158,25 @@ function TelemedicinaRoomContent({
   const muted = !isMicOn;
   const videoOff = !isVideoOn;
 
-  // Sincronizar estado visual cuando el participante o dispositivo cambie
-  useEffect(() => {
-    if (localParticipant) {
-      setIsMicOn(localParticipant.isMicrophoneEnabled);
-      setIsVideoOn(localParticipant.isCameraEnabled);
-    }
-  }, [localParticipant?.isMicrophoneEnabled, localParticipant?.isCameraEnabled]);
-
   const handleToggleMic = async () => {
-    const nextMic = !isMicOn;
-    setIsMicOn(nextMic); // Respuesta visual instantánea en 0ms
-    if (localParticipant) {
-      try {
-        await localParticipant.setMicrophoneEnabled(nextMic);
-      } catch (err) {
-        console.warn("Error en micrófono:", err);
-        setIsMicOn(!nextMic);
-      }
+    if (!localParticipant) return;
+    try {
+      const nextMic = !localParticipant.isMicrophoneEnabled;
+      await localParticipant.setMicrophoneEnabled(nextMic);
+      // El estado se actualiza solo vía el evento TrackMuted/TrackUnmuted del room
+    } catch (err) {
+      console.warn("Error en micrófono:", err);
     }
   };
 
   const handleToggleCamera = async () => {
-    const nextVideo = !isVideoOn;
-    setIsVideoOn(nextVideo); // Respuesta visual instantánea en 0ms
-    if (localParticipant) {
-      try {
-        await localParticipant.setCameraEnabled(nextVideo);
-      } catch (err) {
-        console.warn("Error en cámara:", err);
-        setIsVideoOn(!nextVideo);
-      }
+    if (!localParticipant) return;
+    try {
+      const nextVideo = !localParticipant.isCameraEnabled;
+      await localParticipant.setCameraEnabled(nextVideo);
+      // El estado se actualiza solo vía el evento TrackMuted/TrackUnmuted del room
+    } catch (err) {
+      console.warn("Error en cámara:", err);
     }
   };
 
@@ -762,22 +751,47 @@ function TelemedicinaRoomContent({
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [, setRtcUpdateCounter] = useState(0);
 
+  // FIX #1: Refs estables para isSwapped y localParticipant para evitar el re-registro
+  // infinito de listeners que destruía la conexión WebRTC en cada re-render.
+  const isSwappedRef = useRef(isSwapped);
+  const localParticipantRef = useRef(localParticipant);
+  useEffect(() => { isSwappedRef.current = isSwapped; }, [isSwapped]);
+  useEffect(() => { localParticipantRef.current = localParticipant; }, [localParticipant]);
+
   useEffect(() => {
     if (!room) return;
+
     const triggerUpdate = () => setRtcUpdateCounter(c => c + 1);
 
     const handleActiveSpeakers = (speakers: Participant[]) => {
-      const pipParticipant = isSwapped ? remoteParticipants[0] : localParticipant;
+      const currentRemotes = Array.from(room.remoteParticipants.values());
+      const pipParticipant = isSwappedRef.current ? currentRemotes[0] : localParticipantRef.current;
       setIsPipSpeaking(pipParticipant ? speakers.some(p => p.sid === pipParticipant.sid) : false);
-
-      const remote = remoteParticipants[0];
+      const remote = currentRemotes[0];
       setIsRemoteSpeaking(remote ? speakers.some(p => p.sid === remote.sid) : false);
       triggerUpdate();
     };
 
+    // FIX #2 (parte 2): Actualizar estados mic/cámara local directamente desde eventos de room
+    const handleTrackMuted = (pub: any, participant: any) => {
+      if (participant.isLocal) {
+        if (pub.source === Track.Source.Microphone) setIsMicOn(false);
+        if (pub.source === Track.Source.Camera) setIsVideoOn(false);
+      }
+      triggerUpdate();
+    };
+
+    const handleTrackUnmuted = (pub: any, participant: any) => {
+      if (participant.isLocal) {
+        if (pub.source === Track.Source.Microphone) setIsMicOn(true);
+        if (pub.source === Track.Source.Camera) setIsVideoOn(true);
+      }
+      triggerUpdate();
+    };
+
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
-    room.on(RoomEvent.TrackMuted, triggerUpdate);
-    room.on(RoomEvent.TrackUnmuted, triggerUpdate);
+    room.on(RoomEvent.TrackMuted, handleTrackMuted);
+    room.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
     room.on(RoomEvent.TrackPublished, triggerUpdate);
     room.on(RoomEvent.TrackUnpublished, triggerUpdate);
     room.on(RoomEvent.TrackSubscribed, triggerUpdate);
@@ -787,8 +801,8 @@ function TelemedicinaRoomContent({
 
     return () => {
       room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
-      room.off(RoomEvent.TrackMuted, triggerUpdate);
-      room.off(RoomEvent.TrackUnmuted, triggerUpdate);
+      room.off(RoomEvent.TrackMuted, handleTrackMuted);
+      room.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
       room.off(RoomEvent.TrackPublished, triggerUpdate);
       room.off(RoomEvent.TrackUnpublished, triggerUpdate);
       room.off(RoomEvent.TrackSubscribed, triggerUpdate);
@@ -796,7 +810,8 @@ function TelemedicinaRoomContent({
       room.off(RoomEvent.ParticipantConnected, triggerUpdate);
       room.off(RoomEvent.ParticipantDisconnected, triggerUpdate);
     };
-  }, [room, isSwapped, remoteParticipants, localParticipant]);
+  // FIX #1: Solo `room` como dependencia — los demás son accedidos via refs estables
+  }, [room]);
 
   const isCounterpartConnected = remoteParticipants.length > 0;
   const isCounterpartVideoOff = !remoteCameraTrack || !remoteCameraTrack.publication || remoteCameraTrack.publication.isMuted || remoteCameraTrack.publication.isSubscribed === false || remoteCameraTrack.participant?.isCameraEnabled === false;
@@ -891,8 +906,11 @@ function TelemedicinaRoomContent({
 
     let interval: NodeJS.Timeout;
 
-    // Conectar al WebSocket de FastAPI
-    const ws = new WebSocket(`ws://localhost:8000/api/sign-language/stream/${roomCode}`);
+    // FIX #3: Usar URL de backend correcta desde variables de entorno (no localhost hardcodeado)
+    const wsBaseUrl = ((import.meta as any).env?.VITE_API_BASE_URL || "https://superucedoc-api.duckdns.org")
+      .replace("https://", "wss://")
+      .replace("http://", "ws://");
+    const ws = new WebSocket(`${wsBaseUrl}/api/sign-language/stream/${roomCode}`);
 
     ws.onopen = () => {
       console.log("[ISLR] Conectado al traductor de señas.");
@@ -1063,7 +1081,9 @@ function TelemedicinaRoomContent({
     };
 
     loadComments();
-    const interval = setInterval(loadComments, 1500);
+    // FIX #4: Reducir polling de 1500ms a 5000ms para liberar el event loop del browser
+    // durante la carga de CPU del WebRTC + AudioContext + H.264 encode concurrentes.
+    const interval = setInterval(loadComments, 5000);
     return () => clearInterval(interval);
   }, [roomCode, storageKey, role]);
 
