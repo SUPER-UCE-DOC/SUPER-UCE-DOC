@@ -12,6 +12,8 @@ import {
   useTracks,
   useLocalParticipant,
   useRemoteParticipants,
+  useTrackToggle,
+  useIsMuted,
   RoomAudioRenderer,
   useRoomContext,
   useDataChannel
@@ -146,10 +148,13 @@ function TelemedicinaRoomContent({
   initialVideoOff,
   initialAudioMuted
 }: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean }) {
-  // Call Controls State
+  // Call Controls State (Nativos de LiveKit con useTrackToggle)
   const roomCode = appointmentId ? String(appointmentId) : "global";
-  const [muted, setMuted] = useState(initialAudioMuted);
-  const [videoOff, setVideoOff] = useState(initialVideoOff);
+  const { toggle: toggleCamera, enabled: isCameraEnabled } = useTrackToggle({ source: Track.Source.Camera });
+  const { toggle: toggleMicrophone, enabled: isMicrophoneEnabled } = useTrackToggle({ source: Track.Source.Microphone });
+  const muted = !isMicrophoneEnabled;
+  const videoOff = !isCameraEnabled;
+
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [lseMode, setLseMode] = useState(false);
   const [isLsaEnabledInSettings, setIsLsaEnabledInSettings] = useState<boolean>(true);
@@ -198,15 +203,11 @@ function TelemedicinaRoomContent({
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
   const { localParticipant } = useLocalParticipant();
 
-  // Sincronizar estado local de controles con LiveKit y LocalStorage
+  // Guardar preferencia local en LocalStorage
   useEffect(() => {
-    if (localParticipant) {
-      localParticipant.setMicrophoneEnabled(!muted).catch(() => {});
-      localParticipant.setCameraEnabled(!videoOff).catch(() => {});
-    }
     localStorage.setItem("local_audio_muted", muted ? "true" : "false");
     localStorage.setItem("local_video_off", videoOff ? "true" : "false");
-  }, [muted, videoOff, localParticipant]);
+  }, [muted, videoOff]);
 
   // Arrastre interactivo y magnetismo a esquinas de ventana flotante (PIP)
   type CornerPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -1563,7 +1564,7 @@ function TelemedicinaRoomContent({
           {/* BARRA DE CONTROLES INFERIOR (BOTONES REDONDEADOS CON ESTILO MÉDICO ESTÁNDAR) */}
           <div className="flex items-center justify-center gap-3 py-3 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm flex-wrap">
             <button
-              onClick={() => setMuted(!muted)}
+              onClick={() => toggleMicrophone()}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${muted
                 ? "bg-red-50 text-red-600 border-red-200"
                 : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
@@ -1575,7 +1576,7 @@ function TelemedicinaRoomContent({
             </button>
 
             <button
-              onClick={() => setVideoOff(!videoOff)}
+              onClick={() => toggleCamera()}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${videoOff
                 ? "bg-red-50 text-red-600 border-red-200"
                 : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
