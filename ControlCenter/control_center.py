@@ -42,7 +42,6 @@ DB_AVAILABLE = False
 try:
     from sqlalchemy import create_engine, text, inspect
     if DATABASE_URL:
-        # Ajustar protocolo si es necesario
         db_uri = DATABASE_URL
         if db_uri.startswith("postgres://"):
             db_uri = db_uri.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -55,11 +54,13 @@ class ControlCenterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("🏥 SUPER-UCE DOC - Centro de Control Multiplataforma")
-        self.root.geometry("1100x720")
+        self.root.geometry("1100x750")
         self.root.minsize(950, 600)
 
         self.is_linux = platform.system() == "Linux"
         self.is_windows = platform.system() == "Windows"
+        self.log_streaming = True
+        self.log_process = None
 
         # Estilo temático oscuro profesional
         self.setup_styles()
@@ -95,10 +96,13 @@ class ControlCenterApp:
         self.notebook.add(self.tab_health, text=" 🟢 Salud del Sistema ")
         self.setup_tab_health()
 
-        # Cargar datos iniciales
+        # Cargar datos iniciales y streaming de logs
         self.refresh_health_status()
         if DB_AVAILABLE:
             self.load_users_data()
+
+        # Iniciar transmisión de logs en vivo
+        self.start_live_logs_stream()
 
     def setup_styles(self):
         style = ttk.Style()
@@ -169,19 +173,61 @@ class ControlCenterApp:
         btn_vercel.pack(side=tk.LEFT, padx=15)
 
         # Consola de Registros / Salida
-        log_frame = ttk.Frame(self.tab_server, style="Card.TFrame")
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+        log_header = ttk.Frame(self.tab_server, style="Card.TFrame")
+        log_header.pack(fill=tk.X, padx=15, pady=(5, 0))
 
-        tk.Label(log_frame, text="Consola de Registros en Vivo:", bg=self.BG_CARD, fg=self.TEXT_MUTED, font=("Helvetica", 10, "bold")).pack(anchor="w", pady=(5, 5))
+        tk.Label(log_header, text="📜 Registros del Backend en Vivo (journalctl stream):", bg=self.BG_CARD, fg=self.PRIMARY, font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
+
+        btn_clear = tk.Button(log_header, text="🧹 Limpiar Consola", bg="#475569", fg="white", font=("Helvetica", 8, "bold"), padx=8, pady=2, relief="flat", command=self.clear_console)
+        btn_clear.pack(side=tk.RIGHT, padx=5)
+
+        self.btn_toggle_logs = tk.Button(log_header, text="⏸️ Pausar Streaming", bg="#64748B", fg="white", font=("Helvetica", 8, "bold"), padx=8, pady=2, relief="flat", command=self.toggle_log_stream)
+        self.btn_toggle_logs.pack(side=tk.RIGHT, padx=5)
+
+        log_frame = ttk.Frame(self.tab_server, style="Card.TFrame")
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(5, 15))
 
         self.console = scrolledtext.ScrolledText(log_frame, bg="#0F172A", fg="#34D399", font=("Consolas", 9), insertbackground="white")
         self.console.pack(fill=tk.BOTH, expand=True)
-        self.log_message("Centro de Control listo. Selecciona una operación.")
 
     def log_message(self, msg):
-        timestamp = time.strftime("[%H:%M:%S] ")
-        self.console.insert(tk.END, timestamp + msg + "\n")
-        self.console.see(tk.END)
+        def append():
+            timestamp = time.strftime("[%H:%M:%S] ")
+            self.console.insert(tk.END, timestamp + msg + "\n")
+            self.console.see(tk.END)
+        self.root.after(0, append)
+
+    def clear_console(self):
+        self.console.delete("1.0", tk.END)
+
+    def toggle_log_stream(self):
+        self.log_streaming = not self.log_streaming
+        if self.log_streaming:
+            self.btn_toggle_logs.config(text="⏸️ Pausar Streaming", bg="#64748B")
+            self.log_message("▶️ Streaming de registros reanudado.")
+        else:
+            self.btn_toggle_logs.config(text="▶️ Reanudar Streaming", bg="#10B981")
+            self.log_message("⏸️ Streaming de registros pausado.")
+
+    def start_live_logs_stream(self):
+        def stream_worker():
+            if self.is_linux:
+                cmd = "journalctl -u super-uce-backend.service -f -n 30 --no-pager"
+                try:
+                    self.log_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    for line in iter(self.log_process.stdout.readline, ''):
+                        if not line:
+                            break
+                        if self.log_streaming:
+                            clean_line = line.strip()
+                            if clean_line:
+                                self.root.after(0, lambda l=clean_line: (self.console.insert(tk.END, l + "\n"), self.console.see(tk.END)))
+                except Exception as e:
+                    self.log_message(f"Error iniciando transmisión de logs: {e}")
+            else:
+                self.log_message("En Windows, los registros se muestran cuando ejecutas comandos del servidor.")
+
+        threading.Thread(target=stream_worker, daemon=True).start()
 
     def run_async_cmd(self, cmd, description):
         def worker():
@@ -397,24 +443,25 @@ class ControlCenterApp:
 
         try:
             with engine.begin() as conn:
-                # 1. Eliminar relaciones dependientes usando id / foreign keys correctos
-                conn.execute(text("DELETE FROM appointments WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM prescriptions WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM clinical_histories WHERE patient_id = :uid OR doctor_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM pharmacy_inventory WHERE pharmacy_id = :uid"), {"uid": user_id})
-                
-                # 2. Eliminar perfiles de rol (su PK id referencia a users.id)
-                conn.execute(text("DELETE FROM patients WHERE id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM doctors WHERE id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM pharmacies WHERE id = :uid"), {"uid": user_id})
-
-                # 3. Eliminar sesiones y verificaciones
-                conn.execute(text("DELETE FROM email_verification_codes WHERE user_id = :uid"), {"uid": user_id})
-                conn.execute(text("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)"), {"uid": user_id})
-                conn.execute(text("DELETE FROM chat_sessions WHERE user_id = :uid"), {"uid": user_id})
-
-                # 4. Eliminar el usuario principal
-                conn.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
+                statements = [
+                    ("DELETE FROM appointments WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM prescriptions WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM clinical_histories WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM doctor_patient_links WHERE doctor_id = :uid OR patient_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM pharmacy_inventory WHERE pharmacy_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM patients WHERE id = :uid", {"uid": user_id}),
+                    ("DELETE FROM doctors WHERE id = :uid", {"uid": user_id}),
+                    ("DELETE FROM pharmacies WHERE id = :uid", {"uid": user_id}),
+                    ("DELETE FROM email_verification_codes WHERE email = :uemail", {"uemail": str(email)}),
+                    ("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)", {"uid": user_id}),
+                    ("DELETE FROM chat_sessions WHERE user_id = :uid", {"uid": user_id}),
+                    ("DELETE FROM users WHERE id = :uid", {"uid": user_id}),
+                ]
+                for stmt, params in statements:
+                    try:
+                        conn.execute(text(stmt), params)
+                    except Exception as se:
+                        print(f"[Warning] Sub-delete statement skipped: {se}")
 
             messagebox.showinfo("Usuario Eliminado", f"El usuario {name} (#{user_id}) fue eliminado exitosamente.")
             self.load_users_data()
