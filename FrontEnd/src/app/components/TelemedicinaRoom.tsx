@@ -69,12 +69,11 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [roomStartTime, setRoomStartTime] = useState<number>(0);
   const tokenFetchedRef = useRef(false);
 
-  // Read hardware prefs once at mount time (NOT inside the appointmentId effect,
-  // to avoid re-renders that change video/audio props on <LiveKitRoom> after it mounts)
-  const savedVideoOff = localStorage.getItem("local_video_off") === "true";
-  const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
-  const [initialVideoOn] = useState(!savedVideoOff);
-  const [initialAudioOn] = useState(!savedAudioMuted);
+  // Pre-call Lobby State (Teams / Meet style)
+  const [hasJoined, setHasJoined] = useState(false);
+  const [joinedVideoOn, setJoinedVideoOn] = useState(true);
+  const [joinedAudioOn, setJoinedAudioOn] = useState(true);
+  const [joinedLsaOn, setJoinedLsaOn] = useState(true);
 
   useEffect(() => {
     // Force sidebar collapse when entering live room
@@ -86,8 +85,6 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       window.dispatchEvent(new Event("force-sidebar-expand"));
     };
 
-    // FIX: Only fetch token once — guard with ref to prevent re-fetch
-    // when parent re-renders and appointmentId changes from undefined → value
     if (tokenFetchedRef.current) return cleanupSidebar;
     tokenFetchedRef.current = true;
 
@@ -120,18 +117,304 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     );
   }
 
+  // Pre-Call Lobby Screen (Lobby previo a la llamada estilo Teams / Meet)
+  if (!hasJoined) {
+    return (
+      <PreCallLobby
+        props={props}
+        onJoin={(videoOn, audioOn, lsaOn) => {
+          setJoinedVideoOn(videoOn);
+          setJoinedAudioOn(audioOn);
+          setJoinedLsaOn(lsaOn);
+          setHasJoined(true);
+        }}
+      />
+    );
+  }
+
   return (
     <LiveKitRoom
       serverUrl={(import.meta as any).env?.VITE_LIVEKIT_URL || "wss://superucedoc-livekit.duckdns.org"}
       token={tokenToUse}
       connect={true}
-      video={initialVideoOn}
-      audio={initialAudioOn}
+      video={joinedVideoOn}
+      audio={joinedAudioOn}
       className="h-full w-full"
     >
-      <TelemedicinaRoomContent {...props} startTime={roomStartTime} initialVideoOff={!initialVideoOn} initialAudioMuted={!initialAudioOn} />
+      <TelemedicinaRoomContent
+        {...props}
+        startTime={roomStartTime}
+        initialVideoOff={!joinedVideoOn}
+        initialAudioMuted={!joinedAudioOn}
+        initialLsaOn={joinedLsaOn}
+      />
       <RoomAudioRenderer />
     </LiveKitRoom>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Componente de Menú Previo / Lobby estilo Microsoft Teams
+// ──────────────────────────────────────────────
+function PreCallLobby({
+  props,
+  onJoin
+}: {
+  props: TelemedicinaRoomProps;
+  onJoin: (videoOn: boolean, audioOn: boolean, lsaOn: boolean) => void;
+}) {
+  const savedVideoOff = localStorage.getItem("local_video_off") === "true";
+  const savedAudioMuted = localStorage.getItem("local_audio_muted") === "true";
+  const savedLsaPref = localStorage.getItem("lsa_preference") !== "false";
+
+  const [videoOn, setVideoOn] = useState(!savedVideoOff);
+  const [audioOn, setAudioOn] = useState(!savedAudioMuted);
+  const [lsaOn, setLsaOn] = useState(savedLsaPref);
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Previsualización local de la cámara en el Lobby
+  useEffect(() => {
+    if (!videoOn) {
+      if (previewStream) {
+        previewStream.getTracks().forEach(t => t.stop());
+        setPreviewStream(null);
+      }
+      return;
+    }
+
+    let active = true;
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(stream => {
+        if (active) {
+          setPreviewStream(stream);
+        } else {
+          stream.getTracks().forEach(t => t.stop());
+        }
+      })
+      .catch(err => {
+        console.warn("Vista previa de cámara no disponible:", err);
+        if (active) setVideoOn(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [videoOn]);
+
+  useEffect(() => {
+    if (videoRef.current && previewStream) {
+      videoRef.current.srcObject = previewStream;
+    }
+  }, [previewStream]);
+
+  // Limpiar stream al desmontar el lobby
+  useEffect(() => {
+    return () => {
+      if (previewStream) {
+        previewStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [previewStream]);
+
+  const handleJoinClick = () => {
+    if (previewStream) {
+      previewStream.getTracks().forEach(t => t.stop());
+      setPreviewStream(null);
+    }
+    localStorage.setItem("local_video_off", !videoOn ? "true" : "false");
+    localStorage.setItem("local_audio_muted", !audioOn ? "true" : "false");
+    localStorage.setItem("lsa_preference", lsaOn ? "true" : "false");
+    onJoin(videoOn, audioOn, lsaOn);
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.substring(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="h-full w-full bg-[#F8FAFC] flex flex-col justify-between p-4 md:p-8 overflow-y-auto relative font-sans">
+      {/* Encabezado Principal */}
+      <div className="w-full max-w-5xl mx-auto flex items-center justify-between py-2 border-b border-gray-200/80 mb-2">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#00A69D] flex items-center justify-center text-white font-black text-lg shadow-md shadow-[#00A69D]/20">
+            S
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-[#203A70]">SUPER-UCE DOC</h1>
+            <p className="text-xs text-gray-500 font-medium">Sala de Teleconsulta Médica Segura</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+          <ShieldCheck size={14} className="text-emerald-600" />
+          <span>Conexión Médica Cifrada</span>
+        </div>
+      </div>
+
+      {/* Área Central: Vista Previa y Configuración de Entrada */}
+      <div className="w-full max-w-5xl mx-auto flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 py-4">
+        {/* Columna Izquierda: Vista previa de cámara */}
+        <div className="flex-1 w-full max-w-xl flex flex-col items-center gap-4">
+          <div className="relative aspect-video w-full bg-slate-900 rounded-3xl overflow-hidden border border-slate-700 shadow-2xl flex items-center justify-center group">
+            {videoOn && previewStream ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover -scale-x-100"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-24 h-24 rounded-full bg-[#00A69D] text-white flex items-center justify-center font-bold text-3xl mb-3 shadow-lg">
+                  {props.userAvatar && (props.userAvatar.startsWith("http") || props.userAvatar.startsWith("data:")) ? (
+                    <img src={props.userAvatar} alt={props.userName} className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    getInitials(props.userName)
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">{props.userName} (Tú)</h3>
+                <span className="text-xs text-slate-400 font-semibold px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
+                  Cámara Desactivada
+                </span>
+              </div>
+            )}
+
+            {/* Botones de Control Flotantes en Vista Previa */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-black/60 backdrop-blur-xl px-5 py-2.5 rounded-2xl border border-white/10 shadow-2xl">
+              <button
+                onClick={() => setAudioOn(!audioOn)}
+                title={audioOn ? "Desactivar micrófono" : "Activar micrófono"}
+                className={`p-3 rounded-xl transition-all cursor-pointer ${
+                  audioOn ? "bg-white/20 hover:bg-white/30 text-white" : "bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/30"
+                }`}
+              >
+                {audioOn ? <Mic size={20} /> : <MicOff size={20} />}
+              </button>
+
+              <button
+                onClick={() => setVideoOn(!videoOn)}
+                title={videoOn ? "Desactivar cámara" : "Activar cámara"}
+                className={`p-3 rounded-xl transition-all cursor-pointer ${
+                  videoOn ? "bg-white/20 hover:bg-white/30 text-white" : "bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/30"
+                }`}
+              >
+                {videoOn ? <Video size={20} /> : <VideoOff size={20} />}
+              </button>
+
+              {props.role === "patient" && (
+                <button
+                  onClick={() => setLsaOn(!lsaOn)}
+                  title="Activar/Desactivar Traductor de Lenguaje de Señas (LSA)"
+                  className={`px-3.5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 font-bold text-xs ${
+                    lsaOn
+                      ? "bg-[#00A69D] hover:bg-[#008f87] text-white shadow-md shadow-[#00A69D]/30"
+                      : "bg-white/20 hover:bg-white/30 text-white"
+                  }`}
+                >
+                  <Hand size={18} />
+                  <span>{lsaOn ? "LSA Activado" : "LSA Desactivado"}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 font-medium text-center">
+            Ajusta tu iluminación, encuadre y sonido antes de ingresar a la consulta médica.
+          </p>
+        </div>
+
+        {/* Columna Derecha: Tarjeta de Ingreso */}
+        <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 border border-gray-200 shadow-xl flex flex-col justify-between gap-6">
+          <div>
+            <div className="inline-block px-3 py-1 rounded-full bg-teal-50 text-[#00A69D] font-bold text-xs mb-3 border border-teal-100">
+              {props.role === "doctor" ? "Panel del Médico" : "Paciente"}
+            </div>
+            <h2 className="text-xl font-bold text-[#203A70]">¿Listo para la consulta?</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              {props.role === "doctor"
+                ? `Atención virtual con ${props.counterpartName}`
+                : `Consulta médica con el ${props.counterpartName}`}
+            </p>
+          </div>
+
+          {/* Tarjeta del Interlocutor */}
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+            <div className="w-12 h-12 rounded-full bg-[#203A70] text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
+              {props.counterpartAvatar && (props.counterpartAvatar.startsWith("http") || props.counterpartAvatar.startsWith("data:")) ? (
+                <img src={props.counterpartAvatar} alt={props.counterpartName} className="w-full h-full object-cover" />
+              ) : (
+                getInitials(props.counterpartName)
+              )}
+            </div>
+            <div className="overflow-hidden">
+              <h4 className="text-sm font-bold text-gray-800 truncate">{props.counterpartName}</h4>
+              <p className="text-xs text-[#00A69D] font-semibold truncate">
+                {props.counterpartSpecialty || (props.role === "doctor" ? "Paciente Registrado" : "Médico Especialista")}
+              </p>
+              {props.appointmentReason && (
+                <p className="text-[11px] text-gray-500 truncate mt-0.5">Motivo: {props.appointmentReason}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Resumen de Dispositivos Seleccionados */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+              <span className="flex items-center gap-2 text-gray-700">
+                {audioOn ? <Mic size={15} className="text-[#00A69D]" /> : <MicOff size={15} className="text-red-500" />}
+                Micrófono
+              </span>
+              <span className={audioOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
+                {audioOn ? "Activado" : "Desactivado"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+              <span className="flex items-center gap-2 text-gray-700">
+                {videoOn ? <Video size={15} className="text-[#00A69D]" /> : <VideoOff size={15} className="text-red-500" />}
+                Cámara
+              </span>
+              <span className={videoOn ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
+                {videoOn ? "Activada" : "Desactivada"}
+              </span>
+            </div>
+
+            {props.role === "patient" && (
+              <div className="flex items-center justify-between text-xs font-semibold p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                <span className="flex items-center gap-2 text-gray-700">
+                  <Hand size={15} className={lsaOn ? "text-[#00A69D]" : "text-gray-400"} />
+                  Traductor LSA
+                </span>
+                <span className={lsaOn ? "text-emerald-600 font-bold" : "text-gray-500 font-bold"}>
+                  {lsaOn ? "Activado" : "Desactivado"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Botones de Acción */}
+          <div className="flex flex-col gap-2.5 pt-2">
+            <button
+              onClick={handleJoinClick}
+              className="w-full py-4 px-6 rounded-2xl bg-[#00A69D] hover:bg-[#008f87] active:scale-[0.99] text-white font-bold text-sm shadow-xl shadow-[#00A69D]/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+            >
+              <Video size={18} />
+              <span>Unirse a la Teleconsulta</span>
+            </button>
+
+            <button
+              onClick={props.onEndCall}
+              className="w-full py-3 px-6 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-xs transition-all text-center cursor-pointer"
+            >
+              Cancelar y salir
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -151,8 +434,9 @@ function TelemedicinaRoomContent({
   onReturnToCall,
   startTime,
   initialVideoOff,
-  initialAudioMuted
-}: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean }) {
+  initialAudioMuted,
+  initialLsaOn
+}: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean; initialLsaOn?: boolean }) {
   // Fuente única de verdad para estados mic/cámara — desde eventos RoomEvent
   const roomCode = appointmentId ? String(appointmentId) : "global";
   const { localParticipant } = useLocalParticipant();
@@ -208,7 +492,10 @@ function TelemedicinaRoomContent({
   };
 
   const [subtitlesOn, setSubtitlesOn] = useState(true);
-  const [lseMode, setLseMode] = useState(false);
+  const [lseMode, setLseMode] = useState<boolean>(() => {
+    if (typeof initialLsaOn === "boolean") return initialLsaOn;
+    return localStorage.getItem("lsa_preference") !== "false";
+  });
   const [isLsaEnabledInSettings, setIsLsaEnabledInSettings] = useState<boolean>(true);
   const [isVideoSubtitlesEnabled, setIsVideoSubtitlesEnabled] = useState<boolean>(true);
   const [subtitleSizeSetting, setSubtitleSizeSetting] = useState<string>("Mediano");
@@ -224,7 +511,6 @@ function TelemedicinaRoomContent({
     const updateSettings = () => {
       const lsaPref = localStorage.getItem("lsa_preference") !== "false";
       setIsLsaEnabledInSettings(lsaPref);
-      setLseMode(lsaPref); // Activar LSA automáticamente si está habilitado en configuración
 
       const subSize = localStorage.getItem("subtitle_size") || "Mediano";
       setSubtitleSizeSetting(subSize);
@@ -1054,7 +1340,7 @@ function TelemedicinaRoomContent({
         document.body.removeChild(video);
       }
     };
-  }, [lseMode, role, localParticipant, roomCode]);
+  }, [lseMode, role, localParticipant, roomCode, localCameraTrack?.publication?.track]);
 
   // Poll & Load Live Comments from Backend REST API + LocalStorage fallback
   const storageKey = appointmentId ? `teleconsult_comments_${appointmentId}` : `teleconsult_comments_demo`;
