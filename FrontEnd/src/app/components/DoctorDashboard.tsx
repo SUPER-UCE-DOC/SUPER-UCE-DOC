@@ -1227,12 +1227,11 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
     }
   };
 
-  const startCall = async (patient: any) => {
+  const startCall = (patient: any) => {
     localStorage.removeItem("doctor_user_left_call");
     try {
       setActiveAppointment(patient);
       setActivePatient(patient.patient_name);
-      await api.updateAppointmentStatus(patient.id, "en_curso");
       setInCall(true);
       onNavigate?.("live_teleconsult");
       setElapsedSecs(0);

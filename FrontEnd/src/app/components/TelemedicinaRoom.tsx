@@ -127,6 +127,13 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
           setJoinedAudioOn(audioOn);
           setJoinedLsaOn(lsaOn);
           setHasJoined(true);
+          // Actualizar estado de la cita a "en_curso" ÚNICAMENTE al unirse oficialmente desde el lobby
+          if (props.appointmentId) {
+            api.updateAppointmentStatus(props.appointmentId, "en_curso").catch((err) => {
+              console.warn("Error actualizando estado de cita a en_curso:", err);
+            });
+          }
+          props.onJoinCall?.();
         }}
       />
     );
