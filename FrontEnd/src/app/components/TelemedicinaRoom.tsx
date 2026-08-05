@@ -236,6 +236,7 @@ function TelemedicinaRoomContent({
   const audioTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
   const localCameraTrack = cameraTracks.find(t => t.participant.isLocal);
   const remoteCameraTrack = cameraTracks.find(t => !t.participant.isLocal);
+  const localAudioTrack = audioTracks.find(t => t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
 
   // Guardar preferencia local en LocalStorage
