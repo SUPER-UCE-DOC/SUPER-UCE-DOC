@@ -469,30 +469,35 @@ class ControlCenterApp:
             return
 
         try:
-            with engine.begin() as conn:
-                statements = [
-                    ("DELETE FROM appointments WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM prescriptions WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM clinical_histories WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM doctor_patient_invitations WHERE doctor_id = :uid OR patient_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM doctor_patient_links WHERE doctor_id = :uid OR patient_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM supplier_orders WHERE pharmacy_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM pharmacy_inventory WHERE pharmacy_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM conversation_summaries WHERE user_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM patient_memories WHERE patient_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)", {"uid": user_id}),
-                    ("DELETE FROM chat_sessions WHERE user_id = :uid", {"uid": user_id}),
-                    ("DELETE FROM email_verification_codes WHERE email = :uemail", {"uemail": str(email)}),
-                    ("DELETE FROM patients WHERE id = :uid", {"uid": user_id}),
-                    ("DELETE FROM doctors WHERE id = :uid", {"uid": user_id}),
-                    ("DELETE FROM pharmacies WHERE id = :uid", {"uid": user_id}),
-                    ("DELETE FROM users WHERE id = :uid", {"uid": user_id}),
-                ]
+            statements = [
+                ("DELETE FROM appointments WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                ("DELETE FROM prescriptions WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                ("DELETE FROM clinical_histories WHERE patient_id = :uid OR doctor_id = :uid", {"uid": user_id}),
+                ("DELETE FROM doctor_patient_invitations WHERE doctor_id = :uid OR patient_id = :uid", {"uid": user_id}),
+                ("DELETE FROM doctor_patient_links WHERE doctor_id = :uid OR patient_id = :uid", {"uid": user_id}),
+                ("DELETE FROM supplier_orders WHERE pharmacy_id = :uid", {"uid": user_id}),
+                ("DELETE FROM pharmacy_inventory WHERE pharmacy_id = :uid", {"uid": user_id}),
+                ("DELETE FROM conversation_summaries WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)", {"uid": user_id}),
+                ("DELETE FROM patient_memories WHERE patient_id = :uid", {"uid": user_id}),
+                ("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)", {"uid": user_id}),
+                ("DELETE FROM chat_sessions WHERE user_id = :uid", {"uid": user_id}),
+                ("DELETE FROM email_verification_codes WHERE email = :uemail", {"uemail": str(email)}),
+                ("DELETE FROM patients WHERE id = :uid", {"uid": user_id}),
+                ("DELETE FROM doctors WHERE id = :uid", {"uid": user_id}),
+                ("DELETE FROM pharmacies WHERE id = :uid", {"uid": user_id}),
+                ("DELETE FROM users WHERE id = :uid", {"uid": user_id}),
+            ]
+            
+            with engine.connect() as conn:
                 for stmt, params in statements:
                     try:
+                        trans = conn.begin()
                         conn.execute(text(stmt), params)
+                        trans.commit()
                     except Exception as se:
-                        print(f"[Warning] Sub-delete statement skipped: {se}")
+                        if 'trans' in locals() and trans.is_active:
+                            trans.rollback()
+                        print(f"[Warning] Sub-delete skipped: {se}")
 
             messagebox.showinfo("Usuario Eliminado", f"El usuario {name} (#{user_id}) fue eliminado exitosamente.")
             self.load_users_data()
