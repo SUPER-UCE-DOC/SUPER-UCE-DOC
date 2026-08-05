@@ -180,29 +180,30 @@ function TelemedicinaRoomContent({
   const videoOff = !isVideoOn;
 
   const handleToggleMic = async () => {
-    if (!localParticipant) return;
-    if (!hasMicDevice) return; // Sin micrófono disponible
+    if (!localParticipant || !hasMicDevice) return;
+    const nextMic = !isMicOn;
+    setIsMicOn(nextMic); // Respuesta visual instantánea (0ms)
     try {
-      const nextMic = !localParticipant.isMicrophoneEnabled;
       await localParticipant.setMicrophoneEnabled(nextMic);
     } catch (err) {
       console.warn("Error en micrófono:", err);
+      setIsMicOn(!nextMic); // Revertir si falla la adquisición del dispositivo
     }
   };
 
   const handleToggleCamera = async () => {
     if (!localParticipant) return;
     if (!hasCameraDevice) {
-      // Sin cámara: marcar como apagada explícitamente para limpiar el estado "conectando"
       setIsVideoOn(false);
       return;
     }
+    const nextVideo = !isVideoOn;
+    setIsVideoOn(nextVideo); // Respuesta visual instantánea (0ms)
     try {
-      const nextVideo = !localParticipant.isCameraEnabled;
       await localParticipant.setCameraEnabled(nextVideo);
     } catch (err) {
       console.warn("Error en cámara:", err);
-      setIsVideoOn(false); // Forzar apagado visual si falla
+      setIsVideoOn(!nextVideo); // Revertir si falla
     }
   };
 
