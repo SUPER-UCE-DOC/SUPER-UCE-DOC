@@ -38,3 +38,6 @@
 [Traductor Local] IN: like | OUT: Como.
 [Traductor Local] IN: yesterday hello | OUT: Hola ayer.
 [Traductor Local] IN: hello grandpa | OUT: Hola abuelo.
+[Traductor Local] IN: bye hello | OUT: Adiós, hola.
+[Traductor Local] IN: grandpa see for later | OUT: Abuelo ver para más tarde.
+[Traductor Local] IN: hello grandpa see later | OUT: Hola abuelo ver más tarde.

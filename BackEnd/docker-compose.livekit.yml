@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.5.0
+    container_name: livekit-server
+    restart: unless-stopped
+    command: --config /livekit.yaml
+    network_mode: "host"
+    volumes:
+      - ./livekit.yaml:/livekit.yaml

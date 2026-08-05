@@ -163,7 +163,7 @@ export function GlobalFloatingCallWidget({
 
       {tokenToUse ? (
         <LiveKitRoom
-          serverUrl="ws://127.0.0.1:7880"
+          serverUrl={(import.meta as any).env?.VITE_LIVEKIT_URL || "ws://127.0.0.1:7880"}
           token={tokenToUse}
           connect={true}
           video={initialVideoOn}

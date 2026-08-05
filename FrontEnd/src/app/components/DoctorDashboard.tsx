@@ -210,8 +210,8 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
       <div style={{ display: currentView === "live_teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
         {renderViewContent()}
       </div>
-      {inCall && (
-        <div style={currentView === "live_teleconsult" ? { display: "flex", flexDirection: "column", flex: 1, height: "100%" } : {}}>
+      {(inCall || currentView === "live_teleconsult") && (
+        <div className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}>
           <DoctorLiveRoom
             userName={userName}
             userAvatar={userAvatar}
@@ -635,7 +635,8 @@ function PatientsView() {
     setInviteStatus(null);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/invitations/search-patient?name=${encodeURIComponent(inviteSearchName)}`, {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/search-patient?name=${encodeURIComponent(inviteSearchName)}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -654,7 +655,8 @@ function PatientsView() {
   const handleInvite = async (patientId: number) => {
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/send", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/send`, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -1169,7 +1171,8 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
     setShowScheduleModal(true);
     try {
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      const res = await fetch(`${apiBase}/api/invitations/my-patients`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -1224,12 +1227,11 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
     }
   };
 
-  const startCall = async (patient: any) => {
+  const startCall = (patient: any) => {
     localStorage.removeItem("doctor_user_left_call");
     try {
       setActiveAppointment(patient);
       setActivePatient(patient.patient_name);
-      await api.updateAppointmentStatus(patient.id, "en_curso");
       setInCall(true);
       onNavigate?.("live_teleconsult");
       setElapsedSecs(0);
@@ -1718,10 +1720,12 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
   }, [userAvatar]);
 
   useEffect(() => {
-    if (!resolvedDoc || !resolvedDoc.id) {
+    if (activeAppointment && (activeAppointment.patient_name || activeAppointment.patient || activeAppointment.id)) {
+      setResolvedDoc(activeAppointment);
+    } else {
       api.getAppointments().then((apts) => {
         if (Array.isArray(apts) && apts.length > 0) {
-          const active = apts.find((a: any) => a.status === "en_curso");
+          const active = apts.find((a: any) => a.status === "en_curso") || apts.find((a: any) => a.status === "confirmada") || apts[0];
           if (active) {
             setResolvedDoc(active);
           }
@@ -1730,16 +1734,22 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
     }
   }, [activeAppointment]);
 
+  const counterpartName = resolvedDoc?.patient_name || resolvedDoc?.patient || activePatient || activeAppointment?.patient_name || activeAppointment?.patient || "Paciente Registrado";
+  const counterpartAvatar = resolvedDoc?.patient_avatar || activeAppointment?.patient_avatar;
+  const patientId = resolvedDoc?.patient_id || activeAppointment?.patient_id;
+  const appointmentId = resolvedDoc?.id || activeAppointment?.id;
+  const appointmentReason = resolvedDoc?.reason || activeAppointment?.reason;
+
   return (
     <TelemedicinaRoom
       role="doctor"
       userName={userName || "Dr. Jose Matos"}
       userAvatar={doctorAvatar || userAvatar}
-      counterpartName={resolvedDoc?.patient_name || activePatient || "Paciente"}
-      counterpartAvatar={resolvedDoc?.patient_avatar}
-      patientId={resolvedDoc?.patient_id}
-      appointmentId={resolvedDoc?.id}
-      appointmentReason={resolvedDoc?.reason}
+      counterpartName={counterpartName}
+      counterpartAvatar={counterpartAvatar}
+      patientId={patientId}
+      appointmentId={appointmentId}
+      appointmentReason={appointmentReason}
       onEndCall={onEndCall}
       isMinimized={isMinimized}
       onReturnToCall={onReturnToCall}
@@ -1794,7 +1804,8 @@ function RecetasView() {
     async function loadPatients() {
       try {
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        const res = await fetch("http://localhost:8000/api/invitations/my-patients", {
+        const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+        const res = await fetch(`${apiBase}/api/invitations/my-patients`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {

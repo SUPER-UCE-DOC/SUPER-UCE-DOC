@@ -642,7 +642,6 @@ function DoctorSettings({ userName }: { userName: string }) {
             <textarea
               value={firma}
               onChange={(e) => handleFirmaChange(e.target.value)}
-              onBlur={handleFirmaBlur}
               placeholder="Dr. García · Cardiología · EX-2019-00487"
               rows={2}
               className="w-full px-4 py-2.5 rounded-xl border outline-none resize-none text-sm transition-all bg-white text-gray-800"

@@ -32,3 +32,4 @@ build/
 BackEnd/*.log
 BackEnd/*.csv
 
+.vercel

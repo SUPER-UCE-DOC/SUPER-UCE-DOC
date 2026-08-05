@@ -3,10 +3,14 @@ rtc:
   tcp_port: 7881
   port_range_start: 60000
   port_range_end: 60050
-  use_external_ip: false
+  use_external_ip: true
 keys:
-  # API Key : API Secret (solo para desarrollo local)
+  # API Key : API Secret
   devkey: mi_super_secreto_largo_para_livekit_de_32_letras
 turn:
-  enabled: false
+  enabled: true
+  domain: superucedoc-livekit.duckdns.org
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: true
 

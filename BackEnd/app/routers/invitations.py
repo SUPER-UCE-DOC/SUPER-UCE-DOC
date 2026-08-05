@@ -19,10 +19,11 @@ def search_patient(name: str, db: Session = Depends(get_db), current_user: model
     if current_user.role != "doctor":
         raise HTTPException(status_code=403, detail="Only doctors can search patients")
         
-    # Búsqueda exacta (case insensitive, pero exacta en contenido)
+    # Búsqueda por coincidencia parcial (case insensitive)
+    search_term = f"%{name.strip()}%"
     patients = db.query(models.User).join(models.Patient).filter(
         models.User.role == "patient",
-        models.User.full_name.ilike(name)
+        models.User.full_name.ilike(search_term)
     ).all()
     
     results = []
