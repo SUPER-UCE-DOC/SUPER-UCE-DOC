@@ -236,8 +236,14 @@ def update_appointment_status(
 
     app.status = requested_status
 
-    if requested_status == "en_curso" and not app.real_start_time:
-        app.real_start_time = datetime.datetime.utcnow()
+    if requested_status == "en_curso":
+        if not app.real_start_time:
+            app.real_start_time = datetime.datetime.utcnow()
+        try:
+            from app.routers.realtime import start_room_timer
+            start_room_timer(str(app.id))
+        except Exception as ex:
+            print("Error starting realtime timer:", ex)
     elif requested_status == "completada" and not app.real_end_time:
         app.real_end_time = datetime.datetime.utcnow()
 
@@ -246,15 +252,6 @@ def update_appointment_status(
         if doc:
             if requested_status == "en_curso":
                 doc.room_state = "en_consulta"
-                try:
-                    from app.routers.realtime import get_or_create_session
-                    clean_room = str(app.id)
-                    session = get_or_create_session(clean_room)
-                    if "start_time" not in session or not session["start_time"]:
-                        import time
-                        session["start_time"] = time.time()
-                except Exception as ex:
-                    print("Error setting start_time:", ex)
             elif requested_status == "completada":
                 doc.room_state = "libre"
             elif requested_status == "pendiente":

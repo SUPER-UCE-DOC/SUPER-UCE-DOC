@@ -192,16 +192,6 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       <PreCallLobby
         props={{ ...props, onEndCall: handleEndCallWrapped }}
         onJoin={(videoOn, audioOn, lsaOn) => {
-          const targetRoomCode = props.appointmentId ? String(props.appointmentId) : "global";
-          const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
-          fetch(`${apiBase}/api/realtime/start-timer/${targetRoomCode}`, { method: "POST" })
-            .then(r => r.json())
-            .then(res => {
-              if (res.start_time) setRoomStartTime(res.start_time);
-              if (res.server_time) setServerTimeOffset(res.server_time - (Date.now() / 1000));
-            })
-            .catch(() => {});
-
           setJoinedVideoOn(videoOn);
           setJoinedAudioOn(audioOn);
           setJoinedLsaOn(lsaOn ?? true);
@@ -210,7 +200,15 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
           localStorage.setItem("local_lsa_on", (lsaOn ?? true) ? "true" : "false");
           setHasJoined(true);
           if (props.appointmentId) {
-            api.updateAppointmentStatus(props.appointmentId, "en_curso").catch(() => {});
+            api.updateAppointmentStatus(props.appointmentId, "en_curso")
+              .then(() => {
+                const targetRoomCode = String(props.appointmentId);
+                api.getLiveKitToken(targetRoomCode).then(res => {
+                  if (res.start_time) setRoomStartTime(res.start_time);
+                  if (res.server_time) setServerTimeOffset(res.server_time - (Date.now() / 1000));
+                }).catch(() => {});
+              })
+              .catch(() => {});
           }
           props.onJoinCall?.();
         }}
