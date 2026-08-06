@@ -57,3 +57,5 @@
 [Traductor Local] IN: donkey | OUT: Burro.
 [Traductor Local] IN: donkey | OUT: Burro.
 [Traductor Local] IN: hello donkey stairs | OUT: Hola burro escaleras.
+[Traductor Local] IN: hair sick | OUT: Pelo enfermo.
+[Traductor Local] IN: hello donkey | OUT: Hola burro.

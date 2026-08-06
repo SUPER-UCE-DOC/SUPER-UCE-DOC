@@ -507,11 +507,22 @@ function TelemedicinaRoomContent({
   initialAudioMuted,
   initialLsaOn
 }: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean; initialLsaOn?: boolean }) {
-  // Fuente única de verdad para estados mic/cámara — desde eventos RoomEvent
+  // Fuente única de verdad para estados mic/cámara — desde eventos RoomEvent y localStorage durante la llamada
   const roomCode = appointmentId ? String(appointmentId) : "global";
   const { localParticipant } = useLocalParticipant();
-  const [isMicOn, setIsMicOn] = useState(!initialAudioMuted);
-  const [isVideoOn, setIsVideoOn] = useState(!initialVideoOff);
+
+  const [isMicOn, setIsMicOn] = useState(() => {
+    const savedMuted = localStorage.getItem("local_audio_muted");
+    if (savedMuted !== null) return savedMuted !== "true";
+    return !initialAudioMuted;
+  });
+
+  const [isVideoOn, setIsVideoOn] = useState(() => {
+    const savedOff = localStorage.getItem("local_video_off");
+    if (savedOff !== null) return savedOff !== "true";
+    return !initialVideoOff;
+  });
+
   const [hasCameraDevice, setHasCameraDevice] = useState(true); // optimista; se corrige tras enumerateDevices
   const [hasMicDevice, setHasMicDevice] = useState(true);
 
@@ -522,7 +533,7 @@ function TelemedicinaRoomContent({
       const hasAudio = devices.some(d => d.kind === "audioinput");
       setHasCameraDevice(hasVideo);
       setHasMicDevice(hasAudio);
-      // Si no hay cámara, forzar estado visual a apagado
+      // Si no hay cámara o mic, forzar estado visual a apagado
       if (!hasVideo) setIsVideoOn(false);
       if (!hasAudio) setIsMicOn(false);
     }).catch(() => {
@@ -537,11 +548,13 @@ function TelemedicinaRoomContent({
     if (!localParticipant || !hasMicDevice) return;
     const nextMic = !isMicOn;
     setIsMicOn(nextMic); // Respuesta visual instantánea (0ms)
+    localStorage.setItem("local_audio_muted", nextMic ? "false" : "true");
     try {
       await localParticipant.setMicrophoneEnabled(nextMic);
     } catch (err) {
       console.warn("Error en micrófono:", err);
       setIsMicOn(!nextMic); // Revertir si falla la adquisición del dispositivo
+      localStorage.setItem("local_audio_muted", !nextMic ? "false" : "true");
     }
   };
 
@@ -549,23 +562,34 @@ function TelemedicinaRoomContent({
     if (!localParticipant) return;
     if (!hasCameraDevice) {
       setIsVideoOn(false);
+      localStorage.setItem("local_video_off", "true");
       return;
     }
     const nextVideo = !isVideoOn;
     setIsVideoOn(nextVideo); // Respuesta visual instantánea (0ms)
+    localStorage.setItem("local_video_off", nextVideo ? "false" : "true");
     try {
       await localParticipant.setCameraEnabled(nextVideo);
     } catch (err) {
       console.warn("Error en cámara:", err);
       setIsVideoOn(!nextVideo); // Revertir si falla
+      localStorage.setItem("local_video_off", !nextVideo ? "false" : "true");
     }
   };
 
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [lseMode, setLseMode] = useState<boolean>(() => {
+    const savedCallLse = localStorage.getItem("local_lsa_on");
+    if (savedCallLse !== null) return savedCallLse === "true";
     if (typeof initialLsaOn === "boolean") return initialLsaOn;
     return localStorage.getItem("lsa_preference") !== "false";
   });
+
+  // Persistir preferencia de LSE en llamada activa
+  useEffect(() => {
+    localStorage.setItem("local_lsa_on", lseMode ? "true" : "false");
+  }, [lseMode]);
+
   const [isLsaEnabledInSettings, setIsLsaEnabledInSettings] = useState<boolean>(true);
   const [isVideoSubtitlesEnabled, setIsVideoSubtitlesEnabled] = useState<boolean>(true);
   const [subtitleSizeSetting, setSubtitleSizeSetting] = useState<string>("Mediano");
@@ -611,11 +635,17 @@ function TelemedicinaRoomContent({
   const localAudioTrack = audioTracks.find(t => t.participant.isLocal);
   const remoteAudioTrack = audioTracks.find(t => !t.participant.isLocal);
 
-  // Guardar preferencia local en LocalStorage
+  // Sincronizar preferencia local en LocalStorage y participante LiveKit
   useEffect(() => {
     localStorage.setItem("local_audio_muted", muted ? "true" : "false");
     localStorage.setItem("local_video_off", videoOff ? "true" : "false");
-  }, [muted, videoOff]);
+    if (localParticipant) {
+      if (isMicOn) localParticipant.setMicrophoneEnabled(true).catch(() => {});
+      else localParticipant.setMicrophoneEnabled(false).catch(() => {});
+      if (isVideoOn && hasCameraDevice) localParticipant.setCameraEnabled(true).catch(() => {});
+      else localParticipant.setCameraEnabled(false).catch(() => {});
+    }
+  }, [muted, videoOff, isMicOn, isVideoOn, localParticipant, hasCameraDevice]);
 
   // Arrastre interactivo y magnetismo a esquinas de ventana flotante (PIP)
   type CornerPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
