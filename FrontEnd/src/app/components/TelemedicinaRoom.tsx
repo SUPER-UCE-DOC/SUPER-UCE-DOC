@@ -1862,7 +1862,7 @@ function TelemedicinaRoomContent({
                   /* CÁMARA REMOTA PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO A LA IZQUIERDA O DERECHA SEGÚN CORRESPONDA */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
                     {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
-                      <VideoTrack trackRef={remoteCameraTrack} className="w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+                      <VideoTrack trackRef={remoteCameraTrack} className="w-full h-full object-cover -scale-x-100" disablePictureInPicture={true} translate="no" />
                     ) : (
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-24 h-24 rounded-full bg-slate-800 border border-slate-700/80 text-white flex items-center justify-center font-bold text-2xl mb-2 overflow-hidden shadow-md animate-pulse">
@@ -2043,7 +2043,7 @@ function TelemedicinaRoomContent({
                   /* PIP CÁMARA DEL INTERLOCUTOR PRENDIDA: CONTENEDOR LIMPIO CON NOMBRE E ÍCONO DE MICRÓFONO ABAJO EN PEQUEÑO */
                   <div className="w-full h-full relative bg-slate-900 flex items-center justify-center p-2 overflow-hidden rounded-xl">
                     {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
-                      <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+                      <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover -scale-x-100" disablePictureInPicture={true} translate="no" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
                         <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs mb-1 overflow-hidden shadow-md border border-slate-700/60 animate-pulse">
@@ -2547,7 +2547,7 @@ function FloatingRoomContent({
   return (
     <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
       {remoteCameraTrack && remoteCameraTrack.publication?.track ? (
-        <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" disablePictureInPicture={true} translate="no" />
+        <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover -scale-x-100" disablePictureInPicture={true} translate="no" />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center relative p-2 bg-slate-800">
           <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-xs overflow-hidden shadow-md border border-slate-700/60 animate-pulse">

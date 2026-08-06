@@ -244,7 +244,7 @@ function FloatingRoomContent({
   return (
     <div className="w-full h-full relative bg-slate-900 flex items-center justify-center overflow-hidden">
       {remoteCameraTrack && (
-        <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
+        <VideoTrack trackRef={remoteCameraTrack} className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
       )}
       <div className="absolute bottom-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5 max-w-[150px]">
         <span className="truncate">{counterpartName}</span>
