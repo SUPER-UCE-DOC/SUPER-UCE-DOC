@@ -1720,16 +1720,6 @@ function TelemedicinaRoomContent({
               <span>Volver a pantalla completa</span>
             </button>
           </div>
-
-          <AvatarInitials
-            name={counterpartName}
-            getInitials={(name: string) => {
-              if (!name) return "US";
-              const parts = name.trim().split(/\s+/);
-              if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-              return name.substring(0, 2).toUpperCase();
-            }}
-          />
         </div>
       </>
     );
