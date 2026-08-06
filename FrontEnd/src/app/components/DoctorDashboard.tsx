@@ -209,7 +209,19 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     if (currentView === "home") return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
     if (currentView === "dashboard" || currentView === "schedule") return <AgendaView userName={userName} />;
     if (currentView === "patients") return <PatientsView />;
-    if (currentView === "teleconsult" || currentView === "ai-assistant") return <TeleconsultaView userName={userName} userAvatar={userAvatar} onNavigate={navigate} />;
+    if (currentView === "teleconsult" || currentView === "ai-assistant") return (
+      <TeleconsultaView
+        userName={userName}
+        userAvatar={userAvatar}
+        onNavigate={navigate}
+        onStartCall={(apt: any) => {
+          // Sync the appointment into the parent so DoctorLiveRoom gets the correct patient
+          setActiveAppointment(apt);
+          localStorage.removeItem("doctor_user_left_call");
+          localStorage.setItem("doctor_active_teleconsult", JSON.stringify(apt));
+        }}
+      />
+    );
     if (currentView === "prescriptions") return <RecetasView />;
     if (currentView === "settings") return <SettingsView role="doctor" userName={userName} />;
     return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
@@ -1088,7 +1100,7 @@ const waitingPatients = [
 ];
 
 /* ─── TELECONSULTA CON TRADUCTOR IA ─── */
-function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: string; userAvatar?: string; onNavigate?: (v: string) => void }) {
+function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { userName?: string; userAvatar?: string; onNavigate?: (v: string) => void; onStartCall?: (apt: any) => void }) {
   const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePatient, setActivePatient] = useState<string | null>(null);
@@ -1255,6 +1267,8 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
       setActiveAppointment(patient);
       setActivePatient(patient.patient_name);
       setInCall(true);
+      // Notify parent to sync the appointment before navigating
+      onStartCall?.(patient);
       onNavigate?.("live_teleconsult");
       setElapsedSecs(0);
       setVisibleLines(0);
