@@ -84,9 +84,21 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     }
     return sessionStorage.getItem(joinKey) === "true";
   });
-  const [joinedVideoOn, setJoinedVideoOn] = useState(true);
-  const [joinedAudioOn, setJoinedAudioOn] = useState(true);
-  const [joinedLsaOn, setJoinedLsaOn] = useState(true);
+  const [joinedVideoOn, setJoinedVideoOn] = useState(() => {
+    const savedOff = localStorage.getItem("local_video_off");
+    if (savedOff !== null) return savedOff !== "true";
+    return true;
+  });
+  const [joinedAudioOn, setJoinedAudioOn] = useState(() => {
+    const savedMuted = localStorage.getItem("local_audio_muted");
+    if (savedMuted !== null) return savedMuted !== "true";
+    return true;
+  });
+  const [joinedLsaOn, setJoinedLsaOn] = useState(() => {
+    const savedLsa = localStorage.getItem("local_lsa_on");
+    if (savedLsa !== null) return savedLsa === "true";
+    return true;
+  });
 
   const setHasJoined = (val: boolean) => {
     if (props.role === "doctor") {
