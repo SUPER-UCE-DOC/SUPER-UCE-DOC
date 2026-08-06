@@ -222,17 +222,6 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
           setActiveAppointment(apt);
           localStorage.removeItem("doctor_user_left_call");
           localStorage.setItem("doctor_active_teleconsult", JSON.stringify(apt));
-          if (apt?.id) {
-            const aptId = String(apt.id);
-            const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
-            fetch(`${apiBase}/api/realtime/reset/${aptId}`, { method: "POST" }).catch(() => {});
-            localStorage.removeItem(`doctor_in_active_call_${aptId}`);
-            localStorage.removeItem(`teleconsult_subtitles_${aptId}`);
-            localStorage.removeItem(`teleconsult_chat_${aptId}`);
-            localStorage.removeItem(`teleconsult_comments_${aptId}`);
-            localStorage.removeItem(`room_status_${aptId}`);
-            sessionStorage.removeItem(`has_joined_teleconsult_${aptId}`);
-          }
         }}
       />
     );

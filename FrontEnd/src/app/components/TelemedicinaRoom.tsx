@@ -179,9 +179,6 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
         onJoin={(videoOn, audioOn, lsaOn) => {
           const targetRoomCode = props.appointmentId ? String(props.appointmentId) : "global";
           localStorage.removeItem(`room_status_${targetRoomCode}`);
-          localStorage.removeItem(`teleconsult_subtitles_${targetRoomCode}`);
-          localStorage.removeItem(`teleconsult_chat_${targetRoomCode}`);
-          localStorage.removeItem(`teleconsult_comments_${targetRoomCode}`);
           setJoinedVideoOn(videoOn);
           setJoinedAudioOn(audioOn);
           setJoinedLsaOn(lsaOn);
