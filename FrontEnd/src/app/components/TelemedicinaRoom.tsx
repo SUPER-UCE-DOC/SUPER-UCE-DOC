@@ -1317,9 +1317,18 @@ function TelemedicinaRoomContent({
   const isCounterpartVideoOff = !remoteCameraTrack || !remoteCameraTrack.publication || remoteCameraTrack.publication.isMuted || remoteCameraTrack.publication.isSubscribed === false || remoteCameraTrack.participant?.isCameraEnabled === false;
   const isCounterpartMuted = !remoteAudioTrack || !remoteAudioTrack.publication || remoteAudioTrack.publication.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
   const prevConnectedRef = useRef(false);
+  const isInitialMountCompleteRef = useRef(false);
+
+  // Evitar sonar el chime para uno mismo al unirse o recargar la página
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      isInitialMountCompleteRef.current = true;
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
-    if (isCounterpartConnected && !prevConnectedRef.current) {
+    if (isInitialMountCompleteRef.current && isCounterpartConnected && !prevConnectedRef.current) {
       playJoinChime();
     }
     prevConnectedRef.current = isCounterpartConnected;
