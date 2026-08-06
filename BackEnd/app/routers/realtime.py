@@ -123,7 +123,7 @@ def get_or_create_session(room_id: str) -> dict:
     if clean_room not in room_sessions_store:
         room_sessions_store[clean_room] = {
             "room_id": clean_room,
-            "start_time": now,
+            "start_time": 0.0,
             "start_time_set": False,
             "status": "active",
             "doctor_time": 0.0,
@@ -136,7 +136,7 @@ def start_room_timer(room_id: str):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
-    if not session.get("start_time_set"):
+    if not session.get("start_time_set") or session.get("start_time", 0) == 0:
         session["start_time"] = now
         session["start_time_set"] = True
     return {
@@ -174,7 +174,8 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
     is_connected = (now - spec_time) < 6.0
     
     counterpart_media = room_media_store[clean_room].get(counterpart, {"muted": False, "videoOff": False})
-    elapsed_seconds = int(now - session["start_time"])
+    st = session.get("start_time", 0)
+    elapsed_seconds = int(now - st) if st > 0 else 0
     
     return {
         "connected": is_connected,
@@ -195,7 +196,8 @@ def get_room_presence(room_id: str):
     
     doc_time = session.get("doctor_time", 0)
     pat_time = session.get("patient_time", 0)
-    elapsed_seconds = int(now - session["start_time"])
+    st = session.get("start_time", 0)
+    elapsed_seconds = int(now - st) if st > 0 else 0
     
     return {
         "doctor_online": (now - doc_time) < 6.0,
