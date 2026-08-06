@@ -124,11 +124,26 @@ def get_or_create_session(room_id: str) -> dict:
         room_sessions_store[clean_room] = {
             "room_id": clean_room,
             "start_time": now,
+            "start_time_set": False,
             "status": "active",
             "doctor_time": 0.0,
             "patient_time": 0.0
         }
     return room_sessions_store[clean_room]
+
+@router.post("/start-timer/{room_id}")
+def start_room_timer(room_id: str):
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    session = get_or_create_session(clean_room)
+    now = time.time()
+    if not session.get("start_time_set"):
+        session["start_time"] = now
+        session["start_time_set"] = True
+    return {
+        "status": "ok",
+        "start_time": session["start_time"],
+        "server_time": now
+    }
 
 @router.post("/presence/{room_id}/{role}")
 def update_room_presence(room_id: str, role: str, muted: bool = False, video_off: bool = False):
