@@ -938,10 +938,105 @@ function TelemedicinaRoomContent({
     sendRef.current = send;
   }, [send]);
 
-  // VAD & Grabación Continua STT (Doctor y Paciente) - Extraído directamente del Track Nativo de LiveKit
+  // VAD & Transcripción Híbrida STT (WebSpeech API Nativo + Deepgram Nova-3 con Concatenación Inteligente)
   useEffect(() => {
     if (muted) return;
 
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    let recognition: any = null;
+    let isWebSpeechWorking = false;
+
+    const handleNewTranscription = (text: string) => {
+      const cleanText = text ? text.trim() : "";
+      if (!cleanText || cleanText.length < 2) return;
+      if (["Audio.", "Audio"].includes(cleanText)) return;
+
+      const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      setSubtitlesList(prev => {
+        const lastSub = prev.length > 0 ? prev[prev.length - 1] : null;
+
+        // Concatenar al subtítulo anterior si la intervención es del MISMO hablante
+        if (lastSub && lastSub.speaker_role === role && lastSub.speaker_name === userName) {
+          const lowerLast = lastSub.text.toLowerCase();
+          const lowerNew = cleanText.toLowerCase();
+          
+          if (!lowerLast.endsWith(lowerNew) && !lowerLast.includes(lowerNew)) {
+            const updatedText = `${lastSub.text} ${cleanText}`.trim();
+            const updatedList = [...prev.slice(0, prev.length - 1), { ...lastSub, text: updatedText, timestamp: nowTimestamp }];
+            localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(updatedList));
+            return updatedList;
+          }
+          return prev;
+        } else {
+          // Nueva intervención (otro participante o primera frase del turno)
+          const newSub = {
+            id: Date.now(),
+            speaker_name: userName,
+            speaker_role: role,
+            text: cleanText,
+            timestamp: nowTimestamp
+          };
+          const newList = [...prev, newSub];
+          localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
+          return newList;
+        }
+      });
+
+      // Transmitir en tiempo real mediante el canal de datos de LiveKit al interlocutor
+      if (sendRef.current) {
+        sendRef.current(new TextEncoder().encode(JSON.stringify({
+          type: "SUBTITLE",
+          speaker_name: userName,
+          speaker_role: role,
+          text: cleanText
+        })), { reliable: true });
+      }
+
+      // Persistir subtítulo en el servidor
+      api.postRoomSubtitle(roomCode, {
+        speaker_name: userName,
+        speaker_role: role,
+        text: cleanText,
+        timestamp: nowTimestamp
+      }).catch(err => console.error("Error guardando subtítulo:", err));
+    };
+
+    // Intentar inicializar WebSpeech API nativo en el navegador para velocidad instantánea
+    if (SpeechRecognitionClass) {
+      try {
+        recognition = new SpeechRecognitionClass();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = "es-DO";
+
+        recognition.onresult = (event: any) => {
+          isWebSpeechWorking = true;
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              const transcriptText = event.results[i][0].transcript;
+              handleNewTranscription(transcriptText);
+            }
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn("WebSpeech no disponible o pausado:", event.error);
+        };
+
+        recognition.onend = () => {
+          if (!muted && recognition) {
+            try { recognition.start(); } catch (e) {}
+          }
+        };
+
+        recognition.start();
+      } catch (err) {
+        console.warn("SpeechRecognition nativo no iniciado, usando motor VAD + Deepgram:", err);
+      }
+    }
+
+    // Motor VAD de reserva con captura directa del MediaStreamTrack de LiveKit
     let mediaRecorder: MediaRecorder | null = null;
     let stream: MediaStream | null = null;
     let interval: ReturnType<typeof setInterval>;
@@ -952,108 +1047,78 @@ function TelemedicinaRoomContent({
     let dataArray: Uint8Array;
     let isSpeaking = false;
 
-    // Usar la pista de audio local activa de LiveKit directamente (sin invocar getUserMedia secundario)
     const mediaTrack = localAudioTrack?.publication?.track?.mediaStreamTrack;
-    if (!mediaTrack || mediaTrack.readyState !== "live") return;
+    if (mediaTrack && mediaTrack.readyState === "live") {
+      try {
+        stream = new MediaStream([mediaTrack.clone()]);
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContext = new AudioContextClass();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-    try {
-      stream = new MediaStream([mediaTrack.clone()]);
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        let chunks: Blob[] = [];
+        let recordStartTime = 0;
 
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioContext = new AudioContextClass();
-      const source = audioContext.createMediaStreamSource(stream);
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      dataArray = new Uint8Array(analyser.frequencyBinCount);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
 
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      let chunks: Blob[] = [];
-      let recordStartTime = 0;
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (chunks.length > 0) {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          chunks = [];
-          if (blob.size > 3500) {
-            try {
-              const res = await api.transcribeTelemedicineAudio(blob);
-              const cleanText = res.text ? res.text.trim() : "";
-              if (cleanText && cleanText.length > 1 && !["Audio.", "Audio", "Hola."].includes(cleanText)) {
-                const newSub = {
-                  id: Date.now(),
-                  speaker_name: userName,
-                  speaker_role: role,
-                  text: cleanText,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                setSubtitlesList(prev => {
-                  const newList = [...prev, newSub];
-                  localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
-                  return newList;
-                });
-
-                if (sendRef.current) {
-                  sendRef.current(new TextEncoder().encode(JSON.stringify({
-                    type: "SUBTITLE",
-                    speaker_name: userName,
-                    speaker_role: role,
-                    text: cleanText
-                  })), { reliable: true });
+        mediaRecorder.onstop = async () => {
+          if (chunks.length > 0) {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            chunks = [];
+            if (blob.size > 2500 && !isWebSpeechWorking) {
+              try {
+                const res = await api.transcribeTelemedicineAudio(blob);
+                if (res.text) {
+                  handleNewTranscription(res.text);
                 }
-
-                // POST to backend for persistence (Hybrid Architecture)
-                api.postRoomSubtitle(roomCode, {
-                  speaker_name: userName,
-                  speaker_role: role,
-                  text: cleanText,
-                  timestamp: newSub.timestamp
-                }).catch(err => console.error("Error saving subtitle to backend", err));
-              }
-            } catch (e) { console.error("STT Error", e); }
+              } catch (e) { console.error("STT Deepgram Error", e); }
+            }
           }
-        }
-      };
+        };
 
-      interval = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray);
-        // Evaluar exclusivamente rango de voz humana (~80Hz a 3.5kHz) en los primeros 40 bins de frecuencia
-        let sum = 0;
-        const speechBins = Math.min(40, dataArray.length);
-        for (let i = 2; i < speechBins; i++) sum += dataArray[i];
-        const speechAvg = sum / (speechBins - 2);
+        interval = setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          const speechBins = Math.min(40, dataArray.length);
+          for (let i = 2; i < speechBins; i++) sum += dataArray[i];
+          const speechAvg = sum / (speechBins - 2);
+          const now = Date.now();
 
-        const now = Date.now();
-
-        if (speechAvg > 7) {
-          if (!isSpeaking) {
-            isSpeaking = true;
-            recordStartTime = now;
-            if (mediaRecorder?.state === "inactive") mediaRecorder.start();
+          if (speechAvg > 7) {
+            if (!isSpeaking) {
+              isSpeaking = true;
+              recordStartTime = now;
+              if (mediaRecorder?.state === "inactive") mediaRecorder.start();
+            }
+            clearTimeout(silenceTimer);
+            silenceTimer = setTimeout(() => {
+              isSpeaking = false;
+              if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+            }, 2200);
           }
-          clearTimeout(silenceTimer);
-          silenceTimer = setTimeout(() => {
+
+          if (isSpeaking && mediaRecorder?.state === "recording" && (now - recordStartTime > 14000)) {
+            clearTimeout(silenceTimer);
             isSpeaking = false;
-            if (mediaRecorder?.state === "recording") mediaRecorder.stop();
-          }, 2400);
-        }
-
-        // Si la persona habla continuamente por más de 12 segundos, forzar envío de fragmento completo
-        if (isSpeaking && mediaRecorder?.state === "recording" && (now - recordStartTime > 12000)) {
-          clearTimeout(silenceTimer);
-          isSpeaking = false;
-          mediaRecorder.stop();
-        }
-      }, 100);
-    } catch (e) {
-      console.error("Error inicializando STT desde pista LiveKit", e);
+            mediaRecorder.stop();
+          }
+        }, 100);
+      } catch (e) {
+        console.error("Error configurando VAD:", e);
+      }
     }
 
     return () => {
+      if (recognition) {
+        recognition.onend = null;
+        try { recognition.stop(); } catch (e) {}
+      }
       clearInterval(interval);
       clearTimeout(silenceTimer);
       if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
