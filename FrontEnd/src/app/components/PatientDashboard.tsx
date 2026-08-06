@@ -72,27 +72,31 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
     const userExited = localStorage.getItem("patient_user_left_call") === "true";
     if (userExited) return;
 
-    api.getAppointments().then((apts) => {
-      if (Array.isArray(apts) && apts.length > 0) {
-        const active = apts.find((a: any) => a.status === "en_curso");
-        if (active) {
-          const docData = {
-            id: active.id,
-            name: active.doctor_name || "Dr. Jose Matos",
-            avatar: active.doctor_avatar,
-            specialty: active.doctor_specialty || "Cardiología Clínica"
-          };
-          setActiveCallDoc(docData);
-          // NO forzar setInCall(true) automáticamente para no redirigir al paciente al lobby sin su consentimiento.
-          // Solo se activa inCall si el paciente ya se había unido formalmente en esta sesión.
-          const hasJoinedRoom = sessionStorage.getItem(`has_joined_teleconsult_${active.id}`) === "true";
-          if (hasJoinedRoom) {
-            setInCall(true);
-            localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
+    const checkActiveCall = () => {
+      api.getAppointments().then((apts) => {
+        if (Array.isArray(apts) && apts.length > 0) {
+          const active = apts.find((a: any) => a.status === "en_curso");
+          if (active) {
+            const docData = {
+              id: active.id,
+              name: active.doctor_name || "Dr. Jose Matos",
+              avatar: active.doctor_avatar,
+              specialty: active.doctor_specialty || "Cardiología Clínica"
+            };
+            setActiveCallDoc(docData);
+            const hasJoinedRoom = sessionStorage.getItem(`has_joined_teleconsult_${active.id}`) === "true";
+            if (hasJoinedRoom) {
+              setInCall(true);
+              localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
+            }
           }
         }
-      }
-    }).catch(() => {});
+      }).catch(() => {});
+    };
+
+    checkActiveCall();
+    const interval = setInterval(checkActiveCall, 3000);
+    return () => clearInterval(interval);
   }, [currentView]);
 
   const handleJoinCall = (apt: any) => {

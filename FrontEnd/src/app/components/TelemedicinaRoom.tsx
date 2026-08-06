@@ -155,6 +155,20 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     );
   }
 
+  const liveKitOptions = useMemo(() => ({
+    adaptiveStream: true,
+    dynacast: true,
+    rtcConfig: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ]
+    }
+  }), []);
+
   return (
     <LiveKitRoom
       serverUrl={(import.meta as any).env?.VITE_LIVEKIT_URL || "wss://superucedoc-livekit.duckdns.org"}
@@ -162,6 +176,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       connect={true}
       video={joinedVideoOn}
       audio={joinedAudioOn}
+      options={liveKitOptions}
       className="h-full w-full"
     >
       <TelemedicinaRoomContent

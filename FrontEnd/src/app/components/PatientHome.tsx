@@ -256,11 +256,18 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
                 
                 return (
                   <button
-                    onClick={() => alert("El médico debe presionar 'Iniciar Videollamada' en su panel. En cuanto la inicie, este botón se activará automáticamente.")}
-                    className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-90 cursor-pointer"
+                    onClick={() => onJoinCall?.(nextApp)}
+                    className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all hover:opacity-90 cursor-pointer"
+                    style={{
+                      background: "#00A69D",
+                      color: "white",
+                      fontWeight: 800,
+                      fontSize: "15px",
+                      boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+                    }}
                   >
-                    <Clock size={18} />
-                    Esperando al Médico
+                    <Video size={18} />
+                    Entrar a la Sala de Telemedicina
                   </button>
                 );
               })()

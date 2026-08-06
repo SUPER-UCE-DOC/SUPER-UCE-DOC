@@ -1,0 +1,10 @@
+[
+  {
+    "type": "patient_memory",
+    "patient_id": 3,
+    "memory_id": 1,
+    "memory_type": "síntoma persistente",
+    "value": "fiebre",
+    "_vector_id": "f413a3d7-26d7-45dd-ad11-ba0760d13e89"
+  }
+]
