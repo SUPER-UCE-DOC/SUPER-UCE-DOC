@@ -1321,8 +1321,6 @@ function TelemedicinaRoomContent({
   useEffect(() => {
     if (isCounterpartConnected && !prevConnectedRef.current) {
       playJoinChime();
-    } else if (!isCounterpartConnected && prevConnectedRef.current) {
-      playJoinChime();
     }
     prevConnectedRef.current = isCounterpartConnected;
 
