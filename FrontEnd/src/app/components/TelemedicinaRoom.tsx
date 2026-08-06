@@ -67,6 +67,7 @@ const ragMedicines = [
 export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [tokenToUse, setTokenToUse] = useState<string>("");
   const [roomStartTime, setRoomStartTime] = useState<number>(0);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
   const lastFetchedIdRef = useRef<string | null>(null);
 
   const roomAppId = props.appointmentId ? String(props.appointmentId) : "global";
@@ -148,9 +149,12 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
         if (res.start_time) {
           setRoomStartTime(res.start_time);
         }
+        if (res.server_time) {
+          setServerTimeOffset(res.server_time - (Date.now() / 1000));
+        }
       } catch (err) {
         console.error("Error fetching LiveKit token:", err);
-        lastFetchedIdRef.current = null; // Allow retry on error
+        lastFetchedIdRef.current = null;
       }
     };
     fetchToken();
@@ -183,23 +187,20 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     );
   }
 
-  // Pre-Call Lobby Screen (Lobby previo a la llamada estilo Teams / Meet)
   if (!hasJoined) {
     return (
       <PreCallLobby
         props={{ ...props, onEndCall: handleEndCallWrapped }}
         onJoin={(videoOn, audioOn, lsaOn) => {
-          const targetRoomCode = props.appointmentId ? String(props.appointmentId) : "global";
-          localStorage.removeItem(`room_status_${targetRoomCode}`);
           setJoinedVideoOn(videoOn);
           setJoinedAudioOn(audioOn);
-          setJoinedLsaOn(lsaOn);
+          setJoinedLsaOn(lsaOn ?? true);
+          localStorage.setItem("local_video_off", videoOn ? "false" : "true");
+          localStorage.setItem("local_audio_muted", audioOn ? "false" : "true");
+          localStorage.setItem("local_lsa_on", (lsaOn ?? true) ? "true" : "false");
           setHasJoined(true);
-          // Actualizar estado de la cita a "en_curso" ÚNICAMENTE al unirse oficialmente desde el lobby
           if (props.appointmentId) {
-            api.updateAppointmentStatus(props.appointmentId, "en_curso").catch((err) => {
-              console.warn("Error actualizando estado de cita a en_curso:", err);
-            });
+            api.updateAppointmentStatus(props.appointmentId, "en_curso").catch(() => {});
           }
           props.onJoinCall?.();
         }}
@@ -221,6 +222,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
         {...props}
         onEndCall={handleEndCallWrapped}
         startTime={roomStartTime}
+        serverTimeOffset={serverTimeOffset}
         initialVideoOff={!joinedVideoOn}
         initialAudioMuted={!joinedAudioOn}
         initialLsaOn={joinedLsaOn}
@@ -546,10 +548,11 @@ function TelemedicinaRoomContent({
   isMinimized,
   onReturnToCall,
   startTime,
+  serverTimeOffset,
   initialVideoOff,
   initialAudioMuted,
   initialLsaOn
-}: TelemedicinaRoomProps & { startTime: number; initialVideoOff: boolean; initialAudioMuted: boolean; initialLsaOn?: boolean }) {
+}: TelemedicinaRoomProps & { startTime: number; serverTimeOffset?: number; initialVideoOff: boolean; initialAudioMuted: boolean; initialLsaOn?: boolean }) {
   // Fuente única de verdad para estados mic/cámara — desde eventos RoomEvent y localStorage durante la llamada
   const roomCode = appointmentId ? String(appointmentId) : "global";
   const { localParticipant } = useLocalParticipant();
@@ -1241,16 +1244,19 @@ function TelemedicinaRoomContent({
   // Doctor Clinical Summary
   const [clinicalNotes, setClinicalNotes] = useState("");
 
-  // 1. Single Source of Truth Live Call Timer (Basado en el Servidor)
+  // 1. Single Source of Truth Live Call Timer (Sincronizado con el Servidor y cancelando desfase de reloj)
   useEffect(() => {
     if (!startTime) return;
-    const timer = setInterval(() => {
-      const elapsed = Math.floor(Date.now() / 1000) - startTime;
+    const updateTimer = () => {
+      const currentServerTime = (Date.now() / 1000) + (serverTimeOffset || 0);
+      const elapsed = Math.floor(currentServerTime - startTime);
       setElapsedSecs(Math.max(0, elapsed));
-    }, 1000);
+    };
 
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [startTime]);
+  }, [startTime, serverTimeOffset]);
 
   // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
   const remoteParticipants = useRemoteParticipants();

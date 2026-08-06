@@ -328,4 +328,8 @@ def get_livekit_token(room_id: str, current_user: models.User = Depends(get_curr
     # Get or create session to get the definitive start_time
     session = get_or_create_session(room_id)
     
-    return {"token": token_str, "start_time": session["start_time"]}
+    return {
+        "token": token_str,
+        "start_time": session["start_time"],
+        "server_time": time.time()
+    }
