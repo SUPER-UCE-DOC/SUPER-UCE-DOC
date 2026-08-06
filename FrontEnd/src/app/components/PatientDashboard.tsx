@@ -83,8 +83,13 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
             specialty: active.doctor_specialty || "Cardiología Clínica"
           };
           setActiveCallDoc(docData);
-          setInCall(true);
-          localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
+          // NO forzar setInCall(true) automáticamente para no redirigir al paciente al lobby sin su consentimiento.
+          // Solo se activa inCall si el paciente ya se había unido formalmente en esta sesión.
+          const hasJoinedRoom = sessionStorage.getItem(`has_joined_teleconsult_${active.id}`) === "true";
+          if (hasJoinedRoom) {
+            setInCall(true);
+            localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
+          }
         }
       }
     }).catch(() => {});
