@@ -122,6 +122,20 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     return cleanupSidebar;
   }, [props.appointmentId]);
 
+  const liveKitOptions = useMemo(() => ({
+    adaptiveStream: true,
+    dynacast: true,
+    rtcConfig: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ]
+    }
+  }), []);
+
   if (!tokenToUse) {
     return (
       <div className="flex items-center justify-center h-full w-full bg-[#F9FAFB]">
@@ -154,20 +168,6 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       />
     );
   }
-
-  const liveKitOptions = useMemo(() => ({
-    adaptiveStream: true,
-    dynacast: true,
-    rtcConfig: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
-      ]
-    }
-  }), []);
 
   return (
     <LiveKitRoom
