@@ -969,6 +969,7 @@ function TelemedicinaRoomContent({
 
       mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       let chunks: Blob[] = [];
+      let recordStartTime = 0;
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
@@ -978,15 +979,16 @@ function TelemedicinaRoomContent({
         if (chunks.length > 0) {
           const blob = new Blob(chunks, { type: 'audio/webm' });
           chunks = [];
-          if (blob.size > 2000) {
+          if (blob.size > 3500) {
             try {
               const res = await api.transcribeTelemedicineAudio(blob);
-              if (res.text) {
+              const cleanText = res.text ? res.text.trim() : "";
+              if (cleanText && cleanText.length > 1 && !["Audio.", "Audio", "Hola."].includes(cleanText)) {
                 const newSub = {
                   id: Date.now(),
                   speaker_name: userName,
                   speaker_role: role,
-                  text: res.text,
+                  text: cleanText,
                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
                 setSubtitlesList(prev => {
@@ -1000,7 +1002,7 @@ function TelemedicinaRoomContent({
                     type: "SUBTITLE",
                     speaker_name: userName,
                     speaker_role: role,
-                    text: res.text
+                    text: cleanText
                   })), { reliable: true });
                 }
 
@@ -1008,7 +1010,7 @@ function TelemedicinaRoomContent({
                 api.postRoomSubtitle(roomCode, {
                   speaker_name: userName,
                   speaker_role: role,
-                  text: res.text,
+                  text: cleanText,
                   timestamp: newSub.timestamp
                 }).catch(err => console.error("Error saving subtitle to backend", err));
               }
@@ -1019,20 +1021,32 @@ function TelemedicinaRoomContent({
 
       interval = setInterval(() => {
         analyser.getByteFrequencyData(dataArray);
+        // Evaluar exclusivamente rango de voz humana (~80Hz a 3.5kHz) en los primeros 40 bins de frecuencia
         let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const avg = sum / dataArray.length;
+        const speechBins = Math.min(40, dataArray.length);
+        for (let i = 2; i < speechBins; i++) sum += dataArray[i];
+        const speechAvg = sum / (speechBins - 2);
 
-        if (avg > 15) {
+        const now = Date.now();
+
+        if (speechAvg > 7) {
           if (!isSpeaking) {
             isSpeaking = true;
+            recordStartTime = now;
             if (mediaRecorder?.state === "inactive") mediaRecorder.start();
           }
           clearTimeout(silenceTimer);
           silenceTimer = setTimeout(() => {
             isSpeaking = false;
             if (mediaRecorder?.state === "recording") mediaRecorder.stop();
-          }, 1500);
+          }, 2400);
+        }
+
+        // Si la persona habla continuamente por más de 12 segundos, forzar envío de fragmento completo
+        if (isSpeaking && mediaRecorder?.state === "recording" && (now - recordStartTime > 12000)) {
+          clearTimeout(silenceTimer);
+          isSpeaking = false;
+          mediaRecorder.stop();
         }
       }, 100);
     } catch (e) {
