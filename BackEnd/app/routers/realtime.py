@@ -132,12 +132,12 @@ def get_or_create_session(room_id: str) -> dict:
     return room_sessions_store[clean_room]
 
 @router.post("/start-timer/{room_id}")
-def start_room_timer(room_id: str):
+def start_room_timer(room_id: str, start_ts: float = 0.0):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
-    if not session.get("start_time_set") or session.get("start_time", 0) == 0:
-        session["start_time"] = now
+    if session.get("start_time", 0) == 0 or not session.get("start_time_set"):
+        session["start_time"] = start_ts if start_ts > 0 else now
         session["start_time_set"] = True
     return {
         "status": "ok",
@@ -246,8 +246,6 @@ def reset_room_session(room_id: str):
     room_sessions_store.pop(clean_room, None)
     return {"status": "ok", "message": f"Estado de la sala '{clean_room}' purgado por completo"}
 
-from pydantic import BaseModel
-
 class LiveCommentPayload(BaseModel):
     sender: str
     role: str
@@ -268,6 +266,7 @@ def post_room_comment(room_id: str, payload: LiveCommentPayload):
         room_comments_store[clean_room] = []
     
     msg_dict = {
+        "id": len(room_comments_store[clean_room]) + 1,
         "sender": payload.sender,
         "role": payload.role,
         "text": payload.text,
@@ -277,15 +276,13 @@ def post_room_comment(room_id: str, payload: LiveCommentPayload):
     room_comments_store[clean_room].append(msg_dict)
     return {"status": "ok", "comments": room_comments_store[clean_room]}
 
-
-from typing import Optional
-
+# Subtítulos Persistentes por Sala
 class SubtitlePayload(BaseModel):
     speaker_name: str
     speaker_role: str
-    speaker_avatar: Optional[str] = None
+    speaker_avatar: str = ""
     text: str
-    timestamp: str  # Formato HH:MM:SS (Hora, minuto y segundo)
+    timestamp: str
 
 room_subtitles_store: Dict[str, List[dict]] = {}
 
@@ -312,19 +309,17 @@ def post_room_subtitle(room_id: str, payload: SubtitlePayload):
     room_subtitles_store[clean_room].append(sub_dict)
     return {"status": "ok", "subtitles": room_subtitles_store[clean_room]}
 
-from fastapi import Depends
-from app.routers.auth import get_current_user
-from app import models
-import os
-
 try:
     from livekit.api import AccessToken, VideoGrants
 except ImportError:
     pass
 
 @router.get("/livekit-token/{room_id}")
-def get_livekit_token(room_id: str, current_user: models.User = Depends(get_current_user)):
-    # You can customize these from environment variables or config
+def get_livekit_token(
+    room_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     api_key = os.environ.get("LIVEKIT_API_KEY", "devkey")
     api_secret = os.environ.get("LIVEKIT_API_SECRET", "mi_super_secreto_largo_para_livekit_de_32_letras")
     
@@ -342,11 +337,22 @@ def get_livekit_token(room_id: str, current_user: models.User = Depends(get_curr
         room_comments_store.pop(clean_room, None)
         room_sessions_store.pop(clean_room, None)
 
-    # Get or create session to get the definitive start_time
-    session = get_or_create_session(room_id)
-    
+    session = get_or_create_session(clean_room)
+
+    # Verificar si room_id corresponde a una cita de la DB para sincronizar start_time con real_start_time
+    start_time_to_return = session.get("start_time", 0.0)
+    if clean_room.isdigit():
+        appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
+        if appt:
+            if appt.status != "en_curso" or not appt.real_start_time:
+                start_time_to_return = 0.0
+            else:
+                start_time_to_return = appt.real_start_time.timestamp()
+                session["start_time"] = start_time_to_return
+                session["start_time_set"] = True
+
     return {
         "token": token_str,
-        "start_time": session["start_time"],
+        "start_time": start_time_to_return,
         "server_time": time.time()
     }

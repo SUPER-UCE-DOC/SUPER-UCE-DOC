@@ -192,6 +192,34 @@ def update_appointment_status(
         )
 
     if requested_status == app.status:
+        if requested_status == "en_curso":
+            if not app.real_start_time:
+                app.real_start_time = datetime.datetime.utcnow()
+                db.commit()
+            try:
+                from app.routers.realtime import start_room_timer
+                start_room_timer(str(app.id), start_ts=app.real_start_time.timestamp())
+            except Exception as ex:
+                pass
+            patient_user = app.patient.user if app.patient else None
+            doctor_user = app.doctor.user if app.doctor else None
+            doc_profile = db.query(models.Doctor).filter(models.Doctor.id == app.doctor_id).first() if app.doctor_id else None
+            return schemas.AppointmentResponse(
+                id=app.id,
+                patient_id=app.patient_id,
+                doctor_id=app.doctor_id,
+                date_time=app.date_time,
+                status=app.status,
+                type=app.type,
+                reason=app.reason,
+                patient_name=patient_user.full_name if patient_user else "Paciente",
+                doctor_name=doctor_user.full_name if doctor_user else "Médico",
+                patient_avatar=patient_user.avatar if patient_user else None,
+                doctor_avatar=doctor_user.avatar if doctor_user else None,
+                doctor_specialty=doc_profile.specialty if doc_profile else "Medicina General",
+                real_start_time=app.real_start_time,
+                real_end_time=app.real_end_time
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"La cita ya se encuentra en estado '{app.status}'."
@@ -223,10 +251,10 @@ def update_appointment_status(
             )
 
     elif current_user.role == "patient":
-        if requested_status != "cancelada":
+        if requested_status not in {"cancelada", "en_curso"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Solo el paciente puede cancelar la cita, cambiando su estado a 'cancelada'."
+                detail="Solo el paciente puede cancelar la cita o avanzar a en_curso al unirse."
             )
     else:
         raise HTTPException(
@@ -241,7 +269,7 @@ def update_appointment_status(
             app.real_start_time = datetime.datetime.utcnow()
         try:
             from app.routers.realtime import start_room_timer
-            start_room_timer(str(app.id))
+            start_room_timer(str(app.id), start_ts=app.real_start_time.timestamp())
         except Exception as ex:
             print("Error starting realtime timer:", ex)
     elif requested_status == "completada" and not app.real_end_time:
