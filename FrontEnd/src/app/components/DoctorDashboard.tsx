@@ -188,8 +188,18 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
   }, [currentView]);
 
   const handleEndCall = () => {
+    const activeApt = activeAppointment;
     localStorage.removeItem("doctor_active_teleconsult");
     localStorage.setItem("doctor_user_left_call", "true");
+    // Clean up all session-specific data so next call with same ID starts fresh
+    if (activeApt?.id) {
+      const aptId = String(activeApt.id);
+      localStorage.removeItem(`doctor_in_active_call_${aptId}`);
+      localStorage.removeItem(`teleconsult_subtitles_${aptId}`);
+      localStorage.removeItem(`teleconsult_chat_${aptId}`);
+      localStorage.removeItem(`teleconsult_comments_${aptId}`);
+      sessionStorage.removeItem(`has_joined_teleconsult_${aptId}`);
+    }
     setInCall(false);
     setActiveAppointment(null);
     navigate("home");
@@ -207,22 +217,34 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
 
   return (
     <div className="flex-1 flex flex-col w-full h-full relative">
+      {/* Main view content - hidden when in live teleconsult fullscreen */}
       <div style={{ display: currentView === "live_teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
         {renderViewContent()}
       </div>
-      {(inCall || currentView === "live_teleconsult") && (
-        <div className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}>
-          <DoctorLiveRoom
-            userName={userName}
-            userAvatar={userAvatar}
-            onEndCall={handleEndCall}
-            activeAppointment={activeAppointment}
-            activePatient={activeAppointment?.patient_name}
-            isMinimized={currentView !== "live_teleconsult"}
-            onReturnToCall={() => navigate("live_teleconsult")}
-          />
-        </div>
-      )}
+      {/* DoctorLiveRoom: always mounted when inCall=true OR viewing live_teleconsult.
+          Use CSS display to show/hide to avoid unmounting (prevents audio interruption). */}
+      <div
+        style={{ display: (inCall || currentView === "live_teleconsult") ? undefined : "none" }}
+        className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}
+      >
+        <DoctorLiveRoom
+          userName={userName}
+          userAvatar={userAvatar}
+          onEndCall={handleEndCall}
+          onJoinCall={() => {
+            setInCall(true);
+            // Also persist so component stays mounted after section changes
+            if (activeAppointment?.id) {
+              localStorage.setItem("doctor_active_teleconsult", JSON.stringify(activeAppointment));
+              localStorage.removeItem("doctor_user_left_call");
+            }
+          }}
+          activeAppointment={activeAppointment}
+          activePatient={activeAppointment?.patient_name}
+          isMinimized={currentView !== "live_teleconsult"}
+          onReturnToCall={() => navigate("live_teleconsult")}
+        />
+      </div>
     </div>
   );
 }
@@ -1707,7 +1729,7 @@ function TeleconsultaView({ userName, userAvatar, onNavigate }: { userName?: str
 }
 
 /* ─── DOCTOR LIVE ROOM ─── */
-function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, activePatient, isMinimized, onReturnToCall }: any) {
+function DoctorLiveRoom({ userName, userAvatar, onEndCall, onJoinCall, activeAppointment, activePatient, isMinimized, onReturnToCall }: any) {
   const [resolvedDoc, setResolvedDoc] = useState<any>(activeAppointment);
   const [doctorAvatar, setDoctorAvatar] = useState<string | undefined>(userAvatar);
 
@@ -1751,6 +1773,7 @@ function DoctorLiveRoom({ userName, userAvatar, onEndCall, activeAppointment, ac
       appointmentId={appointmentId}
       appointmentReason={appointmentReason}
       onEndCall={onEndCall}
+      onJoinCall={onJoinCall}
       isMinimized={isMinimized}
       onReturnToCall={onReturnToCall}
     />

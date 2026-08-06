@@ -1627,6 +1627,8 @@ function TelemedicinaRoomContent({
       localStorage.removeItem("local_audio_muted");
       localStorage.removeItem(`teleconsult_subtitles_${roomCode}`);
       localStorage.removeItem(`teleconsult_chat_${roomCode}`);
+      localStorage.removeItem(`teleconsult_comments_${roomCode}`);
+      localStorage.removeItem(`doctor_in_active_call_${roomCode}`);
       sessionStorage.removeItem(`has_joined_teleconsult_${roomCode}`);
       onEndCall();
     }
