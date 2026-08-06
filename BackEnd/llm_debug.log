@@ -54,3 +54,6 @@
 [Traductor Local] IN: donkey | OUT: Burro.
 [Traductor Local] IN: donkey | OUT: Burro.
 [Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello donkey stairs | OUT: Hola burro escaleras.

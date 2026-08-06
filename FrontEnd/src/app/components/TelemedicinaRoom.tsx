@@ -177,6 +177,11 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       <PreCallLobby
         props={{ ...props, onEndCall: handleEndCallWrapped }}
         onJoin={(videoOn, audioOn, lsaOn) => {
+          const targetRoomCode = props.appointmentId ? String(props.appointmentId) : "global";
+          localStorage.removeItem(`room_status_${targetRoomCode}`);
+          localStorage.removeItem(`teleconsult_subtitles_${targetRoomCode}`);
+          localStorage.removeItem(`teleconsult_chat_${targetRoomCode}`);
+          localStorage.removeItem(`teleconsult_comments_${targetRoomCode}`);
           setJoinedVideoOn(videoOn);
           setJoinedAudioOn(audioOn);
           setJoinedLsaOn(lsaOn);
@@ -1629,6 +1634,7 @@ function TelemedicinaRoomContent({
       localStorage.removeItem(`teleconsult_chat_${roomCode}`);
       localStorage.removeItem(`teleconsult_comments_${roomCode}`);
       localStorage.removeItem(`doctor_in_active_call_${roomCode}`);
+      localStorage.removeItem(`room_status_${roomCode}`);
       sessionStorage.removeItem(`has_joined_teleconsult_${roomCode}`);
       onEndCall();
     }
