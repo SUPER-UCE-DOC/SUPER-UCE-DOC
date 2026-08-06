@@ -1,7 +1,14 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from typing import Dict, List, Set
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from pydantic import BaseModel
+from typing import Dict, List, Set, Optional
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.routers.auth import get_current_user
+from app import models
+import os
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +130,7 @@ def get_or_create_session(room_id: str) -> dict:
     if clean_room not in room_sessions_store:
         room_sessions_store[clean_room] = {
             "room_id": clean_room,
-            "start_time": 0.0,
-            "start_time_set": False,
+            "start_time": now,
             "status": "active",
             "doctor_time": 0.0,
             "patient_time": 0.0
@@ -136,9 +142,8 @@ def start_room_timer(room_id: str, start_ts: float = 0.0):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
-    if session.get("start_time", 0) == 0 or not session.get("start_time_set"):
-        session["start_time"] = start_ts if start_ts > 0 else now
-        session["start_time_set"] = True
+    if start_ts > 0:
+        session["start_time"] = start_ts
     return {
         "status": "ok",
         "start_time": session["start_time"],
@@ -174,8 +179,7 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
     is_connected = (now - spec_time) < 6.0
     
     counterpart_media = room_media_store[clean_room].get(counterpart, {"muted": False, "videoOff": False})
-    st = session.get("start_time", 0)
-    elapsed_seconds = int(now - st) if st > 0 else 0
+    elapsed_seconds = int(now - session["start_time"])
     
     return {
         "connected": is_connected,
@@ -196,8 +200,7 @@ def get_room_presence(room_id: str):
     
     doc_time = session.get("doctor_time", 0)
     pat_time = session.get("patient_time", 0)
-    st = session.get("start_time", 0)
-    elapsed_seconds = int(now - st) if st > 0 else 0
+    elapsed_seconds = int(now - session["start_time"])
     
     return {
         "doctor_online": (now - doc_time) < 6.0,
@@ -236,6 +239,12 @@ async def end_room_session(room_id: str):
     room_sessions_store.pop(clean_room, None)
         
     return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
+
+@router.post("/reload-backend")
+def reload_backend():
+    import os
+    logger.info("Solicitud de reinicio del backend recibida. Finalizando worker...")
+    os._exit(0)
 
 @router.post("/reset/{room_id}")
 def reset_room_session(room_id: str):
@@ -339,20 +348,8 @@ def get_livekit_token(
 
     session = get_or_create_session(clean_room)
 
-    # Verificar si room_id corresponde a una cita de la DB para sincronizar start_time con real_start_time
-    start_time_to_return = session.get("start_time", 0.0)
-    if clean_room.isdigit():
-        appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
-        if appt:
-            if appt.status != "en_curso" or not appt.real_start_time:
-                start_time_to_return = 0.0
-            else:
-                start_time_to_return = appt.real_start_time.timestamp()
-                session["start_time"] = start_time_to_return
-                session["start_time_set"] = True
-
     return {
         "token": token_str,
-        "start_time": start_time_to_return,
+        "start_time": session["start_time"],
         "server_time": time.time()
     }
