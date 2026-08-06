@@ -208,12 +208,21 @@ def end_room_session(room_id: str):
     session["patient_time"] = 0
     
     # Limpiar estado en memoria para que no persista si se reutiliza el room_id
-    if clean_room in room_subtitles_store:
-        room_subtitles_store.pop(clean_room, None)
-    if clean_room in room_comments_store:
-        room_comments_store.pop(clean_room, None)
+    room_subtitles_store.pop(clean_room, None)
+    room_comments_store.pop(clean_room, None)
+    room_media_store.pop(clean_room, None)
+    room_sessions_store.pop(clean_room, None)
         
     return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
+
+@router.post("/reset/{room_id}")
+def reset_room_session(room_id: str):
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    room_subtitles_store.pop(clean_room, None)
+    room_comments_store.pop(clean_room, None)
+    room_media_store.pop(clean_room, None)
+    room_sessions_store.pop(clean_room, None)
+    return {"status": "ok", "message": f"Estado de la sala '{clean_room}' purgado por completo"}
 
 from pydantic import BaseModel
 
@@ -305,6 +314,12 @@ def get_livekit_token(room_id: str, current_user: models.User = Depends(get_curr
     
     token_str = access_token.to_jwt()
     
+    clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+    if clean_room in room_sessions_store and room_sessions_store[clean_room].get("status") == "ended":
+        room_subtitles_store.pop(clean_room, None)
+        room_comments_store.pop(clean_room, None)
+        room_sessions_store.pop(clean_room, None)
+
     # Get or create session to get the definitive start_time
     session = get_or_create_session(room_id)
     

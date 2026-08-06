@@ -177,6 +177,7 @@ function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMi
 
   return (
     <TelemedicinaRoom
+      key={resolvedDoc?.id || activeCallDoc?.id || "global"}
       role="patient"
       userName={userName || "Paciente"}
       userAvatar={userAvatar}

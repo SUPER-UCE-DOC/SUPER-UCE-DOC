@@ -194,6 +194,8 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     // Clean up all session-specific data so next call with same ID starts fresh
     if (activeApt?.id) {
       const aptId = String(activeApt.id);
+      const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+      fetch(`${apiBase}/api/realtime/reset/${aptId}`, { method: "POST" }).catch(() => {});
       localStorage.removeItem(`doctor_in_active_call_${aptId}`);
       localStorage.removeItem(`teleconsult_subtitles_${aptId}`);
       localStorage.removeItem(`teleconsult_chat_${aptId}`);
@@ -222,10 +224,14 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
           localStorage.setItem("doctor_active_teleconsult", JSON.stringify(apt));
           if (apt?.id) {
             const aptId = String(apt.id);
-            localStorage.removeItem(`room_status_${aptId}`);
+            const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+            fetch(`${apiBase}/api/realtime/reset/${aptId}`, { method: "POST" }).catch(() => {});
+            localStorage.removeItem(`doctor_in_active_call_${aptId}`);
             localStorage.removeItem(`teleconsult_subtitles_${aptId}`);
             localStorage.removeItem(`teleconsult_chat_${aptId}`);
             localStorage.removeItem(`teleconsult_comments_${aptId}`);
+            localStorage.removeItem(`room_status_${aptId}`);
+            sessionStorage.removeItem(`has_joined_teleconsult_${aptId}`);
           }
         }}
       />
@@ -242,12 +248,14 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
         {renderViewContent()}
       </div>
       {/* DoctorLiveRoom: always mounted when inCall=true OR viewing live_teleconsult.
-          Use CSS display to show/hide to avoid unmounting (prevents audio interruption). */}
+          Keyed by activeAppointment id to force clean state when switching appointments,
+          while using CSS display to show/hide without unmounting during section navigation. */}
       <div
         style={{ display: (inCall || currentView === "live_teleconsult") ? undefined : "none" }}
         className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}
       >
         <DoctorLiveRoom
+          key={activeAppointment?.id ? String(activeAppointment.id) : "global"}
           userName={userName}
           userAvatar={userAvatar}
           onEndCall={handleEndCall}
