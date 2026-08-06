@@ -636,6 +636,14 @@ function TelemedicinaRoomContent({
   const [isLsaEnabledInSettings, setIsLsaEnabledInSettings] = useState<boolean>(true);
   const [isVideoSubtitlesEnabled, setIsVideoSubtitlesEnabled] = useState<boolean>(true);
   const [subtitleSizeSetting, setSubtitleSizeSetting] = useState<string>("Mediano");
+
+  const handleToggleVideoSubtitles = () => {
+    const nextVal = !isVideoSubtitlesEnabled;
+    setIsVideoSubtitlesEnabled(nextVal);
+    localStorage.setItem("settings_video_subtitles_enabled", String(nextVal));
+    window.dispatchEvent(new Event("videoSubtitlesPreferenceChanged"));
+  };
+
   const [showRxMedSuggestions, setShowRxMedSuggestions] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [activeTab, setActiveTab] = useState<"chat" | "subtitles" | "rx" | "notes">("subtitles");
@@ -2145,14 +2153,15 @@ function TelemedicinaRoomContent({
             </button>
 
             <button
-              onClick={() => setActiveTab("subtitles")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${activeTab === "subtitles"
+              onClick={handleToggleVideoSubtitles}
+              title="Activar/Desactivar subtítulos flotantes sobre el video"
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${isVideoSubtitlesEnabled
                 ? "bg-[#F0FFFE] text-[#00A69D] border-[#CCFBF6]"
                 : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"
                 }`}
             >
               <Captions size={16} />
-              <span>Subtítulos Clínicos</span>
+              <span>Subtítulos en Pantalla</span>
             </button>
 
             {role === "patient" && isLsaEnabledInSettings && (
