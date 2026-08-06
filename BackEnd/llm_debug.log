@@ -41,3 +41,16 @@
 [Traductor Local] IN: bye hello | OUT: Adiós, hola.
 [Traductor Local] IN: grandpa see for later | OUT: Abuelo ver para más tarde.
 [Traductor Local] IN: hello grandpa see later | OUT: Hola abuelo ver más tarde.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: grandpa flag donkey | OUT: Asno de la bandera del abuelo.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello | OUT: Hola.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello donkey | OUT: Hola burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: donkey | OUT: Burro.
+[Traductor Local] IN: hello | OUT: Hola.

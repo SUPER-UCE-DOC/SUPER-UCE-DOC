@@ -73,13 +73,14 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const joinKey = `has_joined_teleconsult_${roomAppId}`;
 
   // Pre-call Lobby State (Teams / Meet style)
-  // Doctors always go through the lobby so they set appointment status to en_curso.
-  // Patients restore from sessionStorage (for PIP navigation between sections).
+  // - Doctors: use localStorage so the flag survives component remounts during PIP navigation.
+  //   The flag is cleared ONLY when onEndCall is called (doctor explicitly ends the call).
+  // - Patients: use sessionStorage to restore their active call state across sections.
+  const doctorActiveKey = `doctor_in_active_call_${roomAppId}`;
   const [hasJoined, setHasJoinedState] = useState(() => {
     if (props.role === "doctor") {
-      // Always clear so doctors always pass through the lobby on each new session
-      sessionStorage.removeItem(joinKey);
-      return false;
+      // Restore from localStorage: if doctor was already in this call, skip lobby
+      return localStorage.getItem(doctorActiveKey) === "true";
     }
     return sessionStorage.getItem(joinKey) === "true";
   });
@@ -88,12 +89,28 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [joinedLsaOn, setJoinedLsaOn] = useState(true);
 
   const setHasJoined = (val: boolean) => {
-    if (val) {
-      sessionStorage.setItem(joinKey, "true");
+    if (props.role === "doctor") {
+      if (val) {
+        localStorage.setItem(doctorActiveKey, "true");
+      } else {
+        localStorage.removeItem(doctorActiveKey);
+      }
     } else {
-      sessionStorage.removeItem(joinKey);
+      if (val) {
+        sessionStorage.setItem(joinKey, "true");
+      } else {
+        sessionStorage.removeItem(joinKey);
+      }
     }
     setHasJoinedState(val);
+  };
+
+  // Wrap onEndCall to clear the doctor active call flag before delegating up
+  const handleEndCallWrapped = () => {
+    if (props.role === "doctor") {
+      localStorage.removeItem(doctorActiveKey);
+    }
+    props.onEndCall();
   };
 
   useEffect(() => {
@@ -158,7 +175,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   if (!hasJoined) {
     return (
       <PreCallLobby
-        props={props}
+        props={{ ...props, onEndCall: handleEndCallWrapped }}
         onJoin={(videoOn, audioOn, lsaOn) => {
           setJoinedVideoOn(videoOn);
           setJoinedAudioOn(audioOn);
@@ -188,6 +205,7 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     >
       <TelemedicinaRoomContent
         {...props}
+        onEndCall={handleEndCallWrapped}
         startTime={roomStartTime}
         initialVideoOff={!joinedVideoOn}
         initialAudioMuted={!joinedAudioOn}
