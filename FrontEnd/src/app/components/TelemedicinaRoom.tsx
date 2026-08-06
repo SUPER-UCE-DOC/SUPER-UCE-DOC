@@ -73,7 +73,14 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const joinKey = `has_joined_teleconsult_${roomAppId}`;
 
   // Pre-call Lobby State (Teams / Meet style)
+  // Doctors always go through the lobby so they set appointment status to en_curso.
+  // Patients restore from sessionStorage (for PIP navigation between sections).
   const [hasJoined, setHasJoinedState] = useState(() => {
+    if (props.role === "doctor") {
+      // Always clear so doctors always pass through the lobby on each new session
+      sessionStorage.removeItem(joinKey);
+      return false;
+    }
     return sessionStorage.getItem(joinKey) === "true";
   });
   const [joinedVideoOn, setJoinedVideoOn] = useState(true);
