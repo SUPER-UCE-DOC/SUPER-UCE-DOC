@@ -500,6 +500,37 @@ function PreCallLobby({
   );
 }
 
+function playJoinChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc1.type = "sine";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(659.25, now);
+    osc2.frequency.setValueAtTime(783.99, now + 0.12);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.12);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.4);
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 500);
+  } catch (e) {
+    console.warn("Could not play join chime sound:", e);
+  }
+}
+
 function TelemedicinaRoomContent({
   role,
   userName,
@@ -1277,22 +1308,13 @@ function TelemedicinaRoomContent({
   const isCounterpartConnected = remoteParticipants.length > 0;
   const isCounterpartVideoOff = !remoteCameraTrack || !remoteCameraTrack.publication || remoteCameraTrack.publication.isMuted || remoteCameraTrack.publication.isSubscribed === false || remoteCameraTrack.participant?.isCameraEnabled === false;
   const isCounterpartMuted = !remoteAudioTrack || !remoteAudioTrack.publication || remoteAudioTrack.publication.isMuted || remoteAudioTrack.participant?.isMicrophoneEnabled === false;
-  const [presenceToast, setPresenceToast] = useState<string | null>(null);
   const prevConnectedRef = useRef(false);
 
   useEffect(() => {
     if (isCounterpartConnected && !prevConnectedRef.current) {
-      const msg = role === "doctor"
-        ? `¡${counterpartName} se ha unido a la teleconsulta!`
-        : `¡El ${counterpartName} se ha conectado a la sala!`;
-      setPresenceToast(msg);
-      setTimeout(() => setPresenceToast(null), 4500);
+      playJoinChime();
     } else if (!isCounterpartConnected && prevConnectedRef.current) {
-      const msg = role === "doctor"
-        ? `${counterpartName} ha salido de la sala.`
-        : `El ${counterpartName} se ha desconectado.`;
-      setPresenceToast(msg);
-      setTimeout(() => setPresenceToast(null), 4500);
+      playJoinChime();
     }
     prevConnectedRef.current = isCounterpartConnected;
 
@@ -1808,14 +1830,6 @@ function TelemedicinaRoomContent({
 
           {/* VISOR DE VIDEO */}
           <div ref={mainContainerRef} className="flex-1 relative rounded-2xl overflow-hidden bg-[#111827] border border-gray-200 shadow-md flex items-center justify-center min-h-[380px]">
-
-            {/* TOAST NOTIFICACIÓN EN SALA */}
-            {presenceToast && (
-              <div className="absolute top-4 z-30 px-4 py-2 rounded-xl bg-white text-[#203A70] text-xs font-bold shadow-xl border border-gray-200 flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-[#00A69D]" />
-                <span>{presenceToast}</span>
-              </div>
-            )}
 
             {/* VIDEO PANTALLA PRINCIPAL (VISTA CENTRAL LIMPIA CON SINCRONIZACIÓN MEDIA EN TIEMPO REAL) */}
             <div className="w-full h-full flex flex-col items-center justify-center relative bg-[#111827] transition-all duration-300 ease-in-out select-none">
