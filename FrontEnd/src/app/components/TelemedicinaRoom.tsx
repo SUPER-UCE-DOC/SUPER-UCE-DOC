@@ -1142,7 +1142,7 @@ function TelemedicinaRoomContent({
     if (isEndedByDoctor) {
       const timer = setTimeout(() => {
         onEndCall();
-      }, 2800);
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [isEndedByDoctor, onEndCall]);
@@ -1283,8 +1283,8 @@ function TelemedicinaRoomContent({
         } catch (e) { }
       }
 
-      // Chequeo periódico suave (cada 15s) solo para fallback de estado de cita en BD
-      const interval = setInterval(checkAppointment, 15000);
+      // Chequeo periódico suave (cada 2s) solo para fallback de estado de cita en BD
+      const interval = setInterval(checkAppointment, 2000);
       return () => clearInterval(interval);
     }
   }, [isCounterpartConnected, role, counterpartName, appointmentId, roomCode]);

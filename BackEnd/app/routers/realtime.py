@@ -200,13 +200,18 @@ def leave_room_presence(room_id: str, role: str):
     return {"status": "ok", "message": f"{clean_role} abandonó la sala '{clean_room}'"}
 
 @router.post("/end/{room_id}")
-def end_room_session(room_id: str):
+async def end_room_session(room_id: str):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     session["status"] = "ended"
     session["doctor_time"] = 0
     session["patient_time"] = 0
     
+    try:
+        await manager.broadcast_to_room({"action": "end_call", "status": "completada"}, clean_room)
+    except Exception as e:
+        logger.warn(f"Error broadcasting end_call: {e}")
+
     # Limpiar estado en memoria para que no persista si se reutiliza el room_id
     room_subtitles_store.pop(clean_room, None)
     room_comments_store.pop(clean_room, None)

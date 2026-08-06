@@ -89,6 +89,10 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
               setInCall(true);
               localStorage.setItem("patient_active_teleconsult", JSON.stringify(docData));
             }
+          } else {
+            setInCall(false);
+            setActiveCallDoc(null);
+            localStorage.removeItem("patient_active_teleconsult");
           }
         }
       }).catch(() => {});
