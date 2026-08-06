@@ -1638,6 +1638,30 @@ function TelemedicinaRoomContent({
   };
 
 
+  if (isEndedByDoctor) {
+    return (
+      <>
+        {createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
+                <CheckCircle2 size={36} />
+              </div>
+              <h3 className="text-xl font-extrabold text-[#203A70] mb-1.5">Teleconsulta Finalizada</h3>
+              <p className="text-gray-600 text-sm mb-5 leading-relaxed">
+                El médico ha concluido la cita clínica. Las notas y recetas médicas han sido guardadas en tu expediente.
+              </p>
+              <div className="flex justify-center">
+                <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+      </>
+    );
+  }
+
   if (isMinimized) {
     const handleMinimizedClick = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -1663,14 +1687,42 @@ function TelemedicinaRoomContent({
             zIndex: 9999
           }}
           className={`fixed w-[288px] h-[162px] rounded-xl overflow-hidden bg-slate-800 border-2 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-300 pointer-events-auto ${isDraggingPip ? "scale-105 border-[#00C7C0]" : ""} ${(!isDraggingPip && isRemoteSpeaking) ? "ring-2 ring-[#00C7C0] border-[#00C7C0]" : "border-[#00A69D]"}`}
-          title="Haz clic para volver a la videollamada o arrastra a cualquier esquina"
         >
-          <div className="absolute top-2 right-2 p-1.5 bg-black/70 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center justify-center shadow-md">
-            <Maximize2 size={13} className="text-[#00C7C0]" />
+          {/* Audio Tracks */}
+          <RoomAudioRenderer />
+
+          {/* Mini preview video (Counterpart or Local) */}
+          <div className="w-full h-full relative flex items-center justify-center bg-slate-900">
+            {remoteCameraTrack && !remoteCameraTrack.isMuted ? (
+              <VideoTrack trackRef={remoteCameraTrack as any} className="w-full h-full object-cover" />
+            ) : localCameraTrack && !localCameraTrack.isMuted ? (
+              <VideoTrack trackRef={localCameraTrack as any} className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-1.5 p-2 text-center">
+                <div className="w-10 h-10 rounded-full bg-[#00A69D] text-white font-extrabold flex items-center justify-center text-sm shadow-md">
+                  {counterpartName ? counterpartName.substring(0, 2).toUpperCase() : "MD"}
+                </div>
+                <span className="text-[11px] font-bold text-white max-w-[200px] truncate">{counterpartName}</span>
+                <span className="text-[9px] text-amber-400 font-semibold">{isRemoteSpeaking ? "Hablando..." : "Desconectado"}</span>
+              </div>
+            )}
+
+            {/* Overlays */}
+            <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-[10px] text-white font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{role === "doctor" ? "Paciente" : "Médico"}</span>
+            </div>
+
+            <button
+              onClick={handleMinimizedClick}
+              className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-[#00A69D] hover:bg-[#008f87] text-white text-[10px] font-bold shadow-lg transition-all flex items-center gap-1 cursor-pointer pointer-events-auto"
+            >
+              <span>Volver a pantalla completa</span>
+            </button>
           </div>
-          <FloatingRoomContent
-            counterpartAvatar={counterpartAvatar}
-            counterpartName={counterpartName}
+
+          <AvatarInitials
+            name={counterpartName}
             getInitials={(name: string) => {
               if (!name) return "US";
               const parts = name.trim().split(/\s+/);
@@ -1679,24 +1731,6 @@ function TelemedicinaRoomContent({
             }}
           />
         </div>
-
-        {isEndedByDoctor && createPortal(
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
-                <CheckCircle2 size={36} />
-              </div>
-              <h3 className="text-xl font-extrabold text-[#203A70] mb-1.5">Teleconsulta Finalizada</h3>
-              <p className="text-gray-600 text-sm mb-5 leading-relaxed">
-                El médico ha concluido la cita. Redirigiendo a tu historial de citas...
-              </p>
-              <div className="flex justify-center">
-                <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
       </>
     );
   }
