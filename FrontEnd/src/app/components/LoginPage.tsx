@@ -322,7 +322,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
 
       <div
         className={`relative w-full mx-4 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-7xl" : "max-w-md"
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-[1400px]" : "max-w-md"
         }`}
         style={{
           opacity: isLeaving ? 0 : 1,
@@ -971,7 +971,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                     </div>
                   )}
 
-                  <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+                  <div className={`mt-6 pt-4 border-t border-gray-100 text-center transition-all duration-500 ${authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "hidden" : "block"}`}>
                     <p className="text-xs" style={{ color: "#9CA3AF" }}>
                       Plataforma segura conforme a estándares de salud — HIPAA / HL7
                     </p>

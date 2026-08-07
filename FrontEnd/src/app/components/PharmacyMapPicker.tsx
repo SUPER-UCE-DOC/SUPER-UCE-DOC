@@ -140,7 +140,7 @@ function PharmacyMapPickerContent({ onConfirm, selectedPlaceId }: PharmacyMapPic
         <Map
           defaultZoom={15}
           defaultCenter={center}
-          disableDefaultUI={false}
+          disableDefaultUI={true}
           styles={[
             { featureType: "poi", stylers: [{ visibility: "off" }] },
             { featureType: "transit", stylers: [{ visibility: "off" }] }
