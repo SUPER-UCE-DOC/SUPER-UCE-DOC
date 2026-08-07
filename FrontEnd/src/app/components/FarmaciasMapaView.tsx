@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Search, MapPin, Navigation, Clock, Phone, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Search, MapPin, Navigation, Clock, Phone, CheckCircle, XCircle, Building2 } from "lucide-react";
 import { api } from "../utils/api";
 import { Map, Marker, APIProvider } from "@vis.gl/react-google-maps";
 
@@ -12,6 +12,11 @@ interface FarmaciasMapaViewProps {
 export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: FarmaciasMapaViewProps) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [selected]);
   const [pharmaciesList, setPharmaciesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
@@ -277,26 +282,34 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           {/* Selected pharmacy detail card — floats over map top-left */}
           {selectedPharmacy && (
             <div
-              className="absolute top-6 left-6 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
+              className="absolute top-4 bottom-4 left-4 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
               style={{
                 background: "white",
                 boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-                minWidth: "280px",
+                minWidth: "300px",
                 maxWidth: "320px",
                 zIndex: 40,
+                height: "calc(100% - 32px)",
               }}
             >
-              {/* Street View Image */}
-              <div 
-                className="w-full h-32 bg-gray-200"
-                style={{
-                  backgroundImage: `url(https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${selectedPharmacy.lat},${selectedPharmacy.lon}&key=${(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center"
-                }}
-              />
+              {/* Street View Image or Fallback */}
+              <div className="w-full flex-1 relative bg-gray-100 min-h-[150px]">
+                {imgError ? (
+                  <div className="absolute inset-0 bg-[#E5F6F5] flex flex-col items-center justify-center text-[#00A69D]">
+                    <Building2 size={48} className="mb-2 opacity-50" />
+                    <span className="text-sm font-bold opacity-70">Sin vista previa</span>
+                  </div>
+                ) : (
+                  <img 
+                    src={`https://maps.googleapis.com/maps/api/streetview?size=400x600&location=${selectedPharmacy.lat},${selectedPharmacy.lon}&return_error_code=true&key=${(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}`}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={() => setImgError(true)}
+                    alt="Vista de la farmacia"
+                  />
+                )}
+              </div>
               
-              <div className="p-5">
+              <div className="p-5 flex-shrink-0">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
                     <p style={{ color: "#203A70", fontWeight: 800, fontSize: "15px", lineHeight: 1.3 }}>
