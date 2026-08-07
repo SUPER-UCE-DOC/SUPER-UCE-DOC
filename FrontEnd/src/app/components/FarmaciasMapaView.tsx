@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Search, MapPin, Navigation, Clock, Phone, CheckCircle, XCircle } from "lucide-react";
 import { api } from "../utils/api";
-import { Map, AdvancedMarker, APIProvider } from "@vis.gl/react-google-maps";
+import { Map, Marker, APIProvider } from "@vis.gl/react-google-maps";
 
 interface FarmaciasMapaViewProps {
   medicine: string;
@@ -214,67 +214,62 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
             style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.08)" }}
           >
             <APIProvider apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}>
-              <Map
-                defaultZoom={13}
-                defaultCenter={{ lat: userLat, lng: userLon }}
-                center={{ lat: userLat, lng: userLon }}
-                mapId="SUPER_UCE_DOC_MAP"
-                disableDefaultUI={false}
-                styles={[
-                  { featureType: "poi", stylers: [{ visibility: "off" }] },
-                  { featureType: "transit", stylers: [{ visibility: "off" }] }
-                ]}
-              >
-                {/* Marcador del Paciente */}
-                <AdvancedMarker position={{ lat: userLat, lng: userLon }} zIndex={50}>
-                  <div
-                    className="flex items-center justify-center rounded-full shadow-lg"
-                    style={{ background: "#203A70", border: "3px solid white", width: "40px", height: "40px" }}
-                  >
-                    <span style={{ fontSize: "18px" }}>👤</span>
-                  </div>
-                </AdvancedMarker>
+              {locationLoaded && (
+                <Map
+                  defaultZoom={13}
+                  defaultCenter={{ lat: userLat, lng: userLon }}
+                  disableDefaultUI={false}
+                  styles={[
+                    { featureType: "poi", stylers: [{ visibility: "off" }] },
+                    { featureType: "transit", stylers: [{ visibility: "off" }] }
+                  ]}
+                >
+                  {/* Marcador del Paciente */}
+                  <Marker 
+                    position={{ lat: userLat, lng: userLon }} 
+                    zIndex={50}
+                    icon={{
+                      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent('<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="18" fill="#203A70" stroke="white" stroke-width="3" /><text x="20" y="26" font-size="18" text-anchor="middle" fill="white">👤</text></svg>')}`,
+                      scaledSize: { width: 40, height: 40 } as any,
+                      anchor: { x: 20, y: 20 } as any
+                    }}
+                    title="Tu ubicación"
+                  />
 
-                {/* Marcadores de Farmacias */}
-                {pharmaciesList.map((p) => (
-                  <AdvancedMarker
-                    key={p.id}
-                    position={{ lat: p.lat, lng: p.lon }}
-                    zIndex={selected === p.id ? 100 : 10}
-                    onClick={() => setSelected(p.id)}
-                  >
-                    <div className="flex flex-col items-center">
-                      <div
-                        className="flex items-center justify-center rounded-full shadow-md transition-all cursor-pointer"
-                        style={{
-                          width: selected === p.id ? "38px" : "30px",
-                          height: selected === p.id ? "38px" : "30px",
-                          background: p.hasStock ? (selected === p.id ? "#00A69D" : "white") : "#9CA3AF",
-                          border: `2px solid ${p.hasStock ? "#00A69D" : "#9CA3AF"}`,
+                  {/* Marcadores de Farmacias */}
+                  {pharmaciesList.map((p) => {
+                    const isSelected = selected === p.id;
+                    const size = isSelected ? 38 : 30;
+                    const bg = p.hasStock ? (isSelected ? "#00A69D" : "white") : "#9CA3AF";
+                    const border = p.hasStock ? "#00A69D" : "#9CA3AF";
+                    const inner = p.hasStock && !isSelected ? "#00A69D" : "white";
+                    
+                    const svgIcon = `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="20" cy="20" r="18" fill="${bg}" stroke="${border}" stroke-width="3" />
+                      <circle cx="20" cy="20" r="8" fill="${inner}" />
+                    </svg>`;
+
+                    return (
+                      <Marker
+                        key={p.id}
+                        position={{ lat: p.lat, lng: p.lon }}
+                        zIndex={isSelected ? 100 : 10}
+                        onClick={() => setSelected(p.id)}
+                        icon={{
+                          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgIcon)}`,
+                          scaledSize: { width: size, height: size } as any,
+                          anchor: { x: size/2, y: size/2 } as any
                         }}
-                      >
-                        <MapPin
-                          size={selected === p.id ? 18 : 14}
-                          color={p.hasStock ? (selected === p.id ? "white" : "#00A69D") : "white"}
-                        />
-                      </div>
-                      {selected === p.id && (
-                        <div
-                          className="text-xs px-2 py-0.5 rounded-lg mt-1 whitespace-nowrap"
-                          style={{
-                            background: "#203A70",
-                            color: "white",
-                            fontWeight: 600,
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
-                          }}
-                        >
-                          {p.name}
-                        </div>
-                      )}
-                    </div>
-                  </AdvancedMarker>
-                ))}
-              </Map>
+                        label={isSelected ? {
+                          text: p.name,
+                          className: "font-bold",
+                          color: "#203A70"
+                        } : undefined}
+                      />
+                    );
+                  })}
+                </Map>
+              )}
             </APIProvider>
           </div>
 
