@@ -217,9 +217,9 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
             {/* Métricas rápidas */}
             <div className="flex flex-wrap gap-8 mt-14">
               {[
-                { value: "500K+", label: "Personas sordas en Ecuador" },
+                { value: "Miles", label: "Personas sordas en Rep. Dominicana" },
                 { value: "3 roles", label: "Paciente · Médico · Farmacia" },
-                { value: "IA en vivo", label: "Traducción LSE tiempo real" },
+                { value: "IA en vivo", label: "Traducción LSA tiempo real" },
               ].map((m) => (
                 <div key={m.label}>
                   <div style={{ fontSize: "26px", fontWeight: 800, color: "#00A69D", lineHeight: 1 }}>
@@ -275,7 +275,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 icon: <Brain size={32} style={{ color: "#00A69D" }} />,
                 iconBg: "#F0FFFE",
                 title: "Traducción IA Bidireccional",
-                desc: "Modelos de visión artificial que interpretan gestos clínicos en lenguaje de señas ecuatoriano (LSE) en tiempo real, generando texto y subtítulos para el médico.",
+                desc: "Modelos de visión artificial que interpretan gestos clínicos en lenguaje de señas (LSA) en tiempo real, generando texto y subtítulos para el médico.",
                 tag: "Computer Vision · NLP",
               },
               {
@@ -373,14 +373,14 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 <span style={{ color: "#00A69D" }}>habla todos los idiomas.</span>
               </h2>
               <p className="mt-5" style={{ color: "#6B7280", lineHeight: 1.7, fontSize: "16px" }}>
-                En Ecuador, más de 500,000 personas con discapacidad auditiva enfrentan barreras sistemáticas para acceder
+                En República Dominicana, miles de personas con discapacidad auditiva enfrentan barreras sistemáticas para acceder
                 a atención médica de calidad. SUPER-UCE DOC nace como una respuesta académica, tecnológica y humana a esta
                 realidad, desarrollada desde la Universidad Central del Este.
               </p>
               <div className="mt-8 space-y-4">
                 {[
                   "Reducción de barreras comunicativas en consultas médicas",
-                  "Integración con el sistema nacional de farmacias del Ecuador",
+                  "Integración con el sistema nacional de farmacias de la República Dominicana",
                   "Código abierto: libre para ser adoptado por hospitales públicos",
                   "Diseñado bajo estándares internacionales de accesibilidad (WCAG 2.1 AA)",
                 ].map((item) => (
@@ -400,9 +400,9 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
             {/* Stats cards */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: "500K+", label: "Personas sordas en Ecuador", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
+                { value: "Miles", label: "Personas sordas en Rep. Dominicana", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
                 { value: "3", label: "Módulos interdisciplinarios integrados", color: "#203A70", bg: "#EEF2FF", border: "#C7D2FE" },
-                { value: "LSE", label: "Lenguaje de Señas Ecuatoriano soportado", color: "#10B981", bg: "#F0FDF4", border: "#BBF7D0" },
+                { value: "LSA", label: "Lenguaje de Señas soportado", color: "#10B981", bg: "#F0FDF4", border: "#BBF7D0" },
                 { value: "IA", label: "Interpretación clínica en tiempo real", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
               ].map((s) => (
                 <div
@@ -450,7 +450,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 icon: <Hand size={36} style={{ color: "#00A69D" }} />,
                 title: "Para Pacientes",
                 subtitle: "Sala de Telemedicina Inclusiva",
-                desc: "Consultas por videollamada con intérprete de LSE en tiempo real, subtítulos automáticos y acceso a tus recetas.",
+                desc: "Consultas por videollamada con intérprete de LSA en tiempo real, subtítulos automáticos y acceso a tus recetas.",
                 cta: "Entrar a la Sala Inclusiva",
                 accentColor: "#00A69D",
               },
@@ -546,7 +546,9 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
               </p>
               <div className="flex items-center gap-3 mt-5">
                 <a
-                  href="#"
+                  href="https://github.com/SUPER-UCE-DOC/SUPER-UCE-DOC.git"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-colors"
                   style={{ borderColor: "#E5E7EB", color: "#6B7280" }}
                 >
@@ -613,7 +615,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full"
                 style={{ background: "#F0FFFE", color: "#00A69D", fontWeight: 600 }}
               >
-                <Hand size={12} /> Accesible LSE
+                <Hand size={12} /> Accesible LSA
               </span>
             </div>
           </div>
