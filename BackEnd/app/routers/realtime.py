@@ -132,14 +132,33 @@ def get_or_create_session(room_id: str) -> dict:
     return room_sessions_store[clean_room]
 
 @router.post("/start-timer/{room_id}")
-def start_room_timer(room_id: str):
-    """Marca el inicio oficial de la reunión. Solo funciona una vez por sala."""
+def start_room_timer(room_id: str, start_ts: float = 0.0, db: Session = Depends(get_db)):
+    """Registra el inicio oficial de la reunión.
+    - Si start_ts > 0 (viene de appointments.py con real_start_time), lo usa directamente.
+    - Si start_ts == 0, usa time.time() como inicio.
+    - Idempotente: si ya está iniciada, devuelve el valor existente.
+    """
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
-    # Solo registra si aún no se ha iniciado
+
     if session["start_time"] == 0.0:
-        session["start_time"] = now
+        if start_ts > 0:
+            session["start_time"] = start_ts
+        else:
+            # Intentar leer de la BD antes de usar now()
+            try:
+                if clean_room.isdigit():
+                    appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
+                    if appt and appt.real_start_time:
+                        session["start_time"] = appt.real_start_time.timestamp()
+                    else:
+                        session["start_time"] = now
+                else:
+                    session["start_time"] = now
+            except Exception:
+                session["start_time"] = now
+
     return {
         "status": "ok",
         "start_time": session["start_time"],
@@ -331,25 +350,45 @@ def get_livekit_token(
 ):
     api_key = os.environ.get("LIVEKIT_API_KEY", "devkey")
     api_secret = os.environ.get("LIVEKIT_API_SECRET", "mi_super_secreto_largo_para_livekit_de_32_letras")
-    
+
     grant = VideoGrants(room_join=True, room=room_id)
-    
     user_identity = f"{current_user.email}_{current_user.role}_{current_user.id}"
     access_token = AccessToken(api_key, api_secret)
     access_token = access_token.with_identity(user_identity).with_name(current_user.full_name).with_grants(grant)
-    
     token_str = access_token.to_jwt()
-    
+
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
+
+    # Limpiar sesiones finalizadas
     if clean_room in room_sessions_store and room_sessions_store[clean_room].get("status") == "ended":
         room_subtitles_store.pop(clean_room, None)
         room_comments_store.pop(clean_room, None)
         room_sessions_store.pop(clean_room, None)
 
     session = get_or_create_session(clean_room)
+    now = time.time()
+
+    # FUENTE DE VERDAD PERMANENTE: leer real_start_time de la BD.
+    # Esto garantiza que el timer sobreviva reinicios del backend y recargas de página.
+    start_time_to_return = 0.0
+    if clean_room.isdigit():
+        try:
+            appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
+            if appt and appt.status == "en_curso" and appt.real_start_time:
+                # La reunión ya inició — usar el timestamp de la BD
+                start_time_to_return = appt.real_start_time.timestamp()
+                # Sincronizar también la sesión en memoria
+                if session["start_time"] == 0.0:
+                    session["start_time"] = start_time_to_return
+            # Si está pendiente/confirmada, devolver 0 (reunión no iniciada)
+        except Exception:
+            pass
+    else:
+        # room_id no numérico: usar la sesión en memoria
+        start_time_to_return = session["start_time"]
 
     return {
         "token": token_str,
-        "start_time": session["start_time"],  # 0 si aún no ha iniciado
-        "server_time": time.time()
+        "start_time": start_time_to_return,
+        "server_time": now
     }
