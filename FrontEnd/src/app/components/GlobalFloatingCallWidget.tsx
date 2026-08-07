@@ -35,6 +35,7 @@ export function GlobalFloatingCallWidget({
   const [tokenToUse, setTokenToUse] = useState<string>("");
   const [initialVideoOn, setInitialVideoOn] = useState(true);
   const [initialAudioOn, setInitialAudioOn] = useState(true);
+  const [elapsedSecs, setElapsedSecs] = useState<number>(0);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const dragStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -49,17 +50,36 @@ export function GlobalFloatingCallWidget({
     setInitialAudioOn(!savedAudioMuted);
   }, []);
 
-  // Fetch LiveKit Token
+  // Fetch LiveKit Token and Server Time Sync
   useEffect(() => {
+    let meetingStartTime = 0;
+    let serverOffset = 0;
+    
     const fetchToken = async () => {
       try {
         const res = await api.getLiveKitToken(roomCode);
         setTokenToUse(res.token);
+        if (res.start_time && res.start_time > 0) {
+          meetingStartTime = res.start_time;
+          if (res.server_time) {
+            serverOffset = res.server_time - (Date.now() / 1000);
+          }
+        }
       } catch (err) {
         console.error("Error fetching LiveKit token in PiP:", err);
       }
     };
+    
     fetchToken();
+
+    const interval = setInterval(() => {
+      if (meetingStartTime > 0) {
+        const serverNow = (Date.now() / 1000) + serverOffset;
+        setElapsedSecs(Math.max(0, Math.floor(serverNow - meetingStartTime)));
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [roomCode]);
 
   const getInitials = (name?: string) => {
@@ -174,6 +194,7 @@ export function GlobalFloatingCallWidget({
             counterpartAvatar={counterpartAvatar}
             counterpartName={counterpartName}
             getInitials={getInitials}
+            elapsedSecs={elapsedSecs}
           />
           <RoomAudioRenderer />
         </LiveKitRoom>
@@ -190,7 +211,8 @@ export function GlobalFloatingCallWidget({
 function FloatingRoomContent({
   counterpartAvatar,
   counterpartName,
-  getInitials
+  getInitials,
+  elapsedSecs
 }: any) {
   const remoteParticipants = useRemoteParticipants();
   const isCounterpartConnected = remoteParticipants.length > 0;
@@ -253,6 +275,13 @@ function FloatingRoomContent({
         ) : (
           <Mic size={11} className="text-white/80 flex-shrink-0" title="Micrófono Activo" />
         )}
+      </div>
+      <div className="absolute top-2 left-2 z-10 font-bold text-[10px] text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1.5">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+        </span>
+        {Math.floor(elapsedSecs / 60).toString().padStart(2, "0")}:{Math.floor(elapsedSecs % 60).toString().padStart(2, "0")}
       </div>
     </div>
   );

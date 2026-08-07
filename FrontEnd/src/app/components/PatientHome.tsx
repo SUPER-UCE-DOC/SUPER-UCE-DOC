@@ -10,30 +10,41 @@ interface PatientHomeProps {
 }
 
 function LiveHomeBadge({ roomCode }: { roomCode: number }) {
-  const [elapsed, setElapsed] = useState<number>(0);
+  const [elapsedSecs, setElapsedSecs] = useState<number>(0);
 
   useEffect(() => {
+    let meetingStartTime = 0;
+    let serverOffset = 0;
+    
     const fetchStart = async () => {
       try {
         const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
         const res = await fetch(`${apiBase}/api/realtime/presence/${roomCode}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.start_time) {
-            const diff = Math.floor(Date.now() / 1000 - data.start_time);
-            setElapsed(Math.max(0, diff));
+          if (data.start_time > 0) {
+            meetingStartTime = data.start_time;
+            if (data.server_time) {
+              serverOffset = data.server_time - (Date.now() / 1000);
+            }
           }
         }
       } catch (e) {}
     };
 
     fetchStart();
-    const interval = setInterval(fetchStart, 1000);
+    // No polling the server every second. Update locally instead.
+    const interval = setInterval(() => {
+      if (meetingStartTime > 0) {
+        const serverNow = (Date.now() / 1000) + serverOffset;
+        setElapsedSecs(Math.max(0, Math.floor(serverNow - meetingStartTime)));
+      }
+    }, 1000);
     return () => clearInterval(interval);
   }, [roomCode]);
 
-  const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
-  const s = (elapsed % 60).toString().padStart(2, "0");
+  const m = Math.floor(elapsedSecs / 60).toString().padStart(2, "0");
+  const s = (elapsedSecs % 60).toString().padStart(2, "0");
 
   return (
     <div className="flex items-center gap-2 text-sm text-cyan-300 font-bold">
