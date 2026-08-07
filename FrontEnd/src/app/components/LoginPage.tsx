@@ -981,6 +981,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
         <p className="text-center mt-6 text-xs" style={{ color: "#9CA3AF" }}>
           © 2026 SUPER-UCE DOC · Universidad Central del Este
         </p>
+        </div>
 
         {/* Columna Derecha: Mapa de Farmacia (Solo paso 2) */}
         {authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && (
