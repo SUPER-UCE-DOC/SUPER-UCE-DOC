@@ -114,6 +114,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
 # Gestor de Sesiones de Teleconsulta Persistente en Backend (FastAPI)
 # Mantiene el tiempo de llamada (start_time/elapsed_seconds), presencia y estado de medios
 import time
+import calendar
+
+def utc_dt_to_timestamp(dt) -> float:
+    """Convierte un datetime naive de UTC a Unix timestamp (float) correctamente.
+    datetime.timestamp() asume hora LOCAL, causando errores en servidores no UTC.
+    calendar.timegm() siempre trata el datetime como UTC."""
+    return float(calendar.timegm(dt.timetuple()))
 
 room_sessions_store: Dict[str, dict] = {}
 room_media_store: Dict[str, Dict[str, dict]] = {}
@@ -124,20 +131,36 @@ def get_or_create_session(room_id: str) -> dict:
     if clean_room not in room_sessions_store:
         room_sessions_store[clean_room] = {
             "room_id": clean_room,
-            "start_time": 0.0,   # 0 = reunión aún no iniciada
+            "start_time": 0.0,
             "status": "active",
             "doctor_time": 0.0,
             "patient_time": 0.0
         }
     return room_sessions_store[clean_room]
 
+def resolve_start_time(session: dict, room_id: str, db) -> float:
+    """Obtiene el start_time correcto. Si la sesión en memoria tiene 0,
+    consulta la BD y actualiza la sesión. Fuente de verdad permanente."""
+    if session["start_time"] > 0:
+        return session["start_time"]
+    if db is None or not room_id.isdigit():
+        return 0.0
+    try:
+        appt = db.query(models.Appointment).filter(
+            models.Appointment.id == int(room_id),
+            models.Appointment.status == "en_curso"
+        ).first()
+        if appt and appt.real_start_time:
+            ts = utc_dt_to_timestamp(appt.real_start_time)
+            session["start_time"] = ts  # Cachear en memoria
+            return ts
+    except Exception:
+        pass
+    return 0.0
+
 @router.post("/start-timer/{room_id}")
 def start_room_timer(room_id: str, start_ts: float = 0.0, db: Session = Depends(get_db)):
-    """Registra el inicio oficial de la reunión.
-    - Si start_ts > 0 (viene de appointments.py con real_start_time), lo usa directamente.
-    - Si start_ts == 0, usa time.time() como inicio.
-    - Idempotente: si ya está iniciada, devuelve el valor existente.
-    """
+    """Registra el inicio oficial de la reunión. Idempotente."""
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
@@ -146,12 +169,11 @@ def start_room_timer(room_id: str, start_ts: float = 0.0, db: Session = Depends(
         if start_ts > 0:
             session["start_time"] = start_ts
         else:
-            # Intentar leer de la BD antes de usar now()
             try:
                 if clean_room.isdigit():
                     appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
                     if appt and appt.real_start_time:
-                        session["start_time"] = appt.real_start_time.timestamp()
+                        session["start_time"] = utc_dt_to_timestamp(appt.real_start_time)
                     else:
                         session["start_time"] = now
                 else:
@@ -210,14 +232,15 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
     }
 
 @router.get("/presence/{room_id}")
-def get_room_presence(room_id: str):
+def get_room_presence(room_id: str, db: Session = Depends(get_db)):
     now = time.time()
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
 
     doc_time = session.get("doctor_time", 0)
     pat_time = session.get("patient_time", 0)
-    st = session["start_time"]
+    # Resolver start_time desde BD si la sesión en memoria está vacía
+    st = resolve_start_time(session, clean_room, db)
     elapsed_seconds = int(now - st) if st > 0 else 0
 
     return {
@@ -375,16 +398,14 @@ def get_livekit_token(
         try:
             appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
             if appt and appt.status == "en_curso" and appt.real_start_time:
-                # La reunión ya inició — usar el timestamp de la BD
-                start_time_to_return = appt.real_start_time.timestamp()
-                # Sincronizar también la sesión en memoria
+                # FUENTE DE VERDAD: usar UTC timestamp correcto desde la BD
+                start_time_to_return = utc_dt_to_timestamp(appt.real_start_time)
+                # Sincronizar sesión en memoria
                 if session["start_time"] == 0.0:
                     session["start_time"] = start_time_to_return
-            # Si está pendiente/confirmada, devolver 0 (reunión no iniciada)
         except Exception:
             pass
     else:
-        # room_id no numérico: usar la sesión en memoria
         start_time_to_return = session["start_time"]
 
     return {

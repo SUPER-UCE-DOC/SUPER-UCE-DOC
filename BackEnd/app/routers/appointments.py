@@ -197,8 +197,8 @@ def update_appointment_status(
                 app.real_start_time = datetime.datetime.utcnow()
                 db.commit()
             try:
-                from app.routers.realtime import start_room_timer
-                start_room_timer(str(app.id), start_ts=app.real_start_time.timestamp())
+                from app.routers.realtime import start_room_timer, utc_dt_to_timestamp
+                start_room_timer(str(app.id), start_ts=utc_dt_to_timestamp(app.real_start_time))
             except Exception as ex:
                 pass
             patient_user = app.patient.user if app.patient else None
@@ -268,8 +268,8 @@ def update_appointment_status(
         if not app.real_start_time:
             app.real_start_time = datetime.datetime.utcnow()
         try:
-            from app.routers.realtime import start_room_timer
-            start_room_timer(str(app.id), start_ts=app.real_start_time.timestamp())
+            from app.routers.realtime import start_room_timer, utc_dt_to_timestamp
+            start_room_timer(str(app.id), start_ts=utc_dt_to_timestamp(app.real_start_time))
         except Exception as ex:
             print("Error starting realtime timer:", ex)
     elif requested_status == "completada" and not app.real_end_time:
