@@ -1011,7 +1011,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
             onLogin(user.role as Role, user.full_name, user.avatar);
           }}
         />
-      </div>
+      )}
     </div>
   );
 }
