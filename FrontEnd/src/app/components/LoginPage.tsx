@@ -322,7 +322,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
 
       <div
         className={`relative w-full mx-4 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-[1050px]" : "max-w-md"
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-6xl" : "max-w-md"
         }`}
         style={{
           opacity: isLeaving ? 0 : 1,
@@ -344,7 +344,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
 
         <div className="flex flex-col md:flex-row gap-6">
           {/* Columna Izquierda: Formulario */}
-          <div className="flex-1 w-full transition-all duration-500">
+          <div className="w-full md:max-w-md shrink-0 transition-all duration-500">
 
         <div
           className="bg-white rounded-2xl overflow-hidden anim-scale-in anim-d-1"
@@ -981,10 +981,6 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
             </div>
           </div>
         </div>
-
-        <p className="text-center mt-6 text-xs" style={{ color: "#9CA3AF" }}>
-          © 2026 SUPER-UCE DOC · Universidad Central del Este
-        </p>
         </div>
 
         {/* Columna Derecha: Mapa de Farmacia (Solo paso 2) */}
@@ -1005,6 +1001,11 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           </div>
         )}
         </div>
+
+        {/* Footer Text */}
+        <p className="text-center mt-6 text-xs transition-all duration-500" style={{ color: "#9CA3AF" }}>
+          © 2026 SUPER-UCE DOC · Universidad Central del Este
+        </p>
       </div>
 
       {showVerificationModal && (
