@@ -192,7 +192,10 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
               >
                 Unirse a la Plataforma <ArrowRight size={18} />
               </button>
-              <button
+              <a
+                href="https://github.com/SUPER-UCE-DOC/SUPER-UCE-DOC#readme"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-2 px-7 py-4 rounded-xl transition-all duration-200"
                 style={{
                   background: "white",
@@ -211,7 +214,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 }}
               >
                 <BookOpen size={18} /> Leer la Investigación Académica
-              </button>
+              </a>
             </div>
 
             {/* Métricas rápidas */}
