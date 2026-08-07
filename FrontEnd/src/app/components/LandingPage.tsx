@@ -217,7 +217,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
             {/* Métricas rápidas */}
             <div className="flex flex-wrap gap-8 mt-14">
               {[
-                { value: "500K+", label: "Personas sordas en República Dominicana" },
+                { value: "100K+", label: "Personas con discapacidad auditiva en RD" },
                 { value: "3 roles", label: "Paciente · Médico · Farmacia" },
                 { value: "IA en vivo", label: "Traducción LSA tiempo real" },
               ].map((m) => (
@@ -373,9 +373,7 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                 <span style={{ color: "#00A69D" }}>habla todos los idiomas.</span>
               </h2>
               <p className="mt-5" style={{ color: "#6B7280", lineHeight: 1.7, fontSize: "16px" }}>
-                En República Dominicana, más de 500,000 personas con discapacidad auditiva enfrentan barreras sistemáticas para acceder
-                a atención médica de calidad. SUPER-UCE DOC nace como una respuesta académica, tecnológica y humana a esta
-                realidad, desarrollada desde la Universidad Central del Este.
+                En República Dominicana, más de 478,000 personas viven con alguna discapacidad (Censo ONE 2022) y sobre 100,000 enfrentan barreras comunicativas por discapacidad auditiva. SUPER-UCE DOC nace como una respuesta académica, tecnológica y humana a esta realidad, desarrollada desde la Universidad Central del Este.
               </p>
               <div className="mt-8 space-y-4">
                 {[
@@ -400,9 +398,9 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
             {/* Stats cards */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: "500K+", label: "Personas sordas en República Dominicana", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
-                { value: "3", label: "Módulos interdisciplinarios integrados", color: "#203A70", bg: "#EEF2FF", border: "#C7D2FE" },
-                { value: "LSA", label: "Lenguaje de Señas Americano soportado", color: "#10B981", bg: "#F0FDF4", border: "#BBF7D0" },
+                { value: "100K+", label: "Personas con discapacidad auditiva en RD", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
+                { value: "478K+", label: "Población con discapacidad (Censo ONE 2022)", color: "#203A70", bg: "#EEF2FF", border: "#C7D2FE" },
+                { value: "Ley 43-23", label: "Reconocimiento de Lenguaje de Señas en RD", color: "#10B981", bg: "#F0FDF4", border: "#BBF7D0" },
                 { value: "IA", label: "Interpretación clínica en tiempo real", color: "#00A69D", bg: "#F0FFFE", border: "#00C7C0" },
               ].map((s) => (
                 <div
