@@ -993,7 +993,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                 setAddress(addr);
                 setLat(latit);
                 setLon(longit);
-                if (placeName && !businessName) {
+                if (placeName) {
                   setBusinessName(placeName);
                 }
               }}
