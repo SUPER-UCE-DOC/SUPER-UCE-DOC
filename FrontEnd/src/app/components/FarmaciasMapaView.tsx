@@ -207,7 +207,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           </div>
         </div>
 
-        {/* ── RIGHT PANEL — MAP (65%) ── */}
+        {/* ── RIGHT PANEL — MAP (70%) ── */}
         <div className="flex-1 relative overflow-hidden p-4 anim-slide-right anim-d-1">
           <div
             className="relative w-full h-full rounded-2xl overflow-hidden"
@@ -274,10 +274,10 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
             </APIProvider>
           </div>
 
-          {/* Selected pharmacy detail card — floats over map bottom-right */}
+          {/* Selected pharmacy detail card — floats over map top-left */}
           {selectedPharmacy && (
             <div
-              className="absolute bottom-8 right-8 rounded-2xl p-5 anim-scale-in"
+              className="absolute top-6 left-6 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
               style={{
                 background: "white",
                 boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
@@ -286,18 +286,29 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                 zIndex: 40,
               }}
             >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <p style={{ color: "#203A70", fontWeight: 800, fontSize: "15px", lineHeight: 1.3 }}>
-                    {selectedPharmacy.name}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{selectedPharmacy.address}</p>
-                </div>
-                <span
-                  className="flex-shrink-0 px-2 py-1 rounded-lg text-xs"
-                  style={{
-                    background: selectedPharmacy.hasStock ? "#DCFCE7" : "#FEE2E2",
-                    color: selectedPharmacy.hasStock ? "#10B981" : "#EF4444",
+              {/* Street View Image */}
+              <div 
+                className="w-full h-32 bg-gray-200"
+                style={{
+                  backgroundImage: `url(https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${selectedPharmacy.lat},${selectedPharmacy.lon}&key=${(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center"
+                }}
+              />
+              
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p style={{ color: "#203A70", fontWeight: 800, fontSize: "15px", lineHeight: 1.3 }}>
+                      {selectedPharmacy.name}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>{selectedPharmacy.address}</p>
+                  </div>
+                  <span
+                    className="flex-shrink-0 px-2 py-1 rounded-lg text-xs"
+                    style={{
+                      background: selectedPharmacy.hasStock ? "#DCFCE7" : "#FEE2E2",
+                      color: selectedPharmacy.hasStock ? "#10B981" : "#EF4444",
                     fontWeight: 700,
                   }}
                 >
@@ -336,6 +347,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                   {assigning ? "Enviando..." : "Enviar receta a esta farmacia"}
                 </button>
               )}
+              </div>
             </div>
           )}
         </div>

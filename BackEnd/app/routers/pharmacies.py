@@ -1,7 +1,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from typing import List, Optional
 import uuid
 
@@ -64,21 +64,14 @@ def get_nearby_pharmacies(
     nearby_pharmacies = []
 
     if is_postgres:
-        # Consulta SQL nativa para PostGIS
+        # Consulta nativa con fórmula de Haversine en SQL puro (para evitar dependencias de PostGIS)
         # Buscamos farmacias a menos de 3000 metros (3 km)
         sql = """
         SELECT p.id, p.business_name, p.address, p.phone, p.lat, p.lon, p.google_place_id, u.full_name, u.email,
-               ST_Distance(
-                   ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326)::geography,
-                   ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
-               ) as distance
+               (6371000 * acos(cos(radians(:lat)) * cos(radians(p.lat)) * cos(radians(p.lon) - radians(:lon)) + sin(radians(:lat)) * sin(radians(p.lat)))) AS distance
         FROM pharmacies p
         JOIN users u ON p.id = u.id
-        WHERE ST_DWithin(
-            ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326)::geography,
-            ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-            3000
-        )
+        WHERE (6371000 * acos(cos(radians(:lat)) * cos(radians(p.lat)) * cos(radians(p.lon) - radians(:lon)) + sin(radians(:lat)) * sin(radians(p.lat)))) <= 3000
         ORDER BY distance ASC;
         """
         results = db.execute(text(sql), {"lat": lat, "lon": lon}).fetchall()
