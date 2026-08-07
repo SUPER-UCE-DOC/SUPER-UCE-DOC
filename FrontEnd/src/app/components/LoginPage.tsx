@@ -322,7 +322,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
 
       <div
         className={`relative w-full mx-4 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-6xl" : "max-w-md"
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-7xl" : "max-w-md"
         }`}
         style={{
           opacity: isLeaving ? 0 : 1,
@@ -330,7 +330,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
         }}
       >
         <div className={`text-center mb-8 anim-fade-in-up anim-d-0 transition-all duration-500 ${
-          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "w-full md:w-[calc(50%-12px)]" : "w-full"
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "hidden" : "w-full"
         }`}>
           <div className="inline-flex items-center justify-center mb-4">
             <img
@@ -342,7 +342,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           <p className="text-sm" style={{ color: "#6B7280" }}>Plataforma Médica Interdisciplinaria</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-6">
+        <div className="flex flex-col md:flex-row gap-8 items-stretch">
           {/* Columna Izquierda: Formulario */}
           <div className="w-full md:max-w-md shrink-0 transition-all duration-500">
 
