@@ -1252,28 +1252,21 @@ function TelemedicinaRoomContent({
   // Doctor Clinical Summary
   const [clinicalNotes, setClinicalNotes] = useState("");
 
-  // 1. Single Source of Truth Live Call Timer (Sincronizado 100% con el Servidor FastAPI)
+  // 1. Single Source of Truth Live Call Timer (Unificado y 100% Sincronizado con FastAPI)
   const serverTimeOffsetRef = useRef<number>(serverTimeOffset || 0);
+  const sessionStartTimeRef = useRef<number>(startTime || 0);
 
   useEffect(() => {
     serverTimeOffsetRef.current = serverTimeOffset || 0;
   }, [serverTimeOffset]);
 
-  // Intervalo continuo de 1 segundo utilizando el reloj del servidor cancelado de desfase
   useEffect(() => {
-    if (!startTime) return;
-    const updateTimer = () => {
-      const currentServerTime = (Date.now() / 1000) + serverTimeOffsetRef.current;
-      const elapsed = Math.floor(currentServerTime - startTime);
-      setElapsedSecs(Math.max(0, elapsed));
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
+    if (startTime > 0) {
+      sessionStartTimeRef.current = startTime;
+    }
   }, [startTime]);
 
-  // Sincronización continua de presencia y tiempo transcurrido por heartbeat HTTP cada 3 segundos
+  // Heartbeat continuo de presencia cada 3 segundos para sincronizar reloj del servidor y marca de inicio
   useEffect(() => {
     if (!roomCode) return;
     const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
@@ -1285,8 +1278,8 @@ function TelemedicinaRoomContent({
           if (typeof data.server_time === "number") {
             serverTimeOffsetRef.current = data.server_time - (Date.now() / 1000);
           }
-          if (typeof data.elapsed_seconds === "number" && data.elapsed_seconds >= 0) {
-            setElapsedSecs(data.elapsed_seconds);
+          if (typeof data.start_time === "number" && data.start_time > 0) {
+            sessionStartTimeRef.current = data.start_time;
           }
         }
       } catch (err) {}
@@ -1296,6 +1289,21 @@ function TelemedicinaRoomContent({
     const presenceTimer = setInterval(pollPresence, 3000);
     return () => clearInterval(presenceTimer);
   }, [roomCode, role]);
+
+  // ÚNICA fuente de actualización para elapsedSecs cada 1 segundo (sin parpadeos ni duplicación de tiempos)
+  useEffect(() => {
+    const updateTimer = () => {
+      const activeStart = sessionStartTimeRef.current;
+      if (!activeStart || activeStart <= 0) return;
+      const currentServerTime = (Date.now() / 1000) + serverTimeOffsetRef.current;
+      const elapsed = Math.floor(currentServerTime - activeStart);
+      setElapsedSecs(Math.max(0, elapsed));
+    };
+
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
   const remoteParticipants = useRemoteParticipants();
