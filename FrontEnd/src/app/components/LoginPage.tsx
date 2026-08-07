@@ -322,7 +322,7 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
 
       <div
         className={`relative w-full mx-4 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col md:flex-row gap-6 ${
-          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-[900px]" : "max-w-md"
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-[1050px]" : "max-w-md"
         }`}
         style={{
           opacity: isLeaving ? 0 : 1,

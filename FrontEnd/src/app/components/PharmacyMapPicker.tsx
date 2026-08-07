@@ -120,7 +120,7 @@ function PharmacyMapPickerContent({ onConfirm, selectedPlaceId }: PharmacyMapPic
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col rounded-xl overflow-hidden shadow-inner border border-gray-200 bg-gray-50 min-h-[500px]">
+    <div className="relative w-full h-full flex flex-col rounded-xl overflow-hidden shadow-inner border border-gray-200 bg-gray-50 min-h-[300px]">
       {/* Search Bar overlay */}
       <div className="absolute top-4 left-4 right-4 z-10">
         <div className="bg-white rounded-lg shadow-md flex items-center px-4 py-3 border border-gray-100">
@@ -146,18 +146,6 @@ function PharmacyMapPickerContent({ onConfirm, selectedPlaceId }: PharmacyMapPic
             { featureType: "transit", stylers: [{ visibility: "off" }] }
           ]}
         >
-          {userLocation && (
-             <Marker 
-                position={userLocation}
-                zIndex={50}
-                icon={{
-                  url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent('<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="18" fill="#203A70" stroke="white" stroke-width="3" /><text x="20" y="26" font-size="18" text-anchor="middle" fill="white">👤</text></svg>')}`,
-                  scaledSize: { width: 40, height: 40 } as any,
-                  anchor: { x: 20, y: 20 } as any
-                }}
-             />
-          )}
-
           {pharmacies.map((p) => {
             const isSelected = selectedPharmacy?.place_id === p.place_id;
             const isConfirmed = selectedPlaceId === p.place_id;
