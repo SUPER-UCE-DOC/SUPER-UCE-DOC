@@ -186,6 +186,7 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
         "doctor_online": (now - session.get("doctor_time", 0)) < 6.0,
         "patient_online": (now - session.get("patient_time", 0)) < 6.0,
         "start_time": session["start_time"],
+        "server_time": now,
         "elapsed_seconds": max(0, elapsed_seconds),
         "status": session.get("status", "active"),
         "counterpart_muted": counterpart_media.get("muted", False),
@@ -207,6 +208,7 @@ def get_room_presence(room_id: str):
         "patient_online": (now - pat_time) < 6.0,
         "connected": ((now - doc_time) < 6.0) and ((now - pat_time) < 6.0),
         "start_time": session["start_time"],
+        "server_time": now,
         "elapsed_seconds": max(0, elapsed_seconds),
         "status": session.get("status", "active")
     }

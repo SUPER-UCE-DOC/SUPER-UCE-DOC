@@ -1252,11 +1252,18 @@ function TelemedicinaRoomContent({
   // Doctor Clinical Summary
   const [clinicalNotes, setClinicalNotes] = useState("");
 
-  // 1. Single Source of Truth Live Call Timer (Sincronizado con el Servidor y cancelando desfase de reloj)
+  // 1. Single Source of Truth Live Call Timer (Sincronizado 100% con el Servidor FastAPI)
+  const serverTimeOffsetRef = useRef<number>(serverTimeOffset || 0);
+
+  useEffect(() => {
+    serverTimeOffsetRef.current = serverTimeOffset || 0;
+  }, [serverTimeOffset]);
+
+  // Intervalo continuo de 1 segundo utilizando el reloj del servidor cancelado de desfase
   useEffect(() => {
     if (!startTime) return;
     const updateTimer = () => {
-      const currentServerTime = (Date.now() / 1000) + (serverTimeOffset || 0);
+      const currentServerTime = (Date.now() / 1000) + serverTimeOffsetRef.current;
       const elapsed = Math.floor(currentServerTime - startTime);
       setElapsedSecs(Math.max(0, elapsed));
     };
@@ -1264,7 +1271,31 @@ function TelemedicinaRoomContent({
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [startTime, serverTimeOffset]);
+  }, [startTime]);
+
+  // Sincronización continua de presencia y tiempo transcurrido por heartbeat HTTP cada 3 segundos
+  useEffect(() => {
+    if (!roomCode) return;
+    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
+    const pollPresence = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/realtime/presence/${roomCode}/${role}`, { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.server_time === "number") {
+            serverTimeOffsetRef.current = data.server_time - (Date.now() / 1000);
+          }
+          if (typeof data.elapsed_seconds === "number" && data.elapsed_seconds >= 0) {
+            setElapsedSecs(data.elapsed_seconds);
+          }
+        }
+      } catch (err) {}
+    };
+
+    pollPresence();
+    const presenceTimer = setInterval(pollPresence, 3000);
+    return () => clearInterval(presenceTimer);
+  }, [roomCode, role]);
 
   // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
   const remoteParticipants = useRemoteParticipants();

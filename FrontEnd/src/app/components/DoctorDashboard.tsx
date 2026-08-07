@@ -1187,9 +1187,8 @@ function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { u
 
   useEffect(() => {
     if (!inCall) return;
-    const t1 = setInterval(() => setElapsedSecs((s) => s + 1), 1000);
     const t2 = setInterval(() => setVisibleLines((v) => Math.min(v + 1, aiTranslations.length)), 4000);
-    return () => { clearInterval(t1); clearInterval(t2); };
+    return () => { clearInterval(t2); };
   }, [inCall]);
 
   useEffect(() => {
