@@ -426,7 +426,7 @@ function PreCallLobby({
               <span>{!hasCameraDevice ? "Sin cámara" : videoOn ? "Cámara Activada" : "Cámara Desactivada"}</span>
             </button>
 
-            {props.role === "patient" && (
+            {props.role === "patient" && savedLsaPref && (
               <button
                 onClick={() => setLsaOn(!lsaOn)}
                 className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer border shadow-sm ${
