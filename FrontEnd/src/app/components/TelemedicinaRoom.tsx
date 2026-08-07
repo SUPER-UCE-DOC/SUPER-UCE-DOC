@@ -30,7 +30,7 @@ interface TelemedicinaRoomProps {
   patientId?: number;
   appointmentId?: number;
   appointmentReason?: string;
-  onEndCall: () => void;
+  onEndCall: (reason?: string) => void;
   onEmitRxSuccess?: () => void;
   isMinimized?: boolean;
   onReturnToCall?: () => void;
@@ -121,17 +121,17 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   };
 
   // Wrap onEndCall to clear the doctor active call flag before delegating up
-  const handleEndCallWrapped = () => {
+  const handleEndCallWrapped = (reason?: string) => {
     if (props.role === "doctor") {
       localStorage.removeItem(doctorActiveKey);
     }
-    props.onEndCall();
+    props.onEndCall(reason);
   };
 
   // Salir de la sala de espera automáticamente si el usuario navega a otra sección
   useEffect(() => {
     if (props.isMinimized && !hasJoined) {
-      handleEndCallWrapped();
+      handleEndCallWrapped("navigation");
     }
   }, [props.isMinimized, hasJoined]);
 

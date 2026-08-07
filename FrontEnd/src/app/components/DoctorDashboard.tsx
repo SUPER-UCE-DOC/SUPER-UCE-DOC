@@ -187,7 +187,7 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     }).catch(() => {});
   }, [currentView]);
 
-  const handleEndCall = () => {
+  const handleEndCall = (reason?: string) => {
     const activeApt = activeAppointment;
     localStorage.removeItem("doctor_active_teleconsult");
     localStorage.setItem("doctor_user_left_call", "true");
@@ -205,7 +205,9 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     }
     setInCall(false);
     setActiveAppointment(null);
-    navigate("home");
+    if (reason !== "navigation") {
+      navigate("home");
+    }
   };
 
   const renderViewContent = () => {

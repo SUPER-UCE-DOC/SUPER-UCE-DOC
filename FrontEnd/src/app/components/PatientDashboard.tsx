@@ -117,12 +117,14 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
     navigate("teleconsult");
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = (reason?: string) => {
     localStorage.setItem("patient_user_left_call", "true");
     localStorage.removeItem("patient_active_teleconsult");
     setInCall(false);
     setActiveCallDoc(null);
-    navigate("appointments");
+    if (reason !== "navigation") {
+      navigate("appointments");
+    }
   };
 
   const renderViewContent = () => {
