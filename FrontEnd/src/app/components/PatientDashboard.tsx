@@ -160,7 +160,7 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
 }
 
 /* ─── SALA DE TELEMEDICINA — unificada y dinámica ─── */
-function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMinimized, onReturnToCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: () => void; isMinimized?: boolean; onReturnToCall?: () => void; }) {
+function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMinimized, onReturnToCall }: { userName: string; userAvatar?: string; activeCallDoc?: { name: string; avatar?: string; id?: number; specialty?: string } | null; onEndCall?: (reason?: string) => void; isMinimized?: boolean; onReturnToCall?: () => void; }) {
   const [resolvedDoc, setResolvedDoc] = useState<any>(activeCallDoc);
 
   useEffect(() => {
@@ -191,8 +191,8 @@ function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMi
       counterpartAvatar={resolvedDoc?.avatar || activeCallDoc?.avatar}
       counterpartSpecialty={resolvedDoc?.specialty || activeCallDoc?.specialty}
       appointmentId={resolvedDoc?.id || activeCallDoc?.id}
-      onEndCall={() => {
-        if (onEndCall) onEndCall();
+      onEndCall={(reason) => {
+        if (onEndCall) onEndCall(reason);
         else window.history.back();
       }}
       isMinimized={isMinimized}
