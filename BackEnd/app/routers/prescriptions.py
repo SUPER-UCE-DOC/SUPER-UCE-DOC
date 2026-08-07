@@ -240,6 +240,12 @@ def assign_prescription_to_pharmacy(
             detail="Acceso denegado: esta receta pertenece a otro paciente."
         )
         
+    if rx.status != "activa" or rx.pharmacy_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta receta ya no está activa o ya fue enviada a una farmacia."
+        )
+        
     pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == assignment.pharmacy_id).first()
     if not pharmacy:
         raise HTTPException(
@@ -248,6 +254,7 @@ def assign_prescription_to_pharmacy(
         )
 
     rx.pharmacy_id = assignment.pharmacy_id
+    rx.status = "asignada"
     db.commit()
     db.refresh(rx)
     

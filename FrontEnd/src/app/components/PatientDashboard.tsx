@@ -265,17 +265,19 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#F0FFFE" }}>
-                  <Pill size={22} style={{ color: rx.status === "activa" ? "#00A69D" : "#9CA3AF" }} />
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: rx.status === "asignada" ? "#EFF6FF" : "#F0FFFE" }}>
+                  <Pill size={22} style={{ color: rx.status === "activa" ? "#00A69D" : rx.status === "asignada" ? "#3B82F6" : "#9CA3AF" }} />
                 </div>
                 <span
                   className={`text-sm px-4 py-1.5 rounded-lg font-bold border ${
                     rx.status === "activa"
                       ? "bg-green-50 text-green-600 border-green-200"
+                      : rx.status === "asignada"
+                      ? "bg-blue-50 text-blue-600 border-blue-200"
                       : "bg-gray-50 text-gray-500 border-gray-200"
                   }`}
                 >
-                  {rx.status === "activa" ? "Activa" : "Vencida"}
+                  {rx.status === "activa" ? "Activa" : rx.status === "asignada" ? "Enviada" : "Vencida"}
                 </span>
               </div>
               <p style={{ color: "#203A70", fontWeight: 700 }}>{rx.medicine}</p>
