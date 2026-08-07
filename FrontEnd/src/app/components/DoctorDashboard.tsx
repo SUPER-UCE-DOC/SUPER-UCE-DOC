@@ -241,29 +241,30 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
       {/* DoctorLiveRoom: always mounted when inCall=true OR viewing live_teleconsult.
           Keyed by activeAppointment id to force clean state when switching appointments,
           while using CSS display to show/hide without unmounting during section navigation. */}
-      <div
-        style={{ display: (inCall || currentView === "live_teleconsult") ? undefined : "none" }}
-        className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}
-      >
-        <DoctorLiveRoom
-          key={activeAppointment?.id ? String(activeAppointment.id) : "global"}
-          userName={userName}
-          userAvatar={userAvatar}
-          onEndCall={handleEndCall}
-          onJoinCall={() => {
-            setInCall(true);
-            // Also persist so component stays mounted after section changes
-            if (activeAppointment?.id) {
-              localStorage.setItem("doctor_active_teleconsult", JSON.stringify(activeAppointment));
-              localStorage.removeItem("doctor_user_left_call");
-            }
-          }}
-          activeAppointment={activeAppointment}
-          activePatient={activeAppointment?.patient_name}
-          isMinimized={currentView !== "live_teleconsult"}
-          onReturnToCall={() => navigate("live_teleconsult")}
-        />
-      </div>
+      {(inCall || currentView === "live_teleconsult") && (
+        <div
+          className={currentView === "live_teleconsult" ? "flex flex-col flex-1 h-full w-full z-10" : "pointer-events-none fixed inset-0 z-50"}
+        >
+          <DoctorLiveRoom
+            key={activeAppointment?.id ? String(activeAppointment.id) : "global"}
+            userName={userName}
+            userAvatar={userAvatar}
+            onEndCall={handleEndCall}
+            onJoinCall={() => {
+              setInCall(true);
+              // Also persist so component stays mounted after section changes
+              if (activeAppointment?.id) {
+                localStorage.setItem("doctor_active_teleconsult", JSON.stringify(activeAppointment));
+                localStorage.removeItem("doctor_user_left_call");
+              }
+            }}
+            activeAppointment={activeAppointment}
+            activePatient={activeAppointment?.patient_name}
+            isMinimized={currentView !== "live_teleconsult"}
+            onReturnToCall={() => navigate("live_teleconsult")}
+          />
+        </div>
+      )}
     </div>
   );
 }
