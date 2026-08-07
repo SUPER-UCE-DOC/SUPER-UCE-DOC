@@ -213,6 +213,8 @@ class PrescriptionResponse(BaseModel):
     expires_at: datetime.datetime
     patient_lat: float
     patient_lon: float
+    pharmacy_lat: Optional[float] = None
+    pharmacy_lon: Optional[float] = None
 
     class Config:
         from_attributes = True

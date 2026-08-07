@@ -80,6 +80,14 @@ def create_prescription(
         except Exception as ex:
             print("Error al enviar correo de receta médica:", ex)
 
+    pharmacy_lat = None
+    pharmacy_lon = None
+    if rx.pharmacy_id:
+        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+        if pharmacy:
+            pharmacy_lat = pharmacy.lat
+            pharmacy_lon = pharmacy.lon
+
     return schemas.PrescriptionResponse(
         id=new_rx.id,
         appointment_id=new_rx.appointment_id,
@@ -121,6 +129,14 @@ def get_prescriptions(
     for rx in rx_list:
         p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
         d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
+        pharmacy_lat = None
+        pharmacy_lon = None
+        if rx.pharmacy_id:
+            pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+            if pharmacy:
+                pharmacy_lat = pharmacy.lat
+                pharmacy_lon = pharmacy.lon
+
         response.append(
             schemas.PrescriptionResponse(
                 id=rx.id,
@@ -137,7 +153,9 @@ def get_prescriptions(
                 issued_at=rx.issued_at,
                 expires_at=rx.expires_at,
                 patient_lat=rx.patient_lat,
-                patient_lon=rx.patient_lon
+                patient_lon=rx.patient_lon,
+                pharmacy_lat=pharmacy_lat,
+                pharmacy_lon=pharmacy_lon
             )
         )
     return response
@@ -157,6 +175,14 @@ def get_prescriptions_by_patient(
     for rx in rx_list:
         p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
         d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
+        pharmacy_lat = None
+        pharmacy_lon = None
+        if rx.pharmacy_id:
+            pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+            if pharmacy:
+                pharmacy_lat = pharmacy.lat
+                pharmacy_lon = pharmacy.lon
+
         response.append(
             schemas.PrescriptionResponse(
                 id=rx.id,
@@ -173,7 +199,9 @@ def get_prescriptions_by_patient(
                 issued_at=rx.issued_at,
                 expires_at=rx.expires_at,
                 patient_lat=rx.patient_lat,
-                patient_lon=rx.patient_lon
+                patient_lon=rx.patient_lon,
+                pharmacy_lat=pharmacy_lat,
+                pharmacy_lon=pharmacy_lon
             )
         )
     return response
@@ -201,6 +229,14 @@ def get_prescription_by_id(
     p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
     d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
 
+    pharmacy_lat = None
+    pharmacy_lon = None
+    if rx.pharmacy_id:
+        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+        if pharmacy:
+            pharmacy_lat = pharmacy.lat
+            pharmacy_lon = pharmacy.lon
+
     return schemas.PrescriptionResponse(
         id=rx.id,
         appointment_id=rx.appointment_id,
@@ -216,8 +252,10 @@ def get_prescription_by_id(
         issued_at=rx.issued_at,
         expires_at=rx.expires_at,
         patient_lat=rx.patient_lat,
-        patient_lon=rx.patient_lon
-    )
+        patient_lon=rx.patient_lon,
+                pharmacy_lat=pharmacy_lat,
+                pharmacy_lon=pharmacy_lon
+            )
 
 
 @router.post("/{id}/assign", response_model=schemas.PrescriptionResponse)
@@ -261,6 +299,14 @@ def assign_prescription_to_pharmacy(
     p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
     d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
 
+    pharmacy_lat = None
+    pharmacy_lon = None
+    if rx.pharmacy_id:
+        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+        if pharmacy:
+            pharmacy_lat = pharmacy.lat
+            pharmacy_lon = pharmacy.lon
+
     return schemas.PrescriptionResponse(
         id=rx.id,
         appointment_id=rx.appointment_id,
@@ -276,8 +322,10 @@ def assign_prescription_to_pharmacy(
         issued_at=rx.issued_at,
         expires_at=rx.expires_at,
         patient_lat=rx.patient_lat,
-        patient_lon=rx.patient_lon
-    )
+        patient_lon=rx.patient_lon,
+                pharmacy_lat=pharmacy_lat,
+                pharmacy_lon=pharmacy_lon
+            )
 
 
 @router.post("/{id}/dispatch", response_model=schemas.PrescriptionResponse)
@@ -350,6 +398,14 @@ def dispatch_prescription(
     p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
     d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
 
+    pharmacy_lat = None
+    pharmacy_lon = None
+    if rx.pharmacy_id:
+        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+        if pharmacy:
+            pharmacy_lat = pharmacy.lat
+            pharmacy_lon = pharmacy.lon
+
     return schemas.PrescriptionResponse(
         id=rx.id,
         appointment_id=rx.appointment_id,
@@ -365,5 +421,7 @@ def dispatch_prescription(
         issued_at=rx.issued_at,
         expires_at=rx.expires_at,
         patient_lat=rx.patient_lat,
-        patient_lon=rx.patient_lon
-    )
+        patient_lon=rx.patient_lon,
+                pharmacy_lat=pharmacy_lat,
+                pharmacy_lon=pharmacy_lon
+            )

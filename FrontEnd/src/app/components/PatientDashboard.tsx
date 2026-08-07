@@ -219,7 +219,9 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
             frequency: rx.frequency,
             status: rx.status,
             issued_at: rx.issued_at,
-            expires_at: rx.expires_at
+            expires_at: rx.expires_at,
+            pharmacy_lat: rx.pharmacy_lat,
+            pharmacy_lon: rx.pharmacy_lon
           }));
           setPrescriptionsList(formatted);
         }
@@ -309,11 +311,23 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
             {rx.status === "activa" && (
               <button
                   onClick={() => onFindPharmacy(rx.medicine, rx.id)}
-                className="w-full mt-4 py-2.5 rounded-xl flex items-center justify-center gap-2 text-white text-sm"
+                className="w-full mt-4 py-2.5 rounded-xl flex items-center justify-center gap-2 text-white text-sm transition-transform active:scale-95"
                 style={{ background: "#00A69D", fontWeight: 600, boxShadow: "0 2px 8px rgba(0,166,157,0.25)" }}
               >
                 <MapPin size={15} /> Ver Farmacias Cercanas
               </button>
+            )}
+
+            {rx.status === "asignada" && rx.pharmacy_lat && rx.pharmacy_lon && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${rx.pharmacy_lat},${rx.pharmacy_lon}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full mt-4 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm transition-transform active:scale-95"
+                style={{ background: "#F3F4F6", color: "#203A70", fontWeight: 700 }}
+              >
+                <Navigation size={15} /> Cómo llegar a la farmacia
+              </a>
             )}
           </div>
         )))
