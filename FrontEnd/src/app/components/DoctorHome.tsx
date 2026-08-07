@@ -132,7 +132,7 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
           { label: "Consultas hoy", value: totalHoy, icon: <Stethoscope size={18} />, bg: "#EEF2FF", color: "#203A70" },
           { label: "Completadas", value: completadas, icon: <CheckCircle size={18} />, bg: "#DCFCE7", color: "#10B981" },
           { label: "Pendientes", value: pendientes, icon: <Clock size={18} />, bg: "#FEF3C7", color: "#D97706" },
-          { label: "Telemedicina LSE", value: telemedicinaLSE, icon: <Activity size={18} />, bg: "#F0FFFE", color: "#00A69D" },
+          { label: "Telemedicina LSA", value: telemedicinaLSE, icon: <Activity size={18} />, bg: "#F0FFFE", color: "#00A69D" },
         ].map((m, i) => (
           <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm anim-fade-in-up" style={{ animationDelay: `${60 + i * 60}ms` }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-2.5" style={{ background: m.bg }}>
@@ -187,7 +187,7 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
                     <>
                       <span className="text-cyan-200/50">•</span>
                       <span className="text-sm font-bold text-cyan-300">
-                        LSE requerido
+                        LSA requerido
                       </span>
                     </>
                   )}

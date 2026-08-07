@@ -549,7 +549,7 @@ function AgendaView({ userName }: { userName: string }) {
                             className="text-xs px-2 py-0.5 rounded-full"
                             style={{ background: "#F0FFFE", color: "#00A69D", border: "1px solid #00C7C0", fontWeight: 600 }}
                           >
-                            🤟 Sordo · LSE
+                            🤟 Sordo · LSA
                           </span>
                         )}
                       </div>
@@ -1430,7 +1430,7 @@ function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { u
                           {apt.patient_name}
                           {(apt.patient_name.includes("Rosa") || apt.patient_name.includes("María") || apt.patient_name.includes("Morales")) && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-[#F0FFFE] text-[#00A69D] border border-[#00C7C0] font-semibold">
-                              🤟 Sordo · LSE
+                              🤟 Sordo · LSA
                             </span>
                           )}
                         </div>
