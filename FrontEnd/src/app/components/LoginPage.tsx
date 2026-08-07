@@ -3,6 +3,7 @@ import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } fro
 import { api } from "../utils/api";
 import { EmailVerificationModal } from "./EmailVerificationModal";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { PharmacyMapPicker } from "./PharmacyMapPicker";
 import { Map, AdvancedMarker, APIProvider } from "@vis.gl/react-google-maps";
 
 const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
@@ -320,12 +321,16 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
       )}
 
       <div
-        className="relative w-full max-w-md mx-4 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className={`relative w-full mx-4 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col md:flex-row gap-6 ${
+          authMode === "register" && selectedRole === "pharmacy" && regStep === 2 ? "max-w-[900px]" : "max-w-md"
+        }`}
         style={{
           opacity: isLeaving ? 0 : 1,
           transform: isLeaving ? "translateX(18px) scale(0.985)" : "translateX(0) scale(1)",
         }}
       >
+        {/* Columna Izquierda: Formulario */}
+        <div className="flex-1 w-full transition-all duration-500">
         <div className="text-center mb-8 anim-fade-in-up anim-d-0">
           <div className="inline-flex items-center justify-center mb-4">
             <img
@@ -476,13 +481,20 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                       Cancelar
                     </button>
                     <button
-                      type="button"
-                      onClick={handleCompleteGoogleRegistration}
-                      disabled={loading}
-                      className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all shadow-md active:scale-95"
-                      style={{ background: loading ? "#6B7280" : "#00A69D" }}
+                      type="submit"
+                      disabled={loading || (authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && !googlePlaceId)}
+                      className="w-full py-3 mt-4 rounded-lg font-bold text-white transition-all duration-300 shadow-md active:scale-[0.98]"
+                      style={{
+                        background: loading || (authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && !googlePlaceId) ? "#9CA3AF" : "#00A69D",
+                      }}
                     >
-                      {loading ? "Completando..." : "Completar Registro"}
+                      {loading
+                        ? "Procesando..."
+                        : authMode === "login"
+                        ? "Iniciar Sesión"
+                        : regStep === 1
+                        ? "Siguiente Paso"
+                        : "Completar Registro"}
                     </button>
                   </div>
                 </div>
@@ -839,54 +851,35 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                                 />
                               </div>
 
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 500 }}>
-                                    Dirección Física
-                                  </label>
-                                  <AddressAutocomplete 
-                                    apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}
-                                    defaultValue={address}
-                                    onAddressSelect={(addr, lat, lon, placeId) => {
-                                      setAddress(addr);
-                                      setLat(lat);
-                                      setLon(lon);
-                                      setGooglePlaceId(placeId);
-                                    }}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 500 }}>
-                                    Teléfono
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="809-529-1111"
-                                    className="w-full px-4 py-2.5 rounded-lg border outline-none transition-all"
-                                    style={{ borderColor: "#E5E7EB", fontSize: "16px" }}
-                                    onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
-                                    onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
-                                  />
-                                </div>
+                              <div>
+                                <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 500 }}>
+                                  Teléfono de la Farmacia
+                                </label>
+                                <input
+                                  type="text"
+                                  value={phone}
+                                  onChange={(e) => setPhone(e.target.value)}
+                                  placeholder="809-529-1111"
+                                  className="w-full px-4 py-2.5 rounded-lg border outline-none transition-all"
+                                  style={{ borderColor: "#E5E7EB", fontSize: "16px" }}
+                                  onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
+                                  onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
+                                />
                               </div>
-                              {/* Mini Mapa de Confirmación */}
-                              {googlePlaceId && (
-                                <div className="mt-4 rounded-xl overflow-hidden border border-gray-200 relative" style={{ height: "180px", zIndex: 1 }}>
-                                  <APIProvider apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}>
-                                    <Map
-                                      defaultZoom={16}
-                                      defaultCenter={{ lat, lng: lon }}
-                                      center={{ lat, lng: lon }}
-                                      disableDefaultUI={true}
-                                      mapId="DEMO_MAP_ID"
-                                    >
-                                      <AdvancedMarker position={{ lat, lng: lon }} />
-                                    </Map>
-                                  </APIProvider>
-                                </div>
-                              )}
+
+                              <div className="mt-4 p-4 bg-teal-50 border border-teal-100 rounded-xl">
+                                <p className="text-sm text-teal-800 font-medium mb-2 flex items-center gap-2">
+                                  <MapPin size={16} /> Ubicación de la Farmacia
+                                </p>
+                                {googlePlaceId ? (
+                                  <div className="text-xs text-teal-700">
+                                    <p className="font-bold">{address}</p>
+                                    <p className="mt-1">Seleccionada en el mapa</p>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-teal-600">Por favor selecciona la ubicación exacta de tu farmacia en el mapa de la derecha.</p>
+                                )}
+                              </div>
                             </div>
                           )}
                         </>
@@ -920,9 +913,9 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                           </button>
                           <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || (authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && !googlePlaceId)}
                             className="flex-[2] py-3 rounded-lg text-white font-semibold text-sm transition-all shadow-md active:scale-[0.98]"
-                            style={{ background: loading ? "#6B7280" : "#00A69D" }}
+                            style={{ background: loading || (authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && !googlePlaceId) ? "#9CA3AF" : "#00A69D" }}
                           >
                             {loading ? "Completando..." : "Completar Registro"}
                           </button>
@@ -989,6 +982,26 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           © 2026 SUPER-UCE DOC · Universidad Central del Este
         </p>
 
+        {/* Columna Derecha: Mapa de Farmacia (Solo paso 2) */}
+        {authMode === "register" && selectedRole === "pharmacy" && regStep === 2 && (
+          <div className="flex-1 w-full h-[500px] md:h-auto anim-fade-in-right rounded-2xl overflow-hidden shadow-2xl border-4 border-white mb-8 md:mb-0">
+            <PharmacyMapPicker
+              selectedPlaceId={googlePlaceId}
+              onConfirm={(placeId, addr, latit, longit, placeName) => {
+                setGooglePlaceId(placeId);
+                setAddress(addr);
+                setLat(latit);
+                setLon(longit);
+                if (placeName && !businessName) {
+                  setBusinessName(placeName);
+                }
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {showVerificationModal && (
         <EmailVerificationModal
           isOpen={showVerificationModal}
           email={verificationEmail}
