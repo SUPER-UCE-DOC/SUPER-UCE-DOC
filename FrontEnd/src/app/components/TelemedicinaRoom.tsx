@@ -66,8 +66,10 @@ const ragMedicines = [
 
 export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
   const [tokenToUse, setTokenToUse] = useState<string>("");
-  const [roomStartTime, setRoomStartTime] = useState<number>(0);
-  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+  // meetingStartTime: timestamp Unix (segundos) cuando inició la reunión.
+  // Vale 0 mientras la reunión aún no ha comenzado.
+  const [meetingStartTime, setMeetingStartTime] = useState<number>(0);
+  const [serverOffset, setServerOffset] = useState<number>(0); // server_time - Date.now()/1000
   const lastFetchedIdRef = useRef<string | null>(null);
 
   const roomAppId = props.appointmentId ? String(props.appointmentId) : "global";
@@ -144,13 +146,16 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
 
     const fetchToken = async () => {
       try {
+        // Solo pedimos el token aquí. El start_time NO se usa porque la reunión
+        // aún no ha iniciado (el usuario está en el lobby).
         const res = await api.getLiveKitToken(targetRoomCode);
         setTokenToUse(res.token);
-        if (res.start_time) {
-          setRoomStartTime(res.start_time);
+        // Si ya había una reunión en curso (e.g. reload), restauramos el start_time
+        if (res.start_time && res.start_time > 0) {
+          setMeetingStartTime(res.start_time);
         }
         if (res.server_time) {
-          setServerTimeOffset(res.server_time - (Date.now() / 1000));
+          setServerOffset(res.server_time - (Date.now() / 1000));
         }
       } catch (err) {
         console.error("Error fetching LiveKit token:", err);
@@ -199,16 +204,23 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
           localStorage.setItem("local_audio_muted", audioOn ? "false" : "true");
           localStorage.setItem("local_lsa_on", (lsaOn ?? true) ? "true" : "false");
           setHasJoined(true);
+          // Llamar a /start-timer en el servidor para registrar el inicio oficial de la reunión.
+          // El servidor solo acepta el primer registro (si start_time ya está fijado, lo ignora).
           if (props.appointmentId) {
-            api.updateAppointmentStatus(props.appointmentId, "en_curso")
-              .then(() => {
-                const targetRoomCode = String(props.appointmentId);
-                api.getLiveKitToken(targetRoomCode).then(res => {
-                  if (res.start_time) setRoomStartTime(res.start_time);
-                  if (res.server_time) setServerTimeOffset(res.server_time - (Date.now() / 1000));
-                }).catch(() => {});
+            const apiBase = (import.meta as any).env?.VITE_API_BASE_URL ||
+              (import.meta as any).env?.VITE_API_URL ||
+              "https://superucedoc-api.duckdns.org";
+            fetch(`${apiBase}/api/realtime/start-timer/${props.appointmentId}`, { method: "POST" })
+              .then(r => r.json())
+              .then(data => {
+                if (data.start_time > 0) setMeetingStartTime(data.start_time);
+                if (data.server_time) setServerOffset(data.server_time - (Date.now() / 1000));
               })
               .catch(() => {});
+          }
+          // Si el estado de la cita debe cambiar a en_curso, actualizarlo también
+          if (props.appointmentId) {
+            api.updateAppointmentStatus(props.appointmentId, "en_curso").catch(() => {});
           }
           props.onJoinCall?.();
         }}
@@ -229,8 +241,8 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
       <TelemedicinaRoomContent
         {...props}
         onEndCall={handleEndCallWrapped}
-        startTime={roomStartTime}
-        serverTimeOffset={serverTimeOffset}
+        startTime={meetingStartTime}
+        serverTimeOffset={serverOffset}
         initialVideoOff={!joinedVideoOn}
         initialAudioMuted={!joinedAudioOn}
         initialLsaOn={joinedLsaOn}
@@ -1252,58 +1264,28 @@ function TelemedicinaRoomContent({
   // Doctor Clinical Summary
   const [clinicalNotes, setClinicalNotes] = useState("");
 
-  // 1. Single Source of Truth Live Call Timer (Unificado y 100% Sincronizado con FastAPI)
-  const serverTimeOffsetRef = useRef<number>(serverTimeOffset || 0);
-  const sessionStartTimeRef = useRef<number>(startTime || 0);
-
+  // ─── CRONOMETRO DE REUNIÓN ───────────────────────────────────────────────
+  // Fuente única y limpia:
+  //   1. `startTime` llega del servidor (timestamp Unix en segundos).
+  //      Vale 0 si la reunión aún no inició.
+  //   2. `serverTimeOffset` corrige la diferencia entre el reloj del servidor
+  //      y el reloj local del dispositivo.
+  //   3. Un único setInterval de 1 segundo calcula el tiempo transcurrido.
+  //      No hay ningún otro efecto ni heartbeat que sobreescriba elapsedSecs.
   useEffect(() => {
-    serverTimeOffsetRef.current = serverTimeOffset || 0;
-  }, [serverTimeOffset]);
-
-  useEffect(() => {
-    if (startTime > 0) {
-      sessionStartTimeRef.current = startTime;
+    if (!startTime || startTime <= 0) {
+      setElapsedSecs(0);
+      return;
     }
-  }, [startTime]);
-
-  // Heartbeat continuo de presencia cada 3 segundos para sincronizar reloj del servidor y marca de inicio
-  useEffect(() => {
-    if (!roomCode) return;
-    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || "https://superucedoc-api.duckdns.org";
-    const pollPresence = async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/realtime/presence/${roomCode}/${role}`, { method: "POST" });
-        if (res.ok) {
-          const data = await res.json();
-          if (typeof data.server_time === "number") {
-            serverTimeOffsetRef.current = data.server_time - (Date.now() / 1000);
-          }
-          if (typeof data.start_time === "number" && data.start_time > 0) {
-            sessionStartTimeRef.current = data.start_time;
-          }
-        }
-      } catch (err) {}
+    const tick = () => {
+      const serverNow = Date.now() / 1000 + serverTimeOffset;
+      setElapsedSecs(Math.max(0, Math.floor(serverNow - startTime)));
     };
-
-    pollPresence();
-    const presenceTimer = setInterval(pollPresence, 3000);
-    return () => clearInterval(presenceTimer);
-  }, [roomCode, role]);
-
-  // ÚNICA fuente de actualización para elapsedSecs cada 1 segundo (sin parpadeos ni duplicación de tiempos)
-  useEffect(() => {
-    const updateTimer = () => {
-      const activeStart = sessionStartTimeRef.current;
-      if (!activeStart || activeStart <= 0) return;
-      const currentServerTime = (Date.now() / 1000) + serverTimeOffsetRef.current;
-      const elapsed = Math.floor(currentServerTime - activeStart);
-      setElapsedSecs(Math.max(0, elapsed));
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
+    tick(); // Primer tick inmediato
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [startTime, serverTimeOffset]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // 3. Real-Time Room Presence & Media State Tracking (Nativo LiveKit)
   const remoteParticipants = useRemoteParticipants();

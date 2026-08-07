@@ -120,17 +120,11 @@ room_media_store: Dict[str, Dict[str, dict]] = {}
 
 def get_or_create_session(room_id: str) -> dict:
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
-    now = time.time()
-    
-    if clean_room == "global" and len(room_sessions_store) > 0:
-        active_sessions = [s for k, s in room_sessions_store.items() if k != "global" and s.get("status") == "active"]
-        if active_sessions:
-            return active_sessions[-1]
 
     if clean_room not in room_sessions_store:
         room_sessions_store[clean_room] = {
             "room_id": clean_room,
-            "start_time": now,
+            "start_time": 0.0,   # 0 = reunión aún no iniciada
             "status": "active",
             "doctor_time": 0.0,
             "patient_time": 0.0
@@ -138,12 +132,14 @@ def get_or_create_session(room_id: str) -> dict:
     return room_sessions_store[clean_room]
 
 @router.post("/start-timer/{room_id}")
-def start_room_timer(room_id: str, start_ts: float = 0.0):
+def start_room_timer(room_id: str):
+    """Marca el inicio oficial de la reunión. Solo funciona una vez por sala."""
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
     now = time.time()
-    if start_ts > 0:
-        session["start_time"] = start_ts
+    # Solo registra si aún no se ha iniciado
+    if session["start_time"] == 0.0:
+        session["start_time"] = now
     return {
         "status": "ok",
         "start_time": session["start_time"],
@@ -179,13 +175,14 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
     is_connected = (now - spec_time) < 6.0
     
     counterpart_media = room_media_store[clean_room].get(counterpart, {"muted": False, "videoOff": False})
-    elapsed_seconds = int(now - session["start_time"])
-    
+    st = session["start_time"]
+    elapsed_seconds = int(now - st) if st > 0 else 0
+
     return {
         "connected": is_connected,
         "doctor_online": (now - session.get("doctor_time", 0)) < 6.0,
         "patient_online": (now - session.get("patient_time", 0)) < 6.0,
-        "start_time": session["start_time"],
+        "start_time": st,
         "server_time": now,
         "elapsed_seconds": max(0, elapsed_seconds),
         "status": session.get("status", "active"),
@@ -198,16 +195,17 @@ def get_room_presence(room_id: str):
     now = time.time()
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     session = get_or_create_session(clean_room)
-    
+
     doc_time = session.get("doctor_time", 0)
     pat_time = session.get("patient_time", 0)
-    elapsed_seconds = int(now - session["start_time"])
-    
+    st = session["start_time"]
+    elapsed_seconds = int(now - st) if st > 0 else 0
+
     return {
         "doctor_online": (now - doc_time) < 6.0,
         "patient_online": (now - pat_time) < 6.0,
         "connected": ((now - doc_time) < 6.0) and ((now - pat_time) < 6.0),
-        "start_time": session["start_time"],
+        "start_time": st,
         "server_time": now,
         "elapsed_seconds": max(0, elapsed_seconds),
         "status": session.get("status", "active")
@@ -352,6 +350,6 @@ def get_livekit_token(
 
     return {
         "token": token_str,
-        "start_time": session["start_time"],
+        "start_time": session["start_time"],  # 0 si aún no ha iniciado
         "server_time": time.time()
     }

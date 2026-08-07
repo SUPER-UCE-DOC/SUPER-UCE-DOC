@@ -1114,7 +1114,6 @@ function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { u
   const [muted, setMuted] = useState(false);
 
   const [visibleLines, setVisibleLines] = useState(0);
-  const [elapsedSecs, setElapsedSecs] = useState(0);
   const [rx, setRx] = useState({ medicine: "", dose: "", frequency: "", expires_at_date: "" });
   const [rxSubmitted, setRxSubmitted] = useState(false);
   const [doctorAvatar, setDoctorAvatar] = useState<string | undefined>(userAvatar);
@@ -1274,7 +1273,6 @@ function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { u
       // Notify parent to sync the appointment before navigating
       onStartCall?.(patient);
       onNavigate?.("live_teleconsult");
-      setElapsedSecs(0);
       setVisibleLines(0);
       setRxSubmitted(false);
       setRx({ medicine: "", dose: "", frequency: "" });
@@ -1296,7 +1294,6 @@ function TeleconsultaView({ userName, userAvatar, onNavigate, onStartCall }: { u
     }
     setInCall(false);
     setActivePatient(null);
-    setElapsedSecs(0);
     setVisibleLines(0);
     loadAppointments();
     onEndCall?.();
