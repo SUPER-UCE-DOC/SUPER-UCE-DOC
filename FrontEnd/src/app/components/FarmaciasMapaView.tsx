@@ -216,9 +216,10 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
             <APIProvider apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}>
               {locationLoaded && (
                 <Map
-                  defaultZoom={13}
+                  defaultZoom={14}
+                  minZoom={14}
                   defaultCenter={{ lat: userLat, lng: userLon }}
-                  disableDefaultUI={false}
+                  disableDefaultUI={true}
                   styles={[
                     { featureType: "poi", stylers: [{ visibility: "off" }] },
                     { featureType: "transit", stylers: [{ visibility: "off" }] }

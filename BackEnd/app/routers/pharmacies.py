@@ -57,7 +57,7 @@ def get_nearby_pharmacies(
     db: Session = Depends(get_db)
 ):
     """
-    Busca farmacias dentro del rango de 2km (2000m).
+    Busca farmacias dentro del rango de 3km (3000m).
     Utiliza PostGIS en PostgreSQL o cálculo en Python (Haversine) como fallback.
     """
     is_postgres = "postgresql" in str(db.bind.url)
@@ -65,7 +65,7 @@ def get_nearby_pharmacies(
 
     if is_postgres:
         # Consulta SQL nativa para PostGIS
-        # Buscamos farmacias a menos de 2000 metros (2 km)
+        # Buscamos farmacias a menos de 3000 metros (3 km)
         sql = """
         SELECT p.id, p.business_name, p.address, p.phone, p.lat, p.lon, p.google_place_id, u.full_name, u.email,
                ST_Distance(
@@ -77,7 +77,7 @@ def get_nearby_pharmacies(
         WHERE ST_DWithin(
             ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326)::geography,
             ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-            2000
+            3000
         )
         ORDER BY distance ASC;
         """
@@ -99,7 +99,7 @@ def get_nearby_pharmacies(
         pharmacies = db.query(models.Pharmacy).all()
         for ph in pharmacies:
             dist = haversine_distance(lat, lon, ph.lat, ph.lon)
-            if dist <= 2000.0:  # 2 km
+            if dist <= 3000.0:  # 3 km
                 nearby_pharmacies.append({
                     "id": ph.id,
                     "name": ph.business_name,
