@@ -51,7 +51,7 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
   const [activeCallDoc, setActiveCallDoc] = useState<{ name: string; avatar?: string; id?: number; specialty?: string } | null>(null);
   const [inCall, setInCall] = useState(false);
 
-  if (currentView !== lastView) { setLastView(currentView); setPharmacyMedicine(null); }
+  if (currentView !== lastView) { setLastView(currentView); setPharmacyContext(null); }
 
   const navigate = (v: string) => { onNavigate?.(v); };
 

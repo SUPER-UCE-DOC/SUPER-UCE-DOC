@@ -17,10 +17,30 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
   const [assigning, setAssigning] = useState(false);
   const [assigned, setAssigned] = useState(false);
   
-  const userLat = 18.463;
-  const userLon = -69.304;
+  const [userLat, setUserLat] = useState(18.463);
+  const [userLon, setUserLon] = useState(-69.304);
+  const [locationLoaded, setLocationLoaded] = useState(false);
 
   useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLat(position.coords.latitude);
+          setUserLon(position.coords.longitude);
+          setLocationLoaded(true);
+        },
+        (error) => {
+          console.warn("Geolocalización falló, usando default", error);
+          setLocationLoaded(true);
+        }
+      );
+    } else {
+      setLocationLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!locationLoaded) return;
     async function loadNearby() {
       try {
         setLoading(true);
@@ -48,7 +68,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
       }
     }
     loadNearby();
-  }, [medicine]);
+  }, [medicine, locationLoaded, userLat, userLon]);
 
   const handleAssign = async () => {
     if (!selected || !prescriptionId) return;
@@ -197,8 +217,13 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
               <Map
                 defaultZoom={13}
                 defaultCenter={{ lat: userLat, lng: userLon }}
+                center={{ lat: userLat, lng: userLon }}
                 mapId="SUPER_UCE_DOC_MAP"
                 disableDefaultUI={false}
+                styles={[
+                  { featureType: "poi", stylers: [{ visibility: "off" }] },
+                  { featureType: "transit", stylers: [{ visibility: "off" }] }
+                ]}
               >
                 {/* Marcador del Paciente */}
                 <AdvancedMarker position={{ lat: userLat, lng: userLon }} zIndex={50}>
