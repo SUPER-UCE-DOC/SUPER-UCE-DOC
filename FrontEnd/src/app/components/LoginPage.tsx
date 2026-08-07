@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
-import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft, MapPin } from "lucide-react";
 import { api } from "../utils/api";
 import { EmailVerificationModal } from "./EmailVerificationModal";
 import { AddressAutocomplete } from "./AddressAutocomplete";
