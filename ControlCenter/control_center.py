@@ -609,42 +609,45 @@ class ControlCenterApp:
         return lbl_status
 
     def refresh_health_status(self):
+        def safe_config(widget, text, fg):
+            self.root.after(0, lambda: widget.config(text=text, fg=fg))
+
         def worker():
             # Check Backend
             try:
                 r = requests.get("https://superucedoc-api.duckdns.org/", timeout=4)
                 if r.status_code == 200:
-                    self.card_backend.config(text="🟢 ONLINE (200 OK)", fg="#34D399")
+                    safe_config(self.card_backend, "🟢 ONLINE (200 OK)", "#34D399")
                 else:
-                    self.card_backend.config(text=f"🟡 HTTP {r.status_code}", fg="#FBBF24")
+                    safe_config(self.card_backend, f"🟡 HTTP {r.status_code}", "#FBBF24")
             except Exception:
-                self.card_backend.config(text="🔴 OFFLINE", fg="#EF4444")
+                safe_config(self.card_backend, "🔴 OFFLINE", "#EF4444")
 
             # Check LiveKit
             try:
                 r = requests.get("https://superucedoc-livekit.duckdns.org/", timeout=4)
                 if r.status_code == 200:
-                    self.card_livekit.config(text="🟢 ONLINE (200 OK)", fg="#34D399")
+                    safe_config(self.card_livekit, "🟢 ONLINE (200 OK)", "#34D399")
                 else:
-                    self.card_livekit.config(text="🔴 OFFLINE", fg="#EF4444")
+                    safe_config(self.card_livekit, "🔴 OFFLINE", "#EF4444")
             except Exception:
-                self.card_livekit.config(text="🔴 OFFLINE", fg="#EF4444")
+                safe_config(self.card_livekit, "🔴 OFFLINE", "#EF4444")
 
             # Check DB
             if DB_AVAILABLE:
-                self.card_database.config(text="🟢 CONECTADO (Supabase)", fg="#34D399")
+                safe_config(self.card_database, "🟢 CONECTADO (Supabase)", "#34D399")
             else:
-                self.card_database.config(text="🔴 ERROR DE CONEXIÓN", fg="#EF4444")
+                safe_config(self.card_database, "🔴 ERROR DE CONEXIÓN", "#EF4444")
 
             # Check Vercel
             try:
                 r = requests.get("https://superucedocpage.vercel.app", timeout=4)
                 if r.status_code in (200, 304):
-                    self.card_vercel.config(text="🟢 ONLINE (Vercel CDN)", fg="#34D399")
+                    safe_config(self.card_vercel, "🟢 ONLINE (Vercel CDN)", "#34D399")
                 else:
-                    self.card_vercel.config(text=f"🟡 HTTP {r.status_code}", fg="#FBBF24")
+                    safe_config(self.card_vercel, f"🟡 HTTP {r.status_code}", "#FBBF24")
             except Exception:
-                self.card_vercel.config(text="🔴 OFFLINE", fg="#EF4444")
+                safe_config(self.card_vercel, "🔴 OFFLINE", "#EF4444")
 
         threading.Thread(target=worker, daemon=True).start()
 

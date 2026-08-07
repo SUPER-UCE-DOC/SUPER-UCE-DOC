@@ -36,7 +36,8 @@ function PharmacyMapPickerContent({ onConfirm, selectedPlaceId }: PharmacyMapPic
           setUserLocation(loc);
           if (map) map.setCenter(loc);
         },
-        (err) => console.warn("Geolocation failed", err)
+        (err) => console.warn("Geolocation failed", err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     }
   }, [map]);

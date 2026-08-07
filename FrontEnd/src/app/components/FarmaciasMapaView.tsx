@@ -35,9 +35,9 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           setLocationLoaded(true);
         },
         (error) => {
-          console.warn("Geolocalización falló, usando default", error);
           setLocationLoaded(true);
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       setLocationLoaded(true);
