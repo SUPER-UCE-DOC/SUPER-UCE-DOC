@@ -350,15 +350,27 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                   Receta Enviada
                 </div>
               ) : (
-                <button
-                  onClick={handleAssign}
-                  disabled={assigning}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm transition-all active:scale-95 disabled:opacity-50"
-                  style={{ background: "#00A69D", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,166,157,0.3)" }}
-                >
-                  <Navigation size={15} />
-                  {assigning ? "Enviando..." : "Enviar receta a esta farmacia"}
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleAssign}
+                    disabled={assigning}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: "#00A69D", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,166,157,0.3)" }}
+                  >
+                    <CheckCircle size={15} />
+                    {assigning ? "Enviando..." : "Enviar receta a esta farmacia"}
+                  </button>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLon}&destination=${selectedPharmacy.lat},${selectedPharmacy.lon}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm transition-all active:scale-95"
+                    style={{ background: "#F3F4F6", color: "#203A70", fontWeight: 700 }}
+                  >
+                    <Navigation size={15} />
+                    Cómo llegar (Ruta)
+                  </a>
+                </div>
               )}
               </div>
             </div>
