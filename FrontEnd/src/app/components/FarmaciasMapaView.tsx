@@ -61,7 +61,8 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           hours: "08:00 – 22:00",
           lat: p.lat,
           lon: p.lon,
-        }));
+        })).filter((p: any) => p.hasStock);
+        
         setPharmaciesList(formatted);
         if (formatted.length > 0) {
           setSelected(formatted[0].id);
@@ -245,14 +246,14 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                   {/* Marcadores de Farmacias */}
                   {pharmaciesList.map((p) => {
                     const isSelected = selected === p.id;
-                    const size = isSelected ? 38 : 30;
-                    const bg = p.hasStock ? (isSelected ? "#00A69D" : "white") : "#9CA3AF";
-                    const border = p.hasStock ? "#00A69D" : "#9CA3AF";
-                    const inner = p.hasStock && !isSelected ? "#00A69D" : "white";
+                    const size = isSelected ? 42 : 32;
+                    const bg = isSelected ? "#00A69D" : "white";
+                    const border = "#00A69D";
+                    const inner = isSelected ? "white" : "#00A69D";
                     
                     const svgIcon = `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
                       <circle cx="20" cy="20" r="18" fill="${bg}" stroke="${border}" stroke-width="3" />
-                      <circle cx="20" cy="20" r="8" fill="${inner}" />
+                      <path d="M17 12 h6 v5 h5 v6 h-5 v5 h-6 v-5 h-5 v-6 h5 v-5 z" fill="${inner}" />
                     </svg>`;
 
                     return (
@@ -266,11 +267,6 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                           scaledSize: { width: size, height: size } as any,
                           anchor: { x: size/2, y: size/2 } as any
                         }}
-                        label={isSelected ? {
-                          text: p.name,
-                          className: "font-bold",
-                          color: "#203A70"
-                        } : undefined}
                       />
                     );
                   })}
