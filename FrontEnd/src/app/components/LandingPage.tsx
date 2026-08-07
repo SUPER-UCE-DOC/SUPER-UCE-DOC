@@ -204,6 +204,10 @@ export function LandingPage({ onEnterPortal }: LandingPageProps) {
                   fontSize: "16px",
                   border: "2px solid #203A70",
                 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.open("https://github.com/SUPER-UCE-DOC/SUPER-UCE-DOC#readme", "_blank", "noopener,noreferrer");
+                }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.background = "#203A70";
                   (e.currentTarget as HTMLElement).style.color = "white";
