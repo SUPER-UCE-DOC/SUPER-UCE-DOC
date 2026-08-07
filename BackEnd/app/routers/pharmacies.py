@@ -40,6 +40,7 @@ def get_all_pharmacies(db: Session = Depends(get_db)):
                 lat=ph.lat,
                 lon=ph.lon,
                 address=ph.address,
+                google_place_id=ph.google_place_id,
                 phone=ph.phone,
                 full_name=ph.user.full_name,
                 email=ph.user.email
@@ -66,7 +67,7 @@ def get_nearby_pharmacies(
         # Consulta SQL nativa para PostGIS
         # Buscamos farmacias a menos de 2000 metros (2 km)
         sql = """
-        SELECT p.id, p.business_name, p.address, p.phone, p.lat, p.lon, u.full_name, u.email,
+        SELECT p.id, p.business_name, p.address, p.phone, p.lat, p.lon, p.google_place_id, u.full_name, u.email,
                ST_Distance(
                    ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326)::geography,
                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
@@ -87,6 +88,7 @@ def get_nearby_pharmacies(
                 "name": row.business_name,
                 "address": row.address,
                 "phone": row.phone,
+                "google_place_id": row.google_place_id,
                 "lat": row.lat,
                 "lon": row.lon,
                 "distance": round(row.distance / 1000.0, 2),  # km
@@ -103,6 +105,7 @@ def get_nearby_pharmacies(
                     "name": ph.business_name,
                     "address": ph.address,
                     "phone": ph.phone,
+                    "google_place_id": ph.google_place_id,
                     "lat": ph.lat,
                     "lon": ph.lon,
                     "distance": round(dist / 1000.0, 2),  # km

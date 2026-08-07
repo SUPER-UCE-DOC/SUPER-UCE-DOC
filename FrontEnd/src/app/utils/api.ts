@@ -211,6 +211,13 @@ export const api = {
     });
   },
 
+  async assignPrescription(id: string, pharmacyId: number): Promise<any> {
+    return request(`/api/prescriptions/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ pharmacy_id: pharmacyId }),
+    });
+  },
+
   // --- Farmacias ---
   async getNearbyPharmacies(lat: number, lon: number, medicine?: string): Promise<any[]> {
     let url = `/api/pharmacies/nearby?lat=${lat}&lon=${lon}`;

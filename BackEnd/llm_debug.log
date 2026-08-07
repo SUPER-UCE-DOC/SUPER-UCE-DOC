@@ -62,3 +62,5 @@
 [Traductor Local] IN: hello donkey | OUT: Hola burro.
 [Traductor Local] IN: see moon later | OUT: Ver la luna más tarde.
 [Traductor Local] IN: hello donkey | OUT: Hola burro.
+[Traductor Local] IN: hat | OUT: Sombrero.
+[Traductor Local] IN: not | OUT: No.

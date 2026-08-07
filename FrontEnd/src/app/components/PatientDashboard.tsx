@@ -46,7 +46,7 @@ const gestureLabels = [
 ];
 
 export function PatientDashboard({ userName, userAvatar, currentView, onNavigate }: PatientDashboardProps) {
-  const [pharmacyMedicine, setPharmacyMedicine] = useState<string | null>(null);
+  const [pharmacyContext, setPharmacyContext] = useState<{ medicine: string, prescriptionId: string } | null>(null);
   const [lastView, setLastView] = useState(currentView);
   const [activeCallDoc, setActiveCallDoc] = useState<{ name: string; avatar?: string; id?: number; specialty?: string } | null>(null);
   const [inCall, setInCall] = useState(false);
@@ -128,9 +128,9 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
   };
 
   const renderViewContent = () => {
-    if (pharmacyMedicine) return <FarmaciasMapaView medicine={pharmacyMedicine} onBack={() => setPharmacyMedicine(null)} />;
+    if (pharmacyContext) return <FarmaciasMapaView medicine={pharmacyContext.medicine} prescriptionId={pharmacyContext.prescriptionId} onBack={() => setPharmacyContext(null)} />;
     if (currentView === "home" || currentView === "dashboard") return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
-    if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med) => setPharmacyMedicine(med)} />;
+    if (currentView === "prescriptions" || currentView === "pharmacy") return <RecetasYFarmacia onFindPharmacy={(med, rxId) => setPharmacyContext({ medicine: med, prescriptionId: rxId })} />;
     if (currentView === "appointments") return <CitasView key="appointments" onJoinCall={handleJoinCall} inCall={inCall} />;
     if (currentView === "appointments_new") return <CitasView key="appointments_new" onJoinCall={handleJoinCall} inCall={inCall} initialOpenModal={true} />;
     if (currentView === "ai-assistant") return <AsistenteView userName={userName} userAvatar={userAvatar} />;
@@ -202,7 +202,7 @@ function TelemedicinaSala({ userName, userAvatar, activeCallDoc, onEndCall, isMi
 }
 
 /* ─── RECETAS ─── */
-function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: string) => void }) {
+function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: string, prescriptionId: string) => void }) {
   const [prescriptionsList, setPrescriptionsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -306,7 +306,7 @@ function RecetasYFarmacia({ onFindPharmacy }: { onFindPharmacy: (medicine: strin
             
             {rx.status === "activa" && (
               <button
-                  onClick={() => onFindPharmacy(rx.medicine)}
+                  onClick={() => onFindPharmacy(rx.medicine, rx.id)}
                 className="w-full mt-4 py-2.5 rounded-xl flex items-center justify-center gap-2 text-white text-sm"
                 style={{ background: "#00A69D", fontWeight: 600, boxShadow: "0 2px 8px rgba(0,166,157,0.25)" }}
               >

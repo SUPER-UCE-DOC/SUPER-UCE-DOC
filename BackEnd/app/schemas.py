@@ -50,6 +50,7 @@ class UserCreate(UserBase):
     health_license: Optional[str] = None
     pharmacist_name: Optional[str] = None
     address: Optional[str] = None
+    google_place_id: Optional[str] = None
     phone: Optional[str] = None
     lat: float = 18.46
     lon: float = -69.30
@@ -130,6 +131,7 @@ class PharmacyResponse(BaseModel):
     lat: float
     lon: float
     address: str
+    google_place_id: Optional[str] = None
     phone: str
     full_name: str
     email: str
@@ -199,6 +201,7 @@ class PrescriptionResponse(BaseModel):
     id: str
     appointment_id: Optional[int]
     patient_id: int
+    pharmacy_id: Optional[int] = None
     patient_name: str
     doctor_id: int
     doctor_name: str
@@ -213,6 +216,9 @@ class PrescriptionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PrescriptionAssign(BaseModel):
+    pharmacy_id: int
 
 
 # --- Supplier Orders ---

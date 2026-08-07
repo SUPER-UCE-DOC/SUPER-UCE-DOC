@@ -84,6 +84,7 @@ def create_prescription(
         id=new_rx.id,
         appointment_id=new_rx.appointment_id,
         patient_id=new_rx.patient_id,
+        pharmacy_id=new_rx.pharmacy_id,
         patient_name=patient.user.full_name,
         doctor_id=new_rx.doctor_id,
         doctor_name=current_user.full_name,
@@ -109,9 +110,8 @@ def get_prescriptions(
     elif current_user.role == "doctor":
         query = query.filter(models.Prescription.doctor_id == current_user.id)
     elif current_user.role == "pharmacy":
-        # Pharmacy can see nearby prescriptions (for convenience) or all active ones
-        # For simplicity, returning all prescriptions. We will filter in the geolocated view.
-        pass
+        # Pharmacy can only see prescriptions explicitly assigned to them
+        query = query.filter(models.Prescription.pharmacy_id == current_user.id)
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Rol no reconocido.")
     
@@ -126,6 +126,7 @@ def get_prescriptions(
                 id=rx.id,
                 appointment_id=rx.appointment_id,
                 patient_id=rx.patient_id,
+                pharmacy_id=rx.pharmacy_id,
                 patient_name=p_name,
                 doctor_id=rx.doctor_id,
                 doctor_name=d_name,
@@ -161,6 +162,7 @@ def get_prescriptions_by_patient(
                 id=rx.id,
                 appointment_id=rx.appointment_id,
                 patient_id=rx.patient_id,
+                pharmacy_id=rx.pharmacy_id,
                 patient_name=p_name,
                 doctor_id=rx.doctor_id,
                 doctor_name=d_name,
@@ -203,6 +205,60 @@ def get_prescription_by_id(
         id=rx.id,
         appointment_id=rx.appointment_id,
         patient_id=rx.patient_id,
+        pharmacy_id=rx.pharmacy_id,
+        patient_name=p_name,
+        doctor_id=rx.doctor_id,
+        doctor_name=d_name,
+        medicine=rx.medicine,
+        dose=rx.dose,
+        frequency=rx.frequency,
+        status=rx.status,
+        issued_at=rx.issued_at,
+        expires_at=rx.expires_at,
+        patient_lat=rx.patient_lat,
+        patient_lon=rx.patient_lon
+    )
+
+
+@router.post("/{id}/assign", response_model=schemas.PrescriptionResponse)
+def assign_prescription_to_pharmacy(
+    id: str,
+    assignment: schemas.PrescriptionAssign,
+    current_user: models.User = Depends(RoleChecker(["patient"])),
+    db: Session = Depends(get_db)
+):
+    rx = db.query(models.Prescription).filter(models.Prescription.id == id).first()
+    if not rx:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receta no encontrada."
+        )
+    
+    if rx.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: esta receta pertenece a otro paciente."
+        )
+        
+    pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == assignment.pharmacy_id).first()
+    if not pharmacy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="La farmacia seleccionada no está registrada en el sistema."
+        )
+
+    rx.pharmacy_id = assignment.pharmacy_id
+    db.commit()
+    db.refresh(rx)
+    
+    p_name = db.query(models.User).filter(models.User.id == rx.patient_id).first().full_name
+    d_name = db.query(models.User).filter(models.User.id == rx.doctor_id).first().full_name
+
+    return schemas.PrescriptionResponse(
+        id=rx.id,
+        appointment_id=rx.appointment_id,
+        patient_id=rx.patient_id,
+        pharmacy_id=rx.pharmacy_id,
         patient_name=p_name,
         doctor_id=rx.doctor_id,
         doctor_name=d_name,
@@ -291,6 +347,7 @@ def dispatch_prescription(
         id=rx.id,
         appointment_id=rx.appointment_id,
         patient_id=rx.patient_id,
+        pharmacy_id=rx.pharmacy_id,
         patient_name=p_name,
         doctor_id=rx.doctor_id,
         doctor_name=d_name,

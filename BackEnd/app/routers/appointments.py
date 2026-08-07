@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import datetime
 import time
@@ -111,7 +111,10 @@ def get_my_appointments(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.Appointment)
+    query = db.query(models.Appointment).options(
+        joinedload(models.Appointment.patient).joinedload(models.Patient.user),
+        joinedload(models.Appointment.doctor).joinedload(models.Doctor.user)
+    )
     if current_user.role == "patient":
         query = query.filter(models.Appointment.patient_id == current_user.id)
     elif current_user.role == "doctor":
@@ -126,9 +129,9 @@ def get_my_appointments(
     
     response = []
     for app in appointments:
-        p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
-        d_user = db.query(models.User).filter(models.User.id == app.doctor_id).first()
-        d_prof = db.query(models.Doctor).filter(models.Doctor.id == app.doctor_id).first()
+        p_user = app.patient.user if app.patient else None
+        d_user = app.doctor.user if app.doctor else None
+        d_prof = app.doctor
         p_name = p_user.full_name if p_user else "Paciente"
         d_name = d_user.full_name if d_user else "Doctor"
         d_spec = d_prof.specialty if d_prof else "Medicina General"
@@ -341,21 +344,23 @@ def get_waiting_room(
     start_of_day = datetime.datetime.combine(today, datetime.time.min)
     end_of_day = datetime.datetime.combine(today, datetime.time.max)
     
-    appointments = db.query(models.Appointment).filter(
+    appointments = db.query(models.Appointment).options(
+        joinedload(models.Appointment.patient).joinedload(models.Patient.user),
+        joinedload(models.Appointment.doctor)
+    ).filter(
         models.Appointment.doctor_id == current_user.id,
         models.Appointment.date_time >= start_of_day,
         models.Appointment.date_time <= end_of_day,
         models.Appointment.status.in_(["pendiente", "en_curso"])
     ).order_by(models.Appointment.date_time.asc()).all()
     
-    d_prof = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
-    d_spec = d_prof.specialty if d_prof else "Medicina General"
-
     response = []
     for app in appointments:
-        p_user = db.query(models.User).filter(models.User.id == app.patient_id).first()
+        p_user = app.patient.user if app.patient else None
+        d_prof = app.doctor if app.doctor else None
         p_name = p_user.full_name if p_user else "Paciente"
         d_name = current_user.full_name
+        d_spec = d_prof.specialty if d_prof else "Medicina General"
         response.append(
             schemas.AppointmentResponse(
                 id=app.id,
@@ -406,32 +411,28 @@ def get_my_patients(
     db: Session = Depends(get_db)
 ):
     """Devuelve la lista de pacientes únicos que tienen o han tenido una cita con el doctor actual."""
-    appointments = db.query(models.Appointment).filter(
+    appointments = db.query(models.Appointment).options(
+        joinedload(models.Appointment.patient).joinedload(models.Patient.user)
+    ).filter(
         models.Appointment.doctor_id == current_user.id
-    ).all()
+    ).order_by(models.Appointment.date_time.desc()).all()
     
-    patient_ids = list(set([a.patient_id for a in appointments]))
-    
+    from collections import defaultdict
+    patient_apps = defaultdict(list)
+    for app in appointments:
+        patient_apps[app.patient_id].append(app)
+        
     patients_data = []
-    for pid in patient_ids:
-        patient_user = db.query(models.User).filter(models.User.id == pid).first()
-        patient_profile = db.query(models.Patient).filter(models.Patient.id == pid).first()
+    for pid, apps in patient_apps.items():
+        patient_profile = apps[0].patient
+        patient_user = patient_profile.user if patient_profile else None
         
         if not patient_user:
             continue
             
-        last_appt = db.query(models.Appointment).filter(
-            models.Appointment.patient_id == pid,
-            models.Appointment.doctor_id == current_user.id,
-            models.Appointment.status == "completada"
-        ).order_by(models.Appointment.date_time.desc()).first()
+        completed_apps = [a for a in apps if a.status == "completada"]
+        last_appt = completed_apps[0] if completed_apps else apps[0]
         
-        if not last_appt:
-            last_appt = db.query(models.Appointment).filter(
-                models.Appointment.patient_id == pid,
-                models.Appointment.doctor_id == current_user.id
-            ).order_by(models.Appointment.date_time.desc()).first()
-            
         patients_data.append({
             "id": pid,
             "name": patient_user.full_name,
@@ -442,7 +443,7 @@ def get_my_patients(
             "status": getattr(patient_profile, "risk_status", "estable") if patient_profile else "estable",
             "avatar": patient_user.avatar
         })
-        
+
     return patients_data
 
 
@@ -464,13 +465,15 @@ def get_patient_history(
             detail="No tienes autorización para ver el historial de este paciente."
         )
         
-    histories = db.query(models.ClinicalHistory).filter(
+    histories = db.query(models.ClinicalHistory).options(
+        joinedload(models.ClinicalHistory.doctor).joinedload(models.Doctor.user)
+    ).filter(
         models.ClinicalHistory.patient_id == patient_id
     ).order_by(models.ClinicalHistory.date.desc()).all()
     
     result = []
     for h in histories:
-        doc = db.query(models.User).filter(models.User.id == h.doctor_id).first()
+        doc = h.doctor.user if h.doctor and h.doctor.user else None
         result.append({
             "id": h.id,
             "date": (h.date - datetime.timedelta(hours=4)).isoformat(),

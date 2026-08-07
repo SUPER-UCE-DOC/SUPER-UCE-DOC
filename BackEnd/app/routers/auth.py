@@ -147,6 +147,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
             lat=user_in.lat,
             lon=user_in.lon,
             address=user_in.address if user_in.address else "San Pedro de Macorís, RD",
+            google_place_id=user_in.google_place_id,
             phone=user_in.phone if user_in.phone else "809-529-0000"
         )
         db.add(new_pharmacy)
@@ -519,6 +520,7 @@ def login_google(req_data: schemas.GoogleLoginRequest, db: Session = Depends(get
             lat=18.463,
             lon=-69.304,
             address=req_data.address if req_data.address else "San Pedro de Macorís, RD",
+            google_place_id=req_data.google_place_id if hasattr(req_data, 'google_place_id') else None,
             phone=req_data.phone if req_data.phone else "809-529-0000"
         )
         db.add(new_pharmacy)

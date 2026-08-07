@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { Eye, EyeOff, User, Stethoscope, Building2, AlertCircle, ArrowLeft } from "lucide-react";
 import { api } from "../utils/api";
 import { EmailVerificationModal } from "./EmailVerificationModal";
+import { AddressAutocomplete } from "./AddressAutocomplete";
+import { Map, AdvancedMarker, APIProvider } from "@vis.gl/react-google-maps";
 
 const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
 
@@ -29,6 +31,11 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // Location states
+  const [lat, setLat] = useState(18.463);
+  const [lon, setLon] = useState(-69.304);
+  const [googlePlaceId, setGooglePlaceId] = useState("");
   const [isLeaving, setIsLeaving] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
@@ -244,11 +251,12 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
           business_name: selectedRole === "pharmacy" ? (businessName || name) : undefined,
           rnc: selectedRole === "pharmacy" ? (rnc || "1-00-00000-0") : undefined,
           health_license: selectedRole === "pharmacy" ? (healthLicense || "MISPAS-PEND") : undefined,
-          pharmacist_name: selectedRole === "pharmacy" ? (pharmacistName || name) : undefined,
+          pharmacist_name: selectedRole === "pharmacy" ? pharmacistName : undefined,
           address: selectedRole === "pharmacy" ? (address || "San Pedro de Macorís, RD") : undefined,
-          phone: (selectedRole === "doctor" || selectedRole === "pharmacy") ? (phone || "809-529-0000") : undefined,
-          lat: 18.46,
-          lon: -69.30
+          google_place_id: selectedRole === "pharmacy" ? googlePlaceId : undefined,
+          lat: selectedRole === "pharmacy" ? lat : 18.46,
+          lon: selectedRole === "pharmacy" ? lon : -69.30,
+          phone: (selectedRole === "doctor" || selectedRole === "pharmacy") ? (phone || "809-529-0000") : undefined
         });
 
         if (regRes && regRes.requires_verification) {
@@ -836,15 +844,15 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                                   <label className="block text-sm mb-1.5" style={{ color: "#203A70", fontWeight: 500 }}>
                                     Dirección Física
                                   </label>
-                                  <input
-                                    type="text"
-                                    value={address}
-                                    onChange={(e) => setAddress(e.target.value)}
-                                    placeholder="Av. Independencia #45"
-                                    className="w-full px-4 py-2.5 rounded-lg border outline-none transition-all"
-                                    style={{ borderColor: "#E5E7EB", fontSize: "16px" }}
-                                    onFocus={(e) => (e.target.style.borderColor = "#00A69D")}
-                                    onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
+                                  <AddressAutocomplete 
+                                    apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}
+                                    defaultValue={address}
+                                    onAddressSelect={(addr, lat, lon, placeId) => {
+                                      setAddress(addr);
+                                      setLat(lat);
+                                      setLon(lon);
+                                      setGooglePlaceId(placeId);
+                                    }}
                                   />
                                 </div>
                                 <div>
@@ -863,6 +871,22 @@ export function LoginPage({ onLogin, preselectedRole, onBack }: LoginPageProps) 
                                   />
                                 </div>
                               </div>
+                              {/* Mini Mapa de Confirmación */}
+                              {googlePlaceId && (
+                                <div className="mt-4 rounded-xl overflow-hidden border border-gray-200 relative" style={{ height: "180px", zIndex: 1 }}>
+                                  <APIProvider apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}>
+                                    <Map
+                                      defaultZoom={16}
+                                      defaultCenter={{ lat, lng: lon }}
+                                      center={{ lat, lng: lon }}
+                                      disableDefaultUI={true}
+                                      mapId="DEMO_MAP_ID"
+                                    >
+                                      <AdvancedMarker position={{ lat, lng: lon }} />
+                                    </Map>
+                                  </APIProvider>
+                                </div>
+                              )}
                             </div>
                           )}
                         </>

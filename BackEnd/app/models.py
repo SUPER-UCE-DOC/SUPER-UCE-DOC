@@ -75,6 +75,7 @@ class Pharmacy(Base):
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
     address = Column(String, nullable=False)
+    google_place_id = Column(String, nullable=True, unique=True, index=True)
     phone = Column(String, nullable=False)
 
     # Relationships
@@ -120,6 +121,7 @@ class Prescription(Base):
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+    pharmacy_id = Column(Integer, ForeignKey("pharmacies.id"), nullable=True)
     medicine = Column(String, nullable=False)
     dose = Column(String, nullable=False)
     frequency = Column(String, nullable=False)
