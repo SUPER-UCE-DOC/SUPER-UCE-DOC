@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { api, UploadedDocument } from "../utils/api";
 import {
-  Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill,
+  Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill, Navigation,
   Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square, ChevronDown, Calendar, Sun, Sunset
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
