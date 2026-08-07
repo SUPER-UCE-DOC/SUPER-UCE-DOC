@@ -128,6 +128,13 @@ export function TelemedicinaRoom(props: TelemedicinaRoomProps) {
     props.onEndCall();
   };
 
+  // Salir de la sala de espera automáticamente si el usuario navega a otra sección
+  useEffect(() => {
+    if (props.isMinimized && !hasJoined) {
+      handleEndCallWrapped();
+    }
+  }, [props.isMinimized, hasJoined]);
+
   useEffect(() => {
     // Force sidebar collapse when entering live room
     sessionStorage.setItem("mainSidebarCollapsed", "true");
