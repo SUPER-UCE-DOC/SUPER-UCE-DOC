@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
+const logoImg = new URL("../../imports/logofullNobg.png", import.meta.url).href;
 const heroVideo = new URL("../../imports/hands.mp4", import.meta.url).href;
 
 interface LandingPageProps {

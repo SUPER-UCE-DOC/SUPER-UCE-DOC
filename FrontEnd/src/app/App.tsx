@@ -9,7 +9,7 @@ import { DoctorDashboard } from "./components/DoctorDashboard";
 import { PharmacyDashboard } from "./components/PharmacyDashboard";
 import { Bell, Search, HelpCircle, Settings, LogOut } from "lucide-react";
 
-const logoIconImg = new URL("../imports/image-2.png", import.meta.url).href;
+const logoImg = new URL("../imports/logofullNobg.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type Screen = "loading" | "landing" | "login" | "app";
@@ -253,7 +253,7 @@ export default function App() {
           }`}
         >
           <div className="md:hidden flex items-center">
-            <img src={logoIconImg} alt="SUPER-UCE DOC" className="w-[38px] h-[38px] object-contain" />
+            <img src={logoImg} alt="SUPER-UCE DOC" className="h-[38px] w-auto object-contain" />
           </div>
           <div className="hidden md:block" />
           <div className="flex items-center gap-3 pointer-events-auto">

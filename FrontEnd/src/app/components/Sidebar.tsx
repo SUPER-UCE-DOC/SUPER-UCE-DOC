@@ -5,8 +5,8 @@ import {
   ClipboardList, Users, PackageOpen, TrendingUp, LayoutDashboard
 } from "lucide-react";
 
-const logoImg = new URL("../../imports/image-1.png", import.meta.url).href;
-const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
+const logoImg = new URL("../../imports/logofullNobg.png", import.meta.url).href;
+const logoIconImg = new URL("../../imports/logoreducedNobg.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type View = string;

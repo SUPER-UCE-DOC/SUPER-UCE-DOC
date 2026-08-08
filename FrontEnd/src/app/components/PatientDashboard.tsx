@@ -12,7 +12,7 @@ import { SettingsView } from "./SettingsView";
 import { TelemedicinaRoom } from "./TelemedicinaRoom";
 import { GlobalFloatingCallWidget } from "./GlobalFloatingCallWidget";
 
-const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
+const logoIconImg = new URL("../../imports/logoreducedNobg.png", import.meta.url).href;
 
 type View = string;
 
