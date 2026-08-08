@@ -9,7 +9,7 @@ import { DoctorDashboard } from "./components/DoctorDashboard";
 import { PharmacyDashboard } from "./components/PharmacyDashboard";
 import { Bell, Search, HelpCircle, Settings, LogOut } from "lucide-react";
 
-const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
+const logoIconImg = new URL("../imports/image-2.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type Screen = "loading" | "landing" | "login" | "app";
