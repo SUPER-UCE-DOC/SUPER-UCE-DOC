@@ -297,9 +297,9 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
             <div
               className="absolute rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
               style={{
-                left: "24px",
-                top: "8%",
-                bottom: "8%",
+                left: "32px",
+                top: "32px",
+                bottom: "32px",
                 background: "white",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
                 minWidth: "300px",
