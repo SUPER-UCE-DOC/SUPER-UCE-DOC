@@ -46,6 +46,9 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -76,14 +79,17 @@ export default function App() {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
     };
-    if (showNotifications) {
+    if (showNotifications || showProfileMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showNotifications]);
+  }, [showNotifications, showProfileMenu]);
 
   const handleInvitationAction = async (rawId: number, action: "accept" | "reject") => {
     try {
@@ -238,13 +244,11 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
         <header
-          className="flex items-center justify-between px-6 flex-shrink-0 transition-all duration-300 ease-in-out absolute md:relative top-0 left-0 w-full z-30 pointer-events-none md:pointer-events-auto bg-gradient-to-b from-[#F9FAFB] via-[#F9FAFB] to-transparent md:bg-none md:bg-white border-none md:border-solid md:border-b md:border-[#E5E7EB]"
-          style={{ 
-            height: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : "80px",
-            opacity: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? 0 : 1,
-            paddingTop: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : undefined,
-            paddingBottom: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : undefined
-          }}
+          className={`flex items-center justify-between px-6 flex-shrink-0 transition-all duration-300 ease-in-out absolute md:relative top-0 left-0 w-full z-30 pointer-events-none md:pointer-events-auto bg-[linear-gradient(to_bottom,#F9FAFB_75%,transparent)] md:bg-none md:bg-white border-none md:border-solid md:border-b md:border-[#E5E7EB] ${
+            (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient"))
+              ? "h-[0px] opacity-0 overflow-hidden"
+              : "h-[64px] md:h-[66px] opacity-100"
+          }`}
         >
           <div />
           <div className="flex items-center gap-3 pointer-events-auto">
@@ -325,25 +329,48 @@ export default function App() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {user.avatar ? (
-                <img src={user.avatar} alt="Avatar" className="w-9 h-9 rounded-xl object-cover border" style={{ borderColor: "#E5E7EB", background: "white" }} />
-              ) : (
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm"
-                  style={{ background: "#00A69D", fontWeight: 700 }}
-                >
-                  {getAvatarInitials(user.name)}
+            <div className="relative flex items-center gap-2" ref={profileRef}>
+              <button 
+                onClick={() => window.innerWidth < 768 && setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2 cursor-pointer md:cursor-default"
+              >
+                {user.avatar ? (
+                  <img src={user.avatar} alt="Avatar" className="w-9 h-9 rounded-xl object-cover border" style={{ borderColor: "#E5E7EB", background: "white" }} />
+                ) : (
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm"
+                    style={{ background: "#00A69D", fontWeight: 700 }}
+                  >
+                    {getAvatarInitials(user.name)}
+                  </div>
+                )}
+                <div className="hidden sm:block text-left">
+                  <div className="text-sm" style={{ color: "#203A70", fontWeight: 600, lineHeight: 1.2 }}>
+                    {user.name}
+                  </div>
+                  <div className="text-xs font-semibold" style={{ color: user.role === "doctor" ? "#00A69D" : "#9CA3AF", lineHeight: 1.2 }}>
+                    {user.role === "doctor" ? (user.specialty || "Médico Especialista") : user.role === "pharmacy" ? "Farmacia" : "Paciente"}
+                  </div>
+                </div>
+              </button>
+
+              {/* Profile Dropdown (Mobile Only) */}
+              {showProfileMenu && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white border rounded-xl shadow-lg z-50 p-2 anim-fade-in-up md:hidden" style={{ borderColor: "#E5E7EB" }}>
+                  <button
+                    onClick={() => { setShowProfileMenu(false); setCurrentView("settings"); }}
+                    className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Configuración
+                  </button>
+                  <button
+                    onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                    className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-1"
+                  >
+                    Cerrar sesión
+                  </button>
                 </div>
               )}
-              <div className="hidden sm:block">
-                <div className="text-sm" style={{ color: "#203A70", fontWeight: 600, lineHeight: 1.2 }}>
-                  {user.name}
-                </div>
-                <div className="text-xs font-semibold" style={{ color: user.role === "doctor" ? "#00A69D" : "#9CA3AF", lineHeight: 1.2 }}>
-                  {user.role === "doctor" ? (user.specialty || "Médico Especialista") : user.role === "pharmacy" ? "Farmacia" : "Paciente"}
-                </div>
-              </div>
             </div>
           </div>
         </header>
