@@ -106,7 +106,7 @@ function ProfileImageUpload({ userName }: { userName: string }) {
       {isModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setIsModalOpen(false)}>
           <div
-            className="bg-white w-[90%] sm:w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl anim-scale-in"
+            className="bg-white w-[85%] sm:w-full max-w-[340px] sm:max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl anim-scale-in"
             style={{ border: "1px solid #E5E7EB" }}
             onClick={(e) => e.stopPropagation()}
           >

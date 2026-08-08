@@ -735,7 +735,7 @@ function CitasView({ onJoinCall, inCall, initialOpenModal }: { onJoinCall?: (apt
       {/* Modal Agendar Cita */}
       {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm anim-fade-in" onClick={() => setShowModal(false)}>
-          <div className="bg-white w-[90%] sm:w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white w-[85%] sm:w-full max-w-[340px] sm:max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl anim-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold" style={{ color: "#203A70" }}>Agendar Cita Médica</h3>
               <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
