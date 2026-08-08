@@ -244,10 +244,10 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
         <header
-          className={`flex items-center justify-between px-6 flex-shrink-0 transition-all duration-300 ease-in-out absolute md:relative top-0 left-0 w-full z-30 pointer-events-none md:pointer-events-auto bg-[linear-gradient(to_bottom,#F9FAFB_75%,transparent)] md:bg-none md:bg-white border-none md:border-solid md:border-b md:border-[#E5E7EB] ${
+          className={`flex items-start md:items-center justify-between px-6 pt-3 md:pt-0 flex-shrink-0 transition-all duration-300 ease-in-out absolute md:relative top-0 left-0 w-full z-30 pointer-events-none md:pointer-events-auto bg-[linear-gradient(to_bottom,#F9FAFB_71%,transparent)] md:bg-none md:bg-white border-none md:border-solid md:border-b md:border-[#E5E7EB] ${
             (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient"))
               ? "h-[0px] opacity-0 overflow-hidden"
-              : "h-[64px] md:h-[66px] opacity-100"
+              : "h-[84px] md:h-[66px] opacity-100"
           }`}
         >
           <div />
