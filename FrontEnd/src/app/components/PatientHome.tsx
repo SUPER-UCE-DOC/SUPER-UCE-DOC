@@ -257,10 +257,10 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
                   return (
                     <button
                       disabled
-                      className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm whitespace-nowrap transition-all bg-white/20 text-white font-bold opacity-60 cursor-not-allowed"
+                      className="flex items-center justify-center sm:justify-start gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-all bg-white/20 text-white font-bold opacity-60 cursor-not-allowed w-full sm:w-auto break-words leading-tight text-center sm:text-left"
                     >
-                      <Clock size={18} />
-                      Disponible {formatRelativeDate(appTime)} a las {appTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      <Clock className="shrink-0 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+                      <span>Disponible {formatRelativeDate(appTime)} a las {appTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                     </button>
                   );
                 }
@@ -268,28 +268,27 @@ export function PatientHome({ userName, onNavigate, onJoinCall, inCall }: Patien
                 return (
                   <button
                     onClick={() => onJoinCall?.(nextApp)}
-                    className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all hover:opacity-90 cursor-pointer"
+                    className="flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl text-xs sm:text-sm transition-all hover:opacity-90 cursor-pointer w-full sm:w-auto leading-tight text-center"
                     style={{
                       background: "#00A69D",
                       color: "white",
                       fontWeight: 800,
-                      fontSize: "15px",
                       boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
                     }}
                   >
-                    <Video size={18} />
-                    Entrar a la Sala de Telemedicina
+                    <Video className="shrink-0 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+                    <span>Entrar a la Sala de Telemedicina</span>
                   </button>
                 );
               })()
             ) : (
               <button
                 onClick={() => onNavigate(nextApp ? "appointments" : "appointments_new")}
-                className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl text-sm whitespace-nowrap transition-all font-bold text-white shadow-md cursor-pointer"
+                className="flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl text-xs sm:text-sm transition-all font-bold text-white shadow-md cursor-pointer w-full sm:w-auto text-center"
                 style={{ background: "#00A69D" }}
               >
-                <Calendar size={18} />
-                {nextApp ? "Ver Mis Citas" : "Agendar Cita Médica"}
+                <Calendar className="shrink-0 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+                <span>{nextApp ? "Ver Mis Citas" : "Agendar Cita Médica"}</span>
               </button>
             )}
           </div>
