@@ -1605,7 +1605,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             
             {/* Sugerencias en Móvil (Tarjetas reales mapeadas - AHORA DENTRO DEL CONTENEDOR PARA EVITAR OVERLAP) */}
             {isEmpty && (
-              <div className="flex flex-col items-start gap-2.5 transition-all anim-fade-in-up md:hidden mb-3">
+              <div className="flex flex-col items-start gap-1.5 transition-all anim-fade-in-up md:hidden mb-1">
                 {randomSuggestions.slice(0, 3).map((s, i) => (
                   <button
                     key={i}
