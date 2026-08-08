@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { api, UploadedDocument } from "../utils/api";
 import {
   Video, Mic, MicOff, VideoOff, Phone, MapPin, Pill, Navigation,
-  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square, ChevronDown, Calendar, Sun, Sunset
+  Hand, Captions, Volume2, Sparkles, MessageSquare, Plus, Trash2, PanelLeft, Send, User, Clock, Loader2, FileText, X, Square, ChevronDown, Calendar, Sun, Sunset, Menu
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { FarmaciasMapaView } from "./FarmaciasMapaView";
@@ -1456,37 +1456,43 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="absolute top-4 left-4 z-50 bg-white p-2.5 rounded-xl text-gray-500 hover:text-gray-800 transition-all hover:bg-gray-50"
-          style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.06)", border: "1px solid #F3F4F6" }}
+          className="absolute top-4 left-4 z-50 p-2.5 rounded-full text-gray-600 hover:text-gray-900 transition-all bg-transparent"
         >
-          <PanelLeft size={20} />
+          <Menu size={24} strokeWidth={2} />
         </button>
       )}
 
-      {/* Sidebar Historial de Chats */}
+      {/* Sidebar Historial de Chats (Overlay en móviles) */}
+      {/* Fondo oscuro para móvil cuando el sidebar está abierto */}
       <div 
-        className="border-r flex flex-col bg-white overflow-hidden relative select-none" 
+        className={`md:hidden fixed inset-0 bg-black/20 z-40 transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`} 
+        onClick={() => setIsSidebarOpen(false)}
+      />
+      <div 
+        className="border-r flex flex-col bg-white overflow-hidden select-none z-50 md:relative absolute h-full shadow-2xl md:shadow-none" 
         style={{ 
-          width: isSidebarOpen ? `${sidebarWidth}px` : "0px", 
+          width: isSidebarOpen ? (window.innerWidth < 768 ? "85vw" : `${sidebarWidth}px`) : "0px", 
           opacity: isSidebarOpen ? 1 : 0,
           borderColor: "#F3F4F6",
           flexShrink: 0,
-          transition: isResizing ? "none" : "width 0.3s ease, opacity 0.3s ease"
+          transition: isResizing ? "none" : "width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease",
+          maxWidth: "400px"
         }}
       >
-        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: "#F3F4F6", minWidth: `${sidebarWidth}px` }}>
-          <button 
-            onClick={createNewChat}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold transition-all mr-2"
-            style={{ background: "#00A69D", boxShadow: "0 2px 10px rgba(0,166,157,0.3)" }}
-          >
-            <Plus size={18} /> Nuevo Chat
-          </button>
+        <div className="p-4 flex items-center justify-between" style={{ minWidth: isSidebarOpen && window.innerWidth < 768 ? "85vw" : `${sidebarWidth}px` }}>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="p-2.5 rounded-xl text-gray-400 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 transition-all flex-shrink-0"
+            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-all flex-shrink-0"
           >
-            <PanelLeft size={18} />
+            <X size={20} />
+          </button>
+        </div>
+        <div className="px-4 mb-2" style={{ minWidth: isSidebarOpen && window.innerWidth < 768 ? "85vw" : `${sidebarWidth}px` }}>
+          <button 
+            onClick={createNewChat}
+            className="w-full flex items-center gap-3 py-3 px-4 rounded-full text-gray-700 font-medium transition-all bg-gray-100/50 hover:bg-gray-200/60"
+          >
+            <Plus size={18} /> Nueva conversación
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ minWidth: `${sidebarWidth}px` }}>
@@ -1531,21 +1537,25 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
       )}
 
       {/* Área Principal del Chat */}
-      <div className="flex-1 flex flex-col relative bg-[#FCFCFD]">
-        
-        {/* Animated Background Orbs */}
-        <div className="glowing-orb"></div>
-        <div className="glowing-orb-2"></div>
+      <div className="flex-1 flex flex-col relative" style={{ background: isEmpty ? "linear-gradient(180deg, #FFFFFF 0%, #E8F0FE 100%)" : "#FFFFFF" }}>
         
         {isEmpty ? (
           <div className="flex-1 flex flex-col relative z-10 w-full h-full">
             <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20 anim-fade-in-up">
-              <h1 className="text-center mb-4" style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#203A70" }}>
-                Hola, {userName || "Usuario"}
+              <div className="mb-6 relative">
+                <Sparkles size={48} style={{ color: "#4285F4", fill: "url(#gemini-gradient)" }} />
+                <svg width="0" height="0">
+                  <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop stopColor="#4285F4" offset="0%" />
+                    <stop stopColor="#EA4335" offset="33%" />
+                    <stop stopColor="#FBBC05" offset="66%" />
+                    <stop stopColor="#34A853" offset="100%" />
+                  </linearGradient>
+                </svg>
+              </div>
+              <h1 className="text-center mb-4 leading-tight" style={{ fontSize: "clamp(28px, 6vw, 40px)", fontWeight: 500, letterSpacing: "-0.02em", color: "#1F2937" }}>
+                Hola, {(userName || "Usuario").split(" ")[0]}, ¿qué vamos a hacer?
               </h1>
-              <p className="text-lg mb-10 text-center" style={{ color: "#6B7280", maxWidth: "500px" }}>
-                Mejora tu salud con IA: consultas instantáneas, análisis rápidos y conexión segura.
-              </p>
             </div>
           </div>
         ) : (
@@ -1595,17 +1605,18 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             
             {/* Modern Floating Input */}
             <div 
-              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-4 ${isRecording ? "rounded-full shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-2xl"}`}
+              className={`w-full transition-all duration-300 ease-in-out mb-4 rounded-[32px] ${isDragging ? "shadow-[0_0_0_4px_rgba(66,133,244,0.3)] scale-[1.01]" : "shadow-md border border-gray-200/60"}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
+              style={{ background: isDragging ? "#F0F4F9" : "#FFFFFF" }}
             >
-              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-3xl p-4"} ${isDragging ? "bg-teal-50/50" : "bg-white"}`}>
+              <div className="w-full flex flex-col relative transition-all duration-300 ease-in-out rounded-[32px] p-2">
                 
                 {/* Indicador visual al arrastrar */}
                 {isDragging && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-teal-50/80 rounded-3xl backdrop-blur-sm pointer-events-none border-2 border-dashed border-[#00A69D]">
-                    <div className="flex flex-col items-center text-[#00A69D]">
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-blue-50/80 rounded-[32px] backdrop-blur-sm pointer-events-none border-2 border-dashed border-[#4285F4]">
+                    <div className="flex flex-col items-center text-[#4285F4]">
                       <Plus size={32} className="mb-2 animate-bounce" />
                       <span className="font-bold text-sm">Suelta tu documento aquí</span>
                     </div>
@@ -1613,11 +1624,11 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                 )}
 
                 {/* Tarjetas flotantes de documentos adjuntos */}
-                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${(!isRecording && (attachedFiles.length > 0 || isUploadingDoc)) ? "max-h-[200px] opacity-100 mb-2" : "max-h-0 opacity-0 mb-0"}`}>
-                  <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-b border-gray-100">
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden px-2 ${(!isRecording && (attachedFiles.length > 0 || isUploadingDoc)) ? "max-h-[200px] opacity-100 mb-2 mt-1" : "max-h-0 opacity-0 mb-0 mt-0"}`}>
+                  <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-100">
                     {attachedFiles.map((doc) => (
-                      <div key={doc.doc_id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[13px] text-gray-700 shadow-2xs transition-all hover:bg-gray-100/70">
-                        <FileText size={15} className="text-[#203A70] shrink-0" />
+                      <div key={doc.doc_id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[13px] text-gray-700 shadow-sm transition-all hover:bg-gray-100/70">
+                        <FileText size={15} className="text-[#4285F4] shrink-0" />
                         <span className="font-medium max-w-[190px] truncate" title={doc.filename}>{doc.filename}</span>
                         <span className="text-sm text-gray-500 bg-white px-2 py-1 rounded-lg border border-gray-200 uppercase font-semibold tracking-wider">Procesado</span>
                         <button
@@ -1631,37 +1642,17 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                     ))}
                     {isUploadingDoc && (
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 border border-dashed border-gray-300 rounded-lg text-[13px] text-gray-600">
-                        <Loader2 size={15} className="animate-spin text-[#203A70]" />
+                        <Loader2 size={15} className="animate-spin text-[#4285F4]" />
                         <span className="font-medium">Procesando...</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Textarea Contenedor (Se oculta suavemente al grabar) */}
-                <div className={`transition-all duration-300 ease-in-out overflow-hidden w-full ${isRecording ? "max-h-0 opacity-0 min-h-0" : "max-h-[200px] opacity-100"}`}>
-                  <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!typing && (input.trim() || attachedFiles.length > 0)) send();
-                      }
-                    }}
-                    placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
-                    className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60"
-                    style={{ fontSize: "16px", minHeight: "72px" }}
-                    rows={1}
-                    autoFocus
-                  />
-                </div>
-
-                {/* Barra inferior (Botones y Audio Visualizer) */}
-                <div className={`flex w-full items-center justify-between transition-all duration-300 ${isRecording ? "mt-0" : "mt-1"}`}>
+                <div className="flex w-full items-end justify-between transition-all duration-300 gap-1">
                   
-                  {/* Botones de acción izquierda */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  {/* Botones de acción izquierda (Plus) */}
+                  <div className="flex items-center shrink-0 pb-1 pl-1">
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -1669,39 +1660,43 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                       style={{ display: "none" }}
                       onChange={handleFileChange}
                     />
-                    <div className={`transition-all duration-300 overflow-hidden ${isRecording ? "w-0 opacity-0 scale-0" : "w-[40px] opacity-100 scale-100"}`}>
+                    <div className={`transition-all duration-300 overflow-hidden ${isRecording ? "w-0 opacity-0 scale-0" : "w-[44px] opacity-100 scale-100"}`}>
                       <button
                         onClick={handlePlusClick}
                         disabled={isUploadingDoc || typing || isTranscribing || isRecording}
-                        className="p-2.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed w-[40px] h-[40px] flex items-center justify-center"
+                        className="p-2.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed w-[44px] h-[44px] flex items-center justify-center"
                       >
-                        {isUploadingDoc ? <Loader2 size={20} className="animate-spin text-[#203A70]" /> : <Plus size={20} />}
+                        {isUploadingDoc ? <Loader2 size={24} className="animate-spin text-[#4285F4]" /> : <Plus size={24} />}
                       </button>
                     </div>
-                    <button
-                      onClick={handleToggleRecord}
-                      disabled={isTranscribing || typing || isUploadingDoc}
-                      className={`p-2.5 rounded-full transition-all duration-300 flex items-center justify-center relative w-[44px] h-[44px] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400 ${
-                        isRecording 
-                          ? "text-[#203A70] bg-gray-50 hover:bg-gray-100 ml-1" 
-                          : isTranscribing
-                          ? "text-[#00A69D]"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                      }`}
-                    >
-                      {isTranscribing ? (
-                        <Loader2 size={20} className="animate-spin" />
-                      ) : isRecording ? (
-                        <Square size={20} fill="currentColor" />
-                      ) : (
-                        <Mic size={20} />
-                      )}
-                    </button>
                   </div>
 
-                  {/* Audio Visualizer (Aparece y empuja al grabar) */}
+                  {/* Textarea */}
+                  <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-1 ${isRecording ? "w-0 opacity-0 min-h-0" : "opacity-100"}`}>
+                    <textarea
+                      value={input}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (!typing && (input.trim() || attachedFiles.length > 0)) send();
+                        }
+                      }}
+                      placeholder={isEmpty && attachedFiles.length === 0 ? "Pregunta a Gemini" : "Escribe un mensaje..."}
+                      className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-500 resize-none modern-scroll disabled:opacity-60 py-3.5 px-2"
+                      style={{ fontSize: "16px", minHeight: "52px", height: "52px", lineHeight: "1.5" }}
+                      rows={1}
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Audio Visualizer */}
                   <div 
-                    className={`flex items-center justify-center gap-[3px] overflow-hidden transition-all duration-300 ease-in-out ${
+                    className={`flex items-center justify-center gap-[3px] overflow-hidden transition-all duration-300 ease-in-out pb-2 ${
                       isRecording ? "flex-1 opacity-100 px-4 h-[44px] max-w-[500px]" : "w-0 opacity-0 px-0 h-[44px] max-w-0"
                     }`}
                   >
@@ -1711,30 +1706,50 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                         className="w-1.5 rounded-full transition-all duration-75"
                         style={{ 
                           height: `${Math.max(4, (val / 255) * 36)}px`, 
-                          backgroundColor: val > 150 ? "#00A69D" : "#203A70",
+                          backgroundColor: val > 150 ? "#EA4335" : "#4285F4",
                           opacity: 0.6 + (val / 255) * 0.4 
                         }}
                       />
                     ))}
                   </div>
 
-                  {/* Botón de Enviar derecha */}
-                  <button
-                    onClick={() => send()}
-                    disabled={(!input.trim() && !isRecording && attachedFiles.length === 0) || typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)}
-                    className={`shrink-0 rounded-full text-white shadow-md transition-all duration-300 disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center ${isRecording ? "mr-1" : ""}`}
-                    style={{ 
-                      background: ((!input.trim() && !isRecording && attachedFiles.length === 0) || typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)) ? "#9CA3AF" : "#203A70", 
-                      width: isRecording ? "44px" : "48px", 
-                      height: isRecording ? "44px" : "48px"
-                    }}
-                  >
-                    {(isTranscribing && autoSendAfterRecordRef.current) ? (
-                      <Loader2 size={18} className="animate-spin" />
+                  {/* Botones de acción derecha (Mic / Send) */}
+                  <div className="flex items-center shrink-0 pb-1 pr-1">
+                    {!input.trim() && attachedFiles.length === 0 ? (
+                      <button
+                        onClick={handleToggleRecord}
+                        disabled={isTranscribing || typing || isUploadingDoc}
+                        className={`p-2.5 rounded-full transition-all duration-300 flex items-center justify-center relative w-[44px] h-[44px] disabled:opacity-30 disabled:cursor-not-allowed ${
+                          isRecording 
+                            ? "text-[#EA4335] bg-red-50 hover:bg-red-100" 
+                            : isTranscribing
+                            ? "text-[#4285F4]"
+                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {isTranscribing ? (
+                          <Loader2 size={24} className="animate-spin" />
+                        ) : isRecording ? (
+                          <Square size={24} fill="currentColor" />
+                        ) : (
+                          <Mic size={24} />
+                        )}
+                      </button>
                     ) : (
-                      <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />
+                      <button
+                        onClick={() => send()}
+                        disabled={typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)}
+                        className={`shrink-0 rounded-full text-white shadow-sm transition-all duration-300 disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center w-[44px] h-[44px]`}
+                        style={{ background: (typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)) ? "#9CA3AF" : "#4285F4" }}
+                      >
+                        {(isTranscribing && autoSendAfterRecordRef.current) ? (
+                          <Loader2 size={20} className="animate-spin" />
+                        ) : (
+                          <Send size={20} style={{ transform: "translate(-1px, 1px)" }} />
+                        )}
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
