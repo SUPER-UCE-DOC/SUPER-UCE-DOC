@@ -1214,7 +1214,7 @@ function TelemedicinaRoomContent({
       if (stream) stream.getTracks().forEach(t => t.stop());
       if (ws) ws.close();
     };
-  }, [muted, role, userName, roomCode, localAudioTrack]);
+  }, [muted, role, userName, roomCode, localAudioTrack?.publication?.track?.mediaStreamTrack?.id]);
 
 
 

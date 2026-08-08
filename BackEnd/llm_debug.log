@@ -64,3 +64,4 @@
 [Traductor Local] IN: hello donkey | OUT: Hola burro.
 [Traductor Local] IN: hat | OUT: Sombrero.
 [Traductor Local] IN: not | OUT: No.
+[Traductor Local] IN: flower hot | OUT: Flor caliente.
