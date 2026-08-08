@@ -7,7 +7,9 @@ import { BottomNav } from "./components/BottomNav";
 import { PatientDashboard } from "./components/PatientDashboard";
 import { DoctorDashboard } from "./components/DoctorDashboard";
 import { PharmacyDashboard } from "./components/PharmacyDashboard";
-import { Bell, Search, HelpCircle } from "lucide-react";
+import { Bell, Search, HelpCircle, Settings, LogOut } from "lucide-react";
+
+const logoIconImg = new URL("../../imports/image-2.png", import.meta.url).href;
 
 type Role = "patient" | "doctor" | "pharmacy";
 type Screen = "loading" | "landing" | "login" | "app";
@@ -250,7 +252,10 @@ export default function App() {
               : "h-[84px] md:h-[66px] opacity-100"
           }`}
         >
-          <div />
+          <div className="md:hidden flex items-center">
+            <img src={logoIconImg} alt="SUPER-UCE DOC" className="w-[38px] h-[38px] object-contain" />
+          </div>
+          <div className="hidden md:block" />
           <div className="flex items-center gap-3 pointer-events-auto">
             <div className="relative" ref={notifRef}>
               <button
@@ -356,17 +361,19 @@ export default function App() {
 
               {/* Profile Dropdown (Mobile Only) */}
               {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white border rounded-xl shadow-lg z-50 p-2 anim-fade-in-up md:hidden" style={{ borderColor: "#E5E7EB" }}>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border rounded-2xl shadow-xl z-50 p-2 anim-fade-in-up md:hidden" style={{ borderColor: "#E5E7EB" }}>
                   <button
                     onClick={() => { setShowProfileMenu(false); setCurrentView("settings"); }}
-                    className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[#203A70] hover:bg-gray-50 rounded-xl transition-all"
                   >
+                    <Settings size={18} style={{ color: "#6B7280" }} />
                     Configuración
                   </button>
                   <button
                     onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                    className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-1"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[#EF4444] hover:bg-red-50 rounded-xl transition-all mt-1"
                   >
+                    <LogOut size={18} />
                     Cerrar sesión
                   </button>
                 </div>
