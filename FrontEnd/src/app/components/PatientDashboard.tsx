@@ -1644,17 +1644,21 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                 <div className={`transition-all duration-300 ease-in-out overflow-hidden ${(!isRecording && (attachedFiles.length > 0 || isUploadingDoc)) ? "max-h-[200px] opacity-100 mb-2 mt-1" : "max-h-0 opacity-0 mb-0 mt-0"}`}>
                   <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-b border-gray-100">
                     {attachedFiles.map((doc) => (
-                      <div key={doc.doc_id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[13px] text-gray-700 shadow-2xs transition-all hover:bg-gray-100/70">
-                        <FileText size={15} className="text-[#203A70] shrink-0" />
-                        <span className="font-medium max-w-[190px] truncate" title={doc.filename}>{doc.filename}</span>
-                        <span className="text-sm text-gray-500 bg-white px-2 py-1 rounded-lg border border-gray-200 uppercase font-semibold tracking-wider">Procesado</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(doc.doc_id)}
-                          className="text-gray-400 hover:text-gray-600 transition-colors ml-0.5 p-0.5 cursor-pointer"
-                        >
-                          <X size={14} />
-                        </button>
+                      <div key={doc.doc_id} className="flex items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-gray-50 border border-gray-200/80 rounded-lg text-[12px] sm:text-[13px] text-gray-700 shadow-2xs transition-all hover:bg-gray-100/70 w-full sm:w-auto">
+                        <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden flex-1">
+                          <FileText size={15} className="text-[#203A70] shrink-0" />
+                          <span className="font-medium truncate" title={doc.filename}>{doc.filename}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] sm:text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded-md border border-gray-200 uppercase font-bold tracking-wider">Procesado</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(doc.doc_id)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 cursor-pointer flex items-center justify-center"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {isUploadingDoc && (
@@ -1688,7 +1692,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                     </div>
 
                     {/* Textarea */}
-                    <div className={`order-2 md:order-1 transition-all duration-300 ease-in-out overflow-hidden flex-1 w-full ${isRecording ? "max-h-0 opacity-0 min-h-0" : "max-h-[200px] opacity-100"}`}>
+                    <div className={`order-2 md:order-1 transition-all duration-300 ease-in-out overflow-hidden ${isRecording ? "max-h-0 opacity-0 min-h-0 max-w-0 md:max-w-full flex-none md:flex-1" : "max-h-[200px] opacity-100 flex-1 w-full"}`}>
                       <textarea
                         value={input}
                         onChange={(e) => {
