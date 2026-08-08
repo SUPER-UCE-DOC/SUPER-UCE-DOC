@@ -1689,10 +1689,8 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                         value={input}
                         onChange={(e) => {
                           setInput(e.target.value);
-                          if (window.innerWidth < 768) {
-                            e.target.style.height = "auto";
-                            e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-                          }
+                          e.target.style.height = "auto";
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -1701,8 +1699,8 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                           }
                         }}
                         placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
-                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0"
-                        style={{ fontSize: "16px", minHeight: window.innerWidth < 768 ? "44px" : "72px", height: window.innerWidth < 768 ? "44px" : "auto" }}
+                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[44px] md:h-auto min-h-[44px] md:min-h-[72px] whitespace-nowrap md:whitespace-normal"
+                        style={{ fontSize: "16px" }}
                         rows={1}
                         autoFocus
                       />
