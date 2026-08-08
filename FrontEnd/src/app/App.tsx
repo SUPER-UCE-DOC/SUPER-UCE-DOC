@@ -382,7 +382,11 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto relative md:pb-0 pb-[84px] pt-[66px] md:pt-0">
+        <main className={`flex-1 overflow-auto relative md:pb-0 pt-[66px] md:pt-0 ${
+          currentView === "ai-assistant" || currentView === "teleconsult" || currentView === "live_teleconsult" 
+            ? "pb-[64px]" 
+            : "pb-[84px]"
+        }`}>
           {renderDashboard()}
         </main>
       </div>

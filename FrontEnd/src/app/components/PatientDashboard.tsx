@@ -1628,7 +1628,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-[28px] md:rounded-3xl p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"} border md:border-none border-[#203A70]/30`}>
+              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-full md:rounded-3xl py-1 px-2 md:p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"} border md:border-none border-[#203A70]/30`}>
                 
                 {/* Indicador visual al arrastrar */}
                 {isDragging && (
@@ -1703,7 +1703,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                           }
                         }}
                         placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta..." : "Escribe un mensaje..."}
-                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[44px] md:h-auto min-h-[44px] md:min-h-[72px] overflow-hidden md:overflow-y-auto"
+                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[40px] md:h-auto min-h-[40px] md:min-h-[72px] overflow-hidden md:overflow-y-auto"
                         style={{ fontSize: "16px" }}
                         rows={1}
                         autoFocus
@@ -1726,7 +1726,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                         <button
                           onClick={handleToggleRecord}
                           disabled={isTranscribing || typing || isUploadingDoc}
-                          className={`p-2.5 rounded-full transition-all duration-300 flex items-center justify-center relative w-[44px] h-[44px] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400 ${
+                          className={`p-2 rounded-full transition-all duration-300 flex items-center justify-center relative w-[40px] h-[40px] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400 ${
                             isRecording 
                               ? "text-[#203A70] bg-gray-50 hover:bg-gray-100 ml-1" 
                               : isTranscribing
