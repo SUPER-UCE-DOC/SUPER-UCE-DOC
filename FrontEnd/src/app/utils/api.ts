@@ -288,6 +288,10 @@ export const api = {
     });
   },
 
+  async getDeepgramToken(): Promise<{ token: string }> {
+    return request("/api/ai/deepgram-token");
+  },
+
   async getChatSessions(): Promise<any[]> {
     return request("/api/ai/sessions");
   },

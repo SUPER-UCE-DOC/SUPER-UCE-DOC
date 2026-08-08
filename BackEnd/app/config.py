@@ -56,6 +56,11 @@ class Settings:
         return vals.get("OPENROUTER_MODEL") or os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
     @property
+    def DEEPGRAM_API_KEY(self) -> str:
+        vals = dotenv_values(env_path)
+        return vals.get("DEEPGRAM_API_KEY") or os.getenv("DEEPGRAM_API_KEY", "")
+
+    @property
     def OLLAMA_BASE_URL(self) -> str:
         vals = dotenv_values(env_path)
         return vals.get("OLLAMA_BASE_URL") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

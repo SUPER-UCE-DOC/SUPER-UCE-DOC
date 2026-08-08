@@ -36,6 +36,18 @@ def translate_sign_language(
     )
 
 
+@router.get("/deepgram-token")
+def get_deepgram_token(current_user: models.User = Depends(get_current_user)):
+    """
+    Devuelve el token de Deepgram para que el frontend establezca
+    la conexión WebSocket de STT en tiempo real.
+    """
+    from app.config import settings
+    if not settings.DEEPGRAM_API_KEY:
+        raise HTTPException(status_code=500, detail="DEEPGRAM_API_KEY no configurada")
+    return {"token": settings.DEEPGRAM_API_KEY}
+
+
 @router.post("/telemedicina-stt")
 def telemedicina_stt(
     audio: UploadFile = File(...),

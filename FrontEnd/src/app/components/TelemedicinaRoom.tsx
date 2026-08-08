@@ -1022,14 +1022,18 @@ function TelemedicinaRoomContent({
 
           if (parsed.is_draft) {
             if (isSameSpeakerAndDraft) {
-              lastSub.text = lastSub.text.replace("...", "") + ` ${parsed.text}...`;
+              if (parsed.is_incremental) {
+                lastSub.text = lastSub.text.replace("...", "") + ` ${parsed.text}...`;
+              } else {
+                lastSub.text = parsed.text + "...";
+              }
               lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             } else {
               newList.push({
                 id: Date.now(),
                 speaker_name: parsed.speaker_name,
                 speaker_role: parsed.speaker_role,
-                text: `${parsed.text}...`,
+                text: parsed.is_incremental ? `${parsed.text}...` : `${parsed.text}...`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 is_draft: true
               });
@@ -1037,7 +1041,11 @@ function TelemedicinaRoomContent({
           } else {
             // Final sentence
             if (isSameSpeakerAndDraft) {
-              lastSub.text = parsed.text;
+              if (parsed.is_incremental) {
+                lastSub.text = lastSub.text.replace("...", "") + ` ${parsed.text}`;
+              } else {
+                lastSub.text = parsed.text;
+              }
               lastSub.is_draft = false;
               lastSub.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             } else {
@@ -1093,156 +1101,118 @@ function TelemedicinaRoomContent({
     sendRef.current = send;
   }, [send]);
 
-  // Motor de Transcripción STT Exclusivo con Modelo Deepgram Nova-3 (Servidor)
+  // Motor de Transcripción STT Continuo con Deepgram WebSocket
   useEffect(() => {
     if (muted) return;
 
     let mediaRecorder: MediaRecorder | null = null;
     let stream: MediaStream | null = null;
-    let interval: ReturnType<typeof setInterval>;
-    let silenceTimer: ReturnType<typeof setTimeout>;
-
-    let audioContext: AudioContext;
-    let analyser: AnalyserNode;
-    let dataArray: Uint8Array;
-    let isSpeaking = false;
-    let recordStartTime = 0;
+    let ws: WebSocket | null = null;
+    let isComponentMounted = true;
 
     const mediaTrack = localAudioTrack?.publication?.track?.mediaStreamTrack;
     if (!mediaTrack || mediaTrack.readyState !== "live") return;
 
-    const handleDeepgramTranscription = (text: string) => {
-      const cleanText = text ? text.trim() : "";
-      if (!cleanText || cleanText.length < 2) return;
-      if (["Audio.", "Audio", "Gracias."].includes(cleanText)) return;
+    const startDeepgramSTT = async () => {
+      try {
+        const { token } = await api.getDeepgramToken();
+        if (!token || !isComponentMounted) return;
 
-      const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Establecer conexión WebSocket con Deepgram
+        ws = new WebSocket('wss://api.deepgram.com/v1/listen?model=nova-3&language=es&interim_results=true&smart_format=true', ['token', token]);
 
-      setSubtitlesList(prev => {
-        const lastSub = prev.length > 0 ? prev[prev.length - 1] : null;
-
-        // Concatenar frase al último subtítulo si pertenece al MISMO hablante
-        if (lastSub && lastSub.speaker_role === role && lastSub.speaker_name === userName) {
-          const lowerLast = lastSub.text.toLowerCase();
-          const lowerNew = cleanText.toLowerCase();
-
-          // Evitar añadir duplicados idénticos
-          if (lowerLast.endsWith(lowerNew) || lowerLast === lowerNew) {
-            return prev;
-          }
-
-          const updatedText = `${lastSub.text} ${cleanText}`.trim();
-          const updatedList = [...prev.slice(0, prev.length - 1), { ...lastSub, text: updatedText, timestamp: nowTimestamp }];
-          localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(updatedList));
-          return updatedList;
-        } else {
-          // Nueva tarjeta para un nuevo hablante o intervención
-          const newSub = {
-            id: Date.now(),
-            speaker_name: userName,
-            speaker_role: role,
-            text: cleanText,
-            timestamp: nowTimestamp
+        ws.onopen = () => {
+          if (!isComponentMounted) return;
+          console.log("[STT] Conectado a Deepgram WebSocket");
+          stream = new MediaStream([mediaTrack.clone()]);
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(e.data);
+            }
           };
-          const newList = [...prev, newSub];
-          localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
-          return newList;
-        }
-      });
+          
+          // Grabar y enviar fragmentos (chunks) cada 250ms
+          mediaRecorder.start(250);
+        };
 
-      // Transmitir al interlocutor por el DataChannel de LiveKit
-      if (sendRef.current) {
-        sendRef.current(new TextEncoder().encode(JSON.stringify({
-          type: "SUBTITLE",
-          speaker_name: userName,
-          speaker_role: role,
-          text: cleanText
-        })), { reliable: true });
+        ws.onmessage = (message) => {
+          try {
+            const data = JSON.parse(message.data);
+            const transcript = data?.channel?.alternatives?.[0]?.transcript;
+            
+            if (transcript && transcript.length > 0) {
+              const isFinal = data.is_final;
+              const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              setSubtitlesList(prev => {
+                const newList = [...prev];
+                const lastSub = newList.length > 0 ? newList[newList.length - 1] : null;
+                const isSameSpeakerAndDraft = lastSub && lastSub.is_draft && lastSub.speaker_role === role;
+
+                if (isSameSpeakerAndDraft) {
+                  // Reemplazar la frase temporal actual por la nueva más completa
+                  lastSub.text = isFinal ? transcript : transcript + "...";
+                  lastSub.is_draft = !isFinal;
+                  lastSub.timestamp = nowTimestamp;
+                } else {
+                  // Nueva tarjeta de frase
+                  newList.push({
+                    id: Date.now(),
+                    speaker_name: userName,
+                    speaker_role: role,
+                    text: isFinal ? transcript : transcript + "...",
+                    timestamp: nowTimestamp,
+                    is_draft: !isFinal
+                  });
+                }
+                
+                localStorage.setItem(`teleconsult_subtitles_${roomCode}`, JSON.stringify(newList));
+                return newList;
+              });
+
+              // Transmitir al interlocutor por DataChannel
+              if (sendRef.current) {
+                sendRef.current(new TextEncoder().encode(JSON.stringify({
+                  type: "SUBTITLE",
+                  speaker_name: userName,
+                  speaker_role: role,
+                  text: transcript,
+                  is_draft: !isFinal,
+                  is_incremental: false
+                })), { reliable: true });
+              }
+
+              // Guardar permanentemente en DB solo si es el fragmento final
+              if (isFinal) {
+                api.postRoomSubtitle(roomCode, {
+                  speaker_name: userName,
+                  speaker_role: role,
+                  text: transcript,
+                  timestamp: nowTimestamp
+                }).catch(err => console.error("Error guardando subtítulo final en backend:", err));
+              }
+            }
+          } catch (e) {
+            console.error("Error procesando mensaje de Deepgram:", e);
+          }
+        };
+
+        ws.onerror = (e) => console.error("Error en conexión Deepgram WebSocket", e);
+        ws.onclose = () => console.log("[STT] Deepgram WebSocket cerrado");
+      } catch (e) {
+        console.error("Error inicializando Deepgram STT:", e);
       }
-
-      // Persistir en servidor
-      api.postRoomSubtitle(roomCode, {
-        speaker_name: userName,
-        speaker_role: role,
-        text: cleanText,
-        timestamp: nowTimestamp
-      }).catch(err => console.error("Error guardando subtítulo en backend:", err));
     };
 
-    try {
-      stream = new MediaStream([mediaTrack.clone()]);
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioContext = new AudioContextClass();
-      const source = audioContext.createMediaStreamSource(stream);
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      let chunks: Blob[] = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (chunks.length > 0) {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          chunks = [];
-          if (blob.size > 2500) {
-            try {
-              const res = await api.transcribeTelemedicineAudio(blob);
-              if (res.text) {
-                handleDeepgramTranscription(res.text);
-              }
-            } catch (e) {
-              console.error("Error en STT Deepgram Nova-3:", e);
-            }
-          }
-        }
-      };
-
-      interval = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray);
-
-        // Analizar energía vocal en la banda de frecuencia de la voz humana (80Hz a 3.5kHz)
-        let sum = 0;
-        const speechBins = Math.min(40, dataArray.length);
-        for (let i = 2; i < speechBins; i++) sum += dataArray[i];
-        const speechAvg = sum / (speechBins - 2);
-        const now = Date.now();
-
-        if (speechAvg > 7) {
-          if (!isSpeaking) {
-            isSpeaking = true;
-            recordStartTime = now;
-            if (mediaRecorder?.state === "inactive") mediaRecorder.start();
-          }
-          clearTimeout(silenceTimer);
-          silenceTimer = setTimeout(() => {
-            isSpeaking = false;
-            if (mediaRecorder?.state === "recording") mediaRecorder.stop();
-          }, 2200);
-        }
-
-        // Si la persona habla de forma continua durante más de 12 segundos, enviar el fragmento a Deepgram
-        if (isSpeaking && mediaRecorder?.state === "recording" && (now - recordStartTime > 12000)) {
-          clearTimeout(silenceTimer);
-          isSpeaking = false;
-          mediaRecorder.stop();
-        }
-      }, 100);
-    } catch (e) {
-      console.error("Error configurando VAD de Deepgram:", e);
-    }
+    startDeepgramSTT();
 
     return () => {
-      if (interval) clearInterval(interval);
-      if (silenceTimer) clearTimeout(silenceTimer);
+      isComponentMounted = false;
       if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
       if (stream) stream.getTracks().forEach(t => t.stop());
-      if (audioContext) audioContext.close();
+      if (ws) ws.close();
     };
   }, [muted, role, userName, roomCode, localAudioTrack]);
 
