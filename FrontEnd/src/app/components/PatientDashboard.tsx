@@ -1456,8 +1456,8 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="absolute top-4 left-4 z-50 bg-white p-2.5 rounded-xl text-gray-500 hover:text-gray-800 transition-all hover:bg-gray-50"
-          style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.06)", border: "1px solid #F3F4F6" }}
+          className="absolute top-4 left-4 z-50 bg-white p-2.5 rounded-xl text-gray-500 hover:text-gray-800 transition-all hover:bg-gray-50 shadow-none md:shadow-sm"
+          style={{ border: "1px solid #F3F4F6" }}
         >
           <PanelLeft size={20} />
         </button>
@@ -1595,20 +1595,26 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           <div className="absolute bottom-0 left-0 w-full h-48 z-10 pointer-events-none" style={{ background: "linear-gradient(to bottom, rgba(252,252,253,0) 0%, #FCFCFD 60%, #FCFCFD 100%)" }}></div>
         )}
 
-        {/* Sugerencias en Móvil */}
+        {/* Sugerencias en Móvil (Tarjetas Grises Placeholder) */}
         {isEmpty && (
-          <div className="absolute bottom-[90px] left-0 w-full px-4 flex flex-col items-center gap-2 z-20 transition-all anim-fade-in-up md:hidden pointer-events-none">
+          <div className="absolute bottom-[90px] left-0 w-full px-4 flex flex-col items-start gap-3 z-20 transition-all anim-fade-in-up md:hidden pointer-events-none">
             <button 
-              onClick={() => { setInput("Consultar sobre un síntoma"); }}
-              className="pointer-events-auto bg-white/90 backdrop-blur-md border border-gray-200 shadow-sm text-gray-600 hover:text-gray-800 text-[14px] font-medium py-2 px-5 rounded-full max-w-[280px] w-full text-center truncate active:scale-95 transition-all"
+              onClick={() => { setInput("Renovar medicamentos"); }}
+              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[200px] text-left truncate active:scale-95 transition-all shadow-sm"
             >
-              Consultar síntoma
+              Medicamentos
             </button>
             <button 
-              onClick={() => { setInput("Revisar últimos resultados"); }}
-              className="pointer-events-auto bg-white/90 backdrop-blur-md border border-gray-200 shadow-sm text-gray-600 hover:text-gray-800 text-[14px] font-medium py-2 px-5 rounded-full max-w-[280px] w-full text-center truncate active:scale-95 transition-all"
+              onClick={() => { setInput("Resumen de citas"); }}
+              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[180px] text-left truncate active:scale-95 transition-all shadow-sm"
             >
-              Revisar últimos resultados
+              Resumen citas
+            </button>
+            <button 
+              onClick={() => { setInput("Consultar sobre un síntoma"); }}
+              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[240px] text-left truncate active:scale-95 transition-all shadow-sm"
+            >
+              Síntomas
             </button>
           </div>
         )}
@@ -1619,12 +1625,12 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             
             {/* Modern Floating Input */}
             <div 
-              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-4 ${isRecording ? "rounded-full shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-2xl"}`}
+              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-3xl p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"}`}>
+              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-[28px] md:rounded-3xl p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"} border md:border-none border-[#203A70]/30`}>
                 
                 {/* Indicador visual al arrastrar */}
                 {isDragging && (
