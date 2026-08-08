@@ -232,10 +232,12 @@ export function DoctorDashboard({ userName, userAvatar, currentView, onNavigate 
     return <DoctorHome userName={userName} onNavigate={navigate} inCall={inCall} />;
   };
 
+  const isFullHeightView = currentView === "live_teleconsult" || currentView === "teleconsult" || currentView === "ai-assistant";
+
   return (
-    <div className="flex-1 flex flex-col w-full h-full relative">
+    <div className={`flex-1 flex flex-col w-full relative ${isFullHeightView ? "h-full" : ""}`}>
       {/* Main view content - hidden when in live teleconsult fullscreen */}
-      <div style={{ display: currentView === "live_teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
+      <div style={{ display: currentView === "live_teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: isFullHeightView ? "100%" : "auto" }}>
         {renderViewContent()}
       </div>
       {/* DoctorLiveRoom: always mounted when inCall=true OR viewing live_teleconsult.

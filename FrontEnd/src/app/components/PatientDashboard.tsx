@@ -138,9 +138,11 @@ export function PatientDashboard({ userName, userAvatar, currentView, onNavigate
     return <PatientHome userName={userName} onNavigate={navigate} onJoinCall={handleJoinCall} inCall={inCall} />;
   };
 
+  const isFullHeightView = currentView === "ai-assistant" || currentView === "teleconsult";
+
   return (
-    <div className="flex-1 flex flex-col w-full h-full relative">
-      <div style={{ display: currentView === "teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: "100%" }}>
+    <div className={`flex-1 flex flex-col w-full relative ${isFullHeightView ? "h-full" : ""}`}>
+      <div style={{ display: currentView === "teleconsult" ? "none" : "flex", flex: 1, flexDirection: "column", height: isFullHeightView ? "100%" : "auto" }}>
         {renderViewContent()}
       </div>
       {inCall && (
