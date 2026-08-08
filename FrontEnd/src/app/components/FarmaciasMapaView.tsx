@@ -136,10 +136,10 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
 
       {/* ── Split layout ── */}
       <div className="flex flex-1 gap-0 overflow-hidden">
-        {/* ── LEFT PANEL (35%) ── */}
+        {/* ── LEFT PANEL (28%) ── */}
         <div
           className="flex flex-col border-r flex-shrink-0 anim-slide-left anim-d-0"
-          style={{ width: "35%", borderColor: "#E5E7EB", background: "white" }}
+          style={{ width: "28%", minWidth: "300px", borderColor: "#E5E7EB", background: "white" }}
         >
           <div className="p-4 border-b" style={{ borderColor: "#F3F4F6" }}>
             <div className="relative">
@@ -295,14 +295,17 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           {/* Selected pharmacy detail card — floats over map top-left */}
           {selectedPharmacy && (
             <div
-              className="absolute top-4 bottom-4 left-4 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
+              className="absolute left-6 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
               style={{
+                top: "50%",
+                transform: "translateY(-50%)",
                 background: "white",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
                 minWidth: "300px",
                 maxWidth: "320px",
                 zIndex: 40,
-                height: "calc(100% - 32px)",
+                height: "85%",
+                maxHeight: "650px"
               }}
             >
               {/* Street View Image or Fallback */}
