@@ -1623,12 +1623,12 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
 
             {/* Modern Floating Input */}
             <div 
-              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-2 md:mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
+              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-2 md:mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-[24px] md:rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-full md:rounded-3xl py-1 px-2 md:p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"} border md:border-none border-[#203A70]/30`}>
+              <div className={`animated-border-inner w-full flex flex-col relative transition-all duration-300 ease-in-out ${isRecording ? "rounded-full p-2 bg-white" : "rounded-[24px] md:rounded-3xl py-1 px-2 md:p-3"} ${isDragging ? "bg-teal-50/50" : "bg-white"} border md:border-none border-[#203A70]/30`}>
                 
                 {/* Indicador visual al arrastrar */}
                 {isDragging && (
@@ -1667,7 +1667,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                 </div>
 
                 <div className="flex flex-col w-full">
-                  <div className={`w-full flex ${isRecording ? "flex-col" : "flex-row md:flex-col"} items-end md:items-stretch transition-all duration-300 gap-1 md:gap-0`}>
+                  <div className={`w-full flex flex-row md:flex-col items-center md:items-stretch transition-all duration-300 gap-1 md:gap-0`}>
                     
                     {/* Botón Plus Mobile */}
                     <div className={`flex md:hidden items-center shrink-0 ${isRecording ? "hidden" : ""}`}>
@@ -1757,7 +1757,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                     </div>
 
                     {/* Mobile Audio Visualizer */}
-                    <div className={`flex md:hidden order-4 items-center justify-center gap-[3px] overflow-hidden transition-all duration-300 ease-in-out pb-1 ${isRecording ? "flex-1 opacity-100 px-4 h-[44px] max-w-[500px]" : "w-0 opacity-0 px-0 h-[44px] max-w-0"}`}>
+                    <div className={`flex md:hidden order-4 items-center justify-center gap-[3px] overflow-hidden transition-all duration-300 ease-in-out ${isRecording ? "flex-1 opacity-100 px-4 h-[44px] max-w-[500px]" : "w-0 opacity-0 px-0 h-[44px] max-w-0"}`}>
                       {audioData.map((val, i) => (
                         <div key={i} className="w-1.5 rounded-full transition-all duration-75" style={{ height: `${Math.max(4, (val / 255) * 36)}px`, backgroundColor: val > 150 ? "#00A69D" : "#203A70", opacity: 0.6 + (val / 255) * 0.4 }} />
                       ))}
