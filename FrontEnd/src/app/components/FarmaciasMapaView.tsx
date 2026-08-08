@@ -61,6 +61,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           hours: "08:00 – 22:00",
           lat: p.lat,
           lon: p.lon,
+          googlePlaceId: p.google_place_id,
         })).filter((p: any) => p.hasStock);
         
         setPharmaciesList(formatted);
@@ -99,6 +100,29 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
   );
 
   const selectedPharmacy = pharmaciesList.find((p) => p.id === selected);
+
+  const [placePhotoUrl, setPlacePhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setImgError(false);
+    setPlacePhotoUrl(null);
+    if (selectedPharmacy && selectedPharmacy.googlePlaceId) {
+      const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || "";
+      if (!apiKey) return;
+      
+      fetch(`https://places.googleapis.com/v1/places/${selectedPharmacy.googlePlaceId}?fields=photos&key=${apiKey}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.photos && data.photos.length > 0) {
+            const photoName = data.photos[0].name;
+            setPlacePhotoUrl(`https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${apiKey}`);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching place photo:", err);
+        });
+    }
+  }, [selected, pharmaciesList]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#F9FAFB" }}>
@@ -316,7 +340,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
                   </div>
                 ) : (
                   <img 
-                    src={`https://maps.googleapis.com/maps/api/streetview?size=400x600&location=${selectedPharmacy.lat},${selectedPharmacy.lon}&return_error_code=true&key=${(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}`}
+                    src={placePhotoUrl || `https://maps.googleapis.com/maps/api/streetview?size=400x600&location=${selectedPharmacy.lat},${selectedPharmacy.lon}&return_error_code=true&key=${(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}`}
                     className="absolute inset-0 w-full h-full object-cover"
                     onError={() => setImgError(true)}
                     alt="Vista de la farmacia"
