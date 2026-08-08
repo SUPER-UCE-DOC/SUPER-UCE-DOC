@@ -382,7 +382,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto relative md:pb-0 pb-[120px] pt-[66px] md:pt-0">
+        <main className="flex-1 overflow-auto relative md:pb-0 pb-[84px] pt-[66px] md:pt-0">
           {renderDashboard()}
         </main>
       </div>
