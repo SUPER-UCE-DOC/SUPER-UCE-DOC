@@ -1595,37 +1595,31 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           <div className="absolute bottom-0 left-0 w-full h-48 z-10 pointer-events-none" style={{ background: "linear-gradient(to bottom, rgba(252,252,253,0) 0%, #FCFCFD 60%, #FCFCFD 100%)" }}></div>
         )}
 
-        {/* Sugerencias en Móvil (Tarjetas Grises Placeholder) */}
+        {/* Sugerencias en Móvil (Tarjetas reales mapeadas) */}
         {isEmpty && (
-          <div className="absolute bottom-[90px] left-0 w-full px-4 flex flex-col items-start gap-3 z-20 transition-all anim-fade-in-up md:hidden pointer-events-none">
-            <button 
-              onClick={() => { setInput("Renovar medicamentos"); }}
-              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[200px] text-left truncate active:scale-95 transition-all shadow-sm"
-            >
-              Medicamentos
-            </button>
-            <button 
-              onClick={() => { setInput("Resumen de citas"); }}
-              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[180px] text-left truncate active:scale-95 transition-all shadow-sm"
-            >
-              Resumen citas
-            </button>
-            <button 
-              onClick={() => { setInput("Consultar sobre un síntoma"); }}
-              className="pointer-events-auto bg-[#D1D5DB] hover:bg-gray-400 text-transparent rounded-full h-10 w-[240px] text-left truncate active:scale-95 transition-all shadow-sm"
-            >
-              Síntomas
-            </button>
+          <div className="absolute bottom-[80px] left-0 w-full px-4 flex flex-col items-start gap-2.5 z-20 transition-all anim-fade-in-up md:hidden pointer-events-none">
+            {randomSuggestions.slice(0, 3).map((s, i) => (
+              <button
+                key={i}
+                onClick={() => !typing && send(s.text)}
+                disabled={typing}
+                className="pointer-events-auto bg-white hover:bg-gray-50 border border-gray-200/80 rounded-full h-[46px] px-5 flex items-center justify-start gap-3 active:scale-95 transition-all shadow-sm max-w-[90%]"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <span className="text-[18px]">{s.icon}</span>
+                <span className="text-[14.5px] font-semibold text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">{s.text}</span>
+              </button>
+            ))}
           </div>
         )}
 
         {/* Floating Input Area (Shared between empty and chat state) */}
-        <div className="absolute bottom-6 left-0 w-full px-4 z-20 flex justify-center pointer-events-none">
+        <div className="absolute bottom-2 md:bottom-6 left-0 w-full px-4 z-20 flex justify-center pointer-events-none">
           <div className="w-full max-w-4xl flex flex-col pointer-events-auto">
             
             {/* Modern Floating Input */}
             <div 
-              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
+              className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-2 md:mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -1795,7 +1789,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
 
             {/* Suggestion Cards (Only in empty state, now BELOW) */}
             {isEmpty && (
-              <div className="grid grid-cols-3 gap-3 anim-fade-in-up pb-2 w-full">
+              <div className="hidden md:grid grid-cols-3 gap-3 anim-fade-in-up pb-2 w-full">
                 {randomSuggestions.map((s, i) => (
                   <button
                     key={i}
