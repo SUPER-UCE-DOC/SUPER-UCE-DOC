@@ -276,7 +276,7 @@ export default function App() {
 
               {/* Menú de Notificaciones */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl z-50 p-4 anim-fade-in-up" style={{ borderColor: "#E5E7EB" }}>
+                <div className="fixed top-[84px] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] md:absolute md:top-auto md:left-auto md:translate-x-0 md:right-0 md:mt-2 md:w-80 bg-white border rounded-2xl shadow-xl z-50 p-4 anim-fade-in-up" style={{ borderColor: "#E5E7EB", maxWidth: "400px" }}>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-sm" style={{ color: "#203A70" }}>Notificaciones</h3>
                     {notifications.length > 0 && (
@@ -361,7 +361,7 @@ export default function App() {
 
               {/* Profile Dropdown (Mobile Only) */}
               {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white border rounded-2xl shadow-xl z-50 p-2 anim-fade-in-up md:hidden" style={{ borderColor: "#E5E7EB" }}>
+                <div className="fixed top-[84px] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] bg-white border rounded-2xl shadow-xl z-50 p-2 anim-fade-in-up md:hidden" style={{ borderColor: "#E5E7EB", maxWidth: "400px" }}>
                   <button
                     onClick={() => { setShowProfileMenu(false); setCurrentView("settings"); }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[#203A70] hover:bg-gray-50 rounded-xl transition-all"
@@ -382,7 +382,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto relative md:pb-0 pb-[72px] pt-[66px] md:pt-0">
+        <main className="flex-1 overflow-auto relative md:pb-0 pb-[120px] pt-[66px] md:pt-0">
           {renderDashboard()}
         </main>
       </div>
