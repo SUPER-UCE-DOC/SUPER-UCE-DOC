@@ -129,7 +129,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
     <div className="flex flex-col h-full" style={{ background: "#F9FAFB" }}>
       {/* ── Breadcrumb / Back ── */}
       <div
-        className="flex items-center gap-4 px-6 py-4 border-b flex-shrink-0"
+        className="flex flex-col sm:flex-row sm:items-center items-start gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0"
         style={{ background: "white", borderColor: "#E5E7EB" }}
       >
         <button
@@ -142,10 +142,10 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           <ArrowLeft size={16} />
           Volver a Mis Recetas
         </button>
-        <div className="h-5 w-px" style={{ background: "#E5E7EB" }} />
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:block h-5 w-px" style={{ background: "#E5E7EB" }} />
+        <div className="flex flex-wrap items-center gap-2">
           <MapPin size={16} style={{ color: "#00A69D" }} />
-          <span className="text-sm" style={{ color: "#6B7280" }}>Buscando farmacias con:</span>
+          <span className="text-xs sm:text-sm" style={{ color: "#6B7280" }}>Buscando farmacias con:</span>
           <span
             className="px-3 py-1 rounded-full text-sm"
             style={{ background: "#F0FFFE", color: "#203A70", fontWeight: 700, border: "1px solid #00C7C0" }}
@@ -160,11 +160,11 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
       </div>
 
       {/* ── Split layout ── */}
-      <div className="flex flex-1 gap-0 overflow-hidden">
+      <div className="flex flex-col-reverse md:flex-row flex-1 gap-0 overflow-hidden">
         {/* ── LEFT PANEL (28%) ── */}
         <div
-          className="flex flex-col border-r flex-shrink-0 anim-slide-left anim-d-0"
-          style={{ width: "28%", minWidth: "300px", borderColor: "#E5E7EB", background: "white" }}
+          className="flex flex-col border-t md:border-t-0 md:border-r flex-shrink-0 anim-slide-left anim-d-0 w-full md:w-[350px] lg:w-[28%] md:min-w-[300px]"
+          style={{ borderColor: "#E5E7EB", background: "white" }}
         >
           <div className="p-4 border-b" style={{ borderColor: "#F3F4F6" }}>
             <div className="relative">
@@ -256,7 +256,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
         </div>
 
         {/* ── RIGHT PANEL — MAP (70%) ── */}
-        <div className="flex-1 relative overflow-hidden p-4 anim-slide-right anim-d-1">
+        <div className="flex-1 relative overflow-hidden p-2 sm:p-4 anim-slide-right anim-d-1 min-h-[300px] md:min-h-0">
           <div
             className="relative w-full h-full rounded-2xl overflow-hidden"
             style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.08)" }}
