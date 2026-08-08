@@ -55,10 +55,7 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        const clearedKey = `cleared_notifs_${user.name}`;
-        const clearedIds: string[] = JSON.parse(localStorage.getItem(clearedKey) || "[]");
-        const active = data.filter((n: any) => !clearedIds.includes(n.id));
-        setNotifications(active);
+        setNotifications(data);
       }
     } catch (err) {
       console.error(err);
@@ -103,13 +100,29 @@ export default function App() {
     }
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (!user) return;
-    const clearedKey = `cleared_notifs_${user.name}`;
-    const currentCleared: string[] = JSON.parse(localStorage.getItem(clearedKey) || "[]");
-    const newCleared = Array.from(new Set([...currentCleared, ...notifications.map((n) => n.id)]));
-    localStorage.setItem(clearedKey, JSON.stringify(newCleared));
-    setNotifications([]);
+    try {
+      const idsToClear = notifications.map((n) => n.id);
+      if (idsToClear.length === 0) return;
+      
+      const res = await fetch(`${API_BASE_URL}/api/invitations/dismiss-notifications`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ notification_ids: idsToClear })
+      });
+      
+      if (res.ok) {
+        setNotifications([]);
+      } else {
+        console.error("Error al limpiar notificaciones");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {

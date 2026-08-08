@@ -240,6 +240,25 @@ def get_my_doctors(db: Session = Depends(get_db), current_user: models.User = De
     return results
 
 
+class DismissNotificationsPayload(BaseModel):
+    notification_ids: List[str]
+
+@router.post("/dismiss-notifications")
+def dismiss_notifications(payload: DismissNotificationsPayload, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    for nid in payload.notification_ids:
+        existing = db.query(models.DismissedNotification).filter(
+            models.DismissedNotification.user_id == current_user.id,
+            models.DismissedNotification.notification_raw_id == nid
+        ).first()
+        if not existing:
+            new_dismiss = models.DismissedNotification(
+                user_id=current_user.id,
+                notification_raw_id=nid
+            )
+            db.add(new_dismiss)
+    db.commit()
+    return {"status": "ok", "message": "Notificaciones descartadas correctamente"}
+
 @router.get("/all-notifications")
 def get_all_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     """
@@ -363,10 +382,11 @@ def get_all_notifications(db: Session = Depends(get_db), current_user: models.Us
             })
             
     elif current_user.role == "pharmacy":
-        # 1. Recetas activas entrantes
+        # 1. Recetas activas entrantes asignadas a esta farmacia
         prescriptions = db.query(models.Prescription).filter(
-            models.Prescription.status == "activa"
-        ).all()
+            models.Prescription.status == "activa",
+            models.Prescription.pharmacy_id == current_user.id
+        ).order_by(models.Prescription.issued_at.desc()).all()
         for rx in prescriptions[:5]:  # Muestra las últimas 5 recetas activas
             pat_user = db.query(models.User).filter(models.User.id == rx.patient_id).first()
             pat_name = pat_user.full_name if pat_user else "Paciente"
@@ -391,5 +411,13 @@ def get_all_notifications(db: Session = Depends(get_db), current_user: models.Us
                 "avatar": None,
                 "created_at": ord.created_at.isoformat()
             })
-
-    return notifications_list
+            
+    # Filtrar notificaciones descartadas
+    dismissed = db.query(models.DismissedNotification.notification_raw_id).filter(
+        models.DismissedNotification.user_id == current_user.id
+    ).all()
+    dismissed_ids = {d[0] for d in dismissed}
+    
+    active_notifications = [n for n in notifications_list if n["id"] not in dismissed_ids]
+    
+    return active_notifications

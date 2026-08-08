@@ -179,6 +179,14 @@ class ChatSession(Base):
     title = Column(String, default="Nueva consulta médica")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class DismissedNotification(Base):
+    __tablename__ = "dismissed_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    notification_raw_id = Column(String, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
     # Relationships
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 

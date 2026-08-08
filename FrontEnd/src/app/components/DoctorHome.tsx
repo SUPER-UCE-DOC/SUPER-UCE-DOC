@@ -45,10 +45,7 @@ export function DoctorHome({ userName, onNavigate, inCall }: DoctorHomeProps) {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const clearedKey = `cleared_notifs_${userName}`;
-          const clearedIds: string[] = JSON.parse(localStorage.getItem(clearedKey) || "[]");
-          const active = data.filter((n: any) => !clearedIds.includes(n.id));
-          setNotificationsList(active.slice(0, 3));
+          setNotificationsList(data.slice(0, 3));
         }
       }
     } catch (e) {}
