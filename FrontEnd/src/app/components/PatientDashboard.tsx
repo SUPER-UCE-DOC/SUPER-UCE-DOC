@@ -1549,7 +1549,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
               <h1 className="text-center mb-4" style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#203A70" }}>
                 Hola, {userName || "Usuario"}
               </h1>
-              <p className="text-lg mb-10 text-center hidden md:block" style={{ color: "#6B7280", maxWidth: "500px" }}>
+              <p className="text-[15px] md:text-lg mb-10 text-center" style={{ color: "#6B7280", maxWidth: "500px" }}>
                 Mejora tu salud con IA: consultas instantáneas, análisis rápidos y conexión segura.
               </p>
             </div>
@@ -1595,28 +1595,30 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
           <div className="absolute bottom-0 left-0 w-full h-48 z-10 pointer-events-none" style={{ background: "linear-gradient(to bottom, rgba(252,252,253,0) 0%, #FCFCFD 60%, #FCFCFD 100%)" }}></div>
         )}
 
-        {/* Sugerencias en Móvil (Tarjetas reales mapeadas) */}
-        {isEmpty && (
-          <div className="absolute bottom-[80px] left-0 w-full px-4 flex flex-col items-start gap-2.5 z-20 transition-all anim-fade-in-up md:hidden pointer-events-none">
-            {randomSuggestions.slice(0, 3).map((s, i) => (
-              <button
-                key={i}
-                onClick={() => !typing && send(s.text)}
-                disabled={typing}
-                className="pointer-events-auto bg-white hover:bg-gray-50 border border-gray-200/80 rounded-full h-[46px] px-5 flex items-center justify-start gap-3 active:scale-95 transition-all shadow-sm max-w-[90%]"
-                style={{ animationDelay: `${i * 100}ms` }}
-              >
-                <span className="text-[18px]">{s.icon}</span>
-                <span className="text-[14.5px] font-semibold text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">{s.text}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Sugerencias en Móvil estaban aquí, movidas dentro del contenedor del input */}
 
         {/* Floating Input Area (Shared between empty and chat state) */}
         <div className="absolute bottom-2 md:bottom-6 left-0 w-full px-4 z-20 flex justify-center pointer-events-none">
           <div className="w-full max-w-4xl flex flex-col pointer-events-auto">
             
+            {/* Sugerencias en Móvil (Tarjetas reales mapeadas - AHORA DENTRO DEL CONTENEDOR PARA EVITAR OVERLAP) */}
+            {isEmpty && (
+              <div className="flex flex-col items-start gap-2.5 transition-all anim-fade-in-up md:hidden mb-3">
+                {randomSuggestions.slice(0, 3).map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => !typing && send(s.text)}
+                    disabled={typing}
+                    className="bg-white hover:bg-gray-50 border border-gray-200/80 rounded-full h-[46px] px-5 flex items-center justify-start gap-3 active:scale-95 transition-all shadow-sm max-w-full"
+                    style={{ animationDelay: `${i * 100}ms` }}
+                  >
+                    <span className="text-[18px] shrink-0">{s.icon}</span>
+                    <span className="text-[14px] font-semibold text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">{s.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Modern Floating Input */}
             <div 
               className={`animated-border-wrapper w-full transition-all duration-300 ease-in-out mb-2 md:mb-4 ${isRecording ? "rounded-full shadow-lg md:shadow-2xl" : "rounded-3xl"} ${isDragging ? "shadow-[0_0_0_4px_rgba(0,166,157,0.3)] scale-[1.01]" : "shadow-none md:shadow-2xl"}`}
@@ -1699,7 +1701,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                           }
                         }}
                         placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
-                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[44px] md:h-auto min-h-[44px] md:min-h-[72px] whitespace-nowrap md:whitespace-normal"
+                        className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[44px] md:h-auto min-h-[44px] md:min-h-[72px] overflow-hidden md:overflow-y-auto"
                         style={{ fontSize: "16px" }}
                         rows={1}
                         autoFocus
