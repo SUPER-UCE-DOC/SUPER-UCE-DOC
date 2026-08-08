@@ -115,6 +115,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
         .then(data => {
           if (data.photos && data.photos.length > 0) {
             const photoName = data.photos[0].name;
+            setImgError(false);
             setPlacePhotoUrl(`https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${apiKey}`);
           }
         })
