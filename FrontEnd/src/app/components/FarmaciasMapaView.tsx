@@ -163,7 +163,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
       <div className="flex flex-col-reverse md:flex-row flex-1 gap-0 overflow-hidden">
         {/* ── LEFT PANEL (28%) ── */}
         <div
-          className="flex flex-col border-t md:border-t-0 md:border-r flex-shrink-0 anim-slide-left anim-d-0 w-full md:w-[350px] lg:w-[28%] md:min-w-[300px]"
+          className={`flex flex-col border-t md:border-t-0 md:border-r flex-shrink-0 anim-slide-left anim-d-0 w-full md:w-[350px] lg:w-[28%] md:min-w-[300px] min-h-0 ${selectedPharmacy ? 'hidden md:flex' : 'flex-1 md:flex-none'}`}
           style={{ borderColor: "#E5E7EB", background: "white" }}
         >
           <div className="p-4 border-b" style={{ borderColor: "#F3F4F6" }}>
@@ -256,9 +256,9 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
         </div>
 
         {/* ── RIGHT PANEL — MAP (70%) ── */}
-        <div className="flex-1 relative overflow-hidden p-2 sm:p-4 anim-slide-right anim-d-1 min-h-[300px] md:min-h-0">
+        <div className="flex-1 relative overflow-hidden p-0 sm:p-4 anim-slide-right anim-d-1 min-h-0 flex flex-col">
           <div
-            className="relative w-full h-full rounded-2xl overflow-hidden"
+            className="flex-1 relative w-full h-full rounded-none sm:rounded-2xl overflow-hidden"
             style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.08)" }}
           >
             <APIProvider apiKey={(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ""}>
@@ -320,18 +320,17 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           {/* Selected pharmacy detail card — floats over map top-left */}
           {selectedPharmacy && (
             <div
-              className="absolute rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
-              style={{
-                left: "32px",
-                top: "32px",
-                bottom: "32px",
-                background: "white",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-                minWidth: "300px",
-                maxWidth: "320px",
-                zIndex: 40
-              }}
+              className="absolute z-40 p-0 anim-slide-up md:anim-scale-in flex flex-col bg-white overflow-y-auto
+                         inset-x-0 bottom-0 top-auto max-h-[65vh] rounded-t-3xl shadow-[0_-8px_32px_rgba(0,0,0,0.15)]
+                         md:inset-auto md:left-8 md:top-8 md:bottom-8 md:min-w-[300px] md:max-w-[320px] md:rounded-2xl md:shadow-[0_8px_32px_rgba(0,0,0,0.15)]"
             >
+              {/* Close button for mobile */}
+              <button 
+                onClick={() => setSelected(null)} 
+                className="md:hidden absolute top-3 right-3 z-50 p-2 bg-black/40 text-white rounded-full backdrop-blur-md"
+              >
+                <X size={18} />
+              </button>
               {/* Street View Image or Fallback */}
               <div className="w-full flex-1 relative bg-gray-100 min-h-[150px]">
                 {imgError ? (
