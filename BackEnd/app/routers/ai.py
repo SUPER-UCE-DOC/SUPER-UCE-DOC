@@ -218,7 +218,7 @@ def summarize_consultation(
     new_record = models.ClinicalHistory(
         patient_id=appointment.patient_id,
         doctor_id=appointment.doctor_id,
-        date=datetime.datetime.utcnow(),
+        date=datetime.datetime.now(),
         gestures_detected="Conversación grabada",
         translation_text=final_translation,
         summary_ia=summary_text
@@ -254,7 +254,7 @@ def summarize_consultation(
     # Actualizar cita a completada
     appointment.status = "completada"
     if not appointment.real_end_time:
-        appointment.real_end_time = datetime.datetime.utcnow()
+        appointment.real_end_time = datetime.datetime.now()
     
     # Cambiar estado del médico a libre
     doc = db.query(models.Doctor).filter(models.Doctor.id == appointment.doctor_id).first()
@@ -352,8 +352,8 @@ def medical_chatbot_query(
         chat_history = [{"role": m.role, "content": m.content} for m in db_messages]
 
     # Extraer contexto directo de la base de datos para inyectarlo en el LLM (RAG Personalizado)
-    # Usar huso horario de República Dominicana (UTC-4) para evitar discrepancias
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-4)))
+    # Usar hora del servidor (República Dominicana)
+    now = datetime.datetime.now()
     now_str = now.strftime("%Y-%m-%d %I:%M %p")
     user_context = f"FECHA Y HORA ACTUAL DEL SISTEMA: {now_str}\n"
     user_context += f"Nombre del paciente: {current_user.full_name}\n\n"
@@ -412,7 +412,7 @@ def medical_chatbot_query(
                 matched_summary = "No disponible"
                 for h in histories:
                     if h.doctor_id == appt.doctor_id:
-                        local_h_date = h.date - datetime.timedelta(hours=4)
+                        local_h_date = h.date
                         if abs((local_h_date - local_time).total_seconds()) < 86400:
                             matched_summary = h.summary_ia or h.translation_text
                             histories.remove(h)
@@ -420,10 +420,10 @@ def medical_chatbot_query(
                             
                 time_info = f"Programada para el {date_str}"
                 if appt.real_start_time:
-                    real_start_local = appt.real_start_time - datetime.timedelta(hours=4)
+                    real_start_local = appt.real_start_time
                     time_info += f" (Iniciada realmente a las {real_start_local.strftime('%I:%M %p')}"
                     if appt.real_end_time:
-                        real_end_local = appt.real_end_time - datetime.timedelta(hours=4)
+                        real_end_local = appt.real_end_time
                         time_info += f", finalizada a las {real_end_local.strftime('%I:%M %p')})"
                     else:
                         time_info += ")"
@@ -448,7 +448,7 @@ def medical_chatbot_query(
                 issued_str = rx.issued_at.strftime("%d/%m/%Y a las %I:%M %p") if rx.issued_at else "Sin fecha"
                 expires_str = rx.expires_at.strftime("%d/%m/%Y a las %I:%M %p") if rx.expires_at else "Sin fecha"
                 
-                now_utc = datetime.datetime.utcnow()
+                now_utc = datetime.datetime.now()
                 is_expired = (rx.expires_at and now_utc > rx.expires_at)
                 if rx.status == "despachada":
                     st_desc = "DESPACHADA Y VENCIDA (El paciente YA la consiguió / retiró en la farmacia. YA NO ESTÁ ACTIVA ni vigente para volver a reclamar)."

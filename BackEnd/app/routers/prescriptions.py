@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 import datetime
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/prescriptions", tags=["prescriptions"])
 @router.post("", response_model=schemas.PrescriptionResponse, status_code=status.HTTP_201_CREATED)
 def create_prescription(
     prescription_in: schemas.PrescriptionCreate,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(RoleChecker(["doctor"])),
     db: Session = Depends(get_db)
 ):
@@ -39,9 +40,9 @@ def create_prescription(
             expires_at = parsed_date.replace(hour=23, minute=59, second=59)
         except ValueError:
             # Fallback if invalid format
-            expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=prescription_in.expires_in_days)
+            expires_at = datetime.datetime.now() + datetime.timedelta(days=prescription_in.expires_in_days)
     else:
-        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=prescription_in.expires_in_days)
+        expires_at = datetime.datetime.now() + datetime.timedelta(days=prescription_in.expires_in_days)
     
     # Generate unique ID e.g. RX-2026-XXXX
     unique_rx_id = f"RX-{datetime.datetime.now().year}-{str(uuid.uuid4().int)[:4]}"
@@ -55,7 +56,7 @@ def create_prescription(
         dose=prescription_in.dose,
         frequency=prescription_in.frequency,
         status="activa",
-        issued_at=datetime.datetime.utcnow(),
+        issued_at=datetime.datetime.now(),
         expires_at=expires_at,
         patient_lat=patient.lat,
         patient_lon=patient.lon
@@ -66,24 +67,22 @@ def create_prescription(
 
     # Enviar correo de notificación de receta médica al paciente
     if patient and patient.user and patient.user.email:
-        try:
-            from app.services.email_service import email_service
-            email_service.send_prescription_email(
-                to_email=patient.user.email,
-                patient_name=patient.user.full_name,
-                doctor_name=current_user.full_name,
-                medicine=new_rx.medicine,
-                dose=new_rx.dose,
-                frequency=new_rx.frequency,
-                rx_id=new_rx.id
-            )
-        except Exception as ex:
-            print("Error al enviar correo de receta médica:", ex)
+        from app.services.email_service import email_service
+        background_tasks.add_task(
+            email_service.send_prescription_email,
+            to_email=patient.user.email,
+            patient_name=patient.user.full_name,
+            doctor_name=current_user.full_name,
+            medicine=new_rx.medicine,
+            dose=new_rx.dose,
+            frequency=new_rx.frequency,
+            rx_id=new_rx.id
+        )
 
     pharmacy_lat = None
     pharmacy_lon = None
-    if rx.pharmacy_id:
-        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == rx.pharmacy_id).first()
+    if getattr(new_rx, "pharmacy_id", None):
+        pharmacy = db.query(models.Pharmacy).filter(models.Pharmacy.id == new_rx.pharmacy_id).first()
         if pharmacy:
             pharmacy_lat = pharmacy.lat
             pharmacy_lon = pharmacy.lon

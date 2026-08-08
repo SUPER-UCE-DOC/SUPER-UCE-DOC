@@ -30,7 +30,7 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.datetime.now() + datetime.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -117,7 +117,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         new_code_entry = models.EmailVerificationCode(
             email=user_in.email,
             code=otp_code,
-            expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+            expires_at=datetime.datetime.now() + datetime.timedelta(minutes=15)
         )
         db.add(new_code_entry)
         db.commit()
@@ -193,7 +193,7 @@ def verify_email_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_
         )
 
     # Verificar si expiró (más de 15 minutos)
-    if datetime.datetime.utcnow() > code_record.expires_at:
+    if datetime.datetime.now() > code_record.expires_at:
         db.delete(code_record)
         db.commit()
         raise HTTPException(
@@ -242,7 +242,7 @@ def resend_verification_code(req: schemas.VerifyCodeRequest, db: Session = Depen
     new_code_entry = models.EmailVerificationCode(
         email=req.email,
         code=otp_code,
-        expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+        expires_at=datetime.datetime.now() + datetime.timedelta(minutes=15)
     )
     db.add(new_code_entry)
     db.commit()
@@ -287,7 +287,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         new_code_entry = models.EmailVerificationCode(
             email=user.email,
             code=otp_code,
-            expires_at=datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+            expires_at=datetime.datetime.now() + datetime.timedelta(minutes=15)
         )
         db.add(new_code_entry)
         db.commit()
@@ -474,7 +474,7 @@ def login_google(req_data: schemas.GoogleLoginRequest, db: Session = Depends(get
 
     # Si es el paso de creación (is_creation_step = True), registramos al usuario
     full_name = req_data.full_name if req_data.full_name and req_data.full_name.strip() else (user_info.get("name") or email.split("@")[0])
-    random_pwd = get_password_hash(datetime.datetime.utcnow().isoformat() + email)
+    random_pwd = get_password_hash(datetime.datetime.now().isoformat() + email)
     
     new_user = models.User(
         email=email,

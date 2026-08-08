@@ -13,7 +13,7 @@ class User(Base):
     full_name = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     # Relationships
     patient_profile = relationship("Patient", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -101,7 +101,7 @@ class Appointment(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
-    date_time = Column(DateTime, default=datetime.datetime.utcnow)
+    date_time = Column(DateTime, default=datetime.datetime.now)
     status = Column(String, default="pendiente")  # "pendiente", "en_curso", "completada"
     type = Column(String, nullable=False)  # "Teleconsulta", "Presencial", "Seguimiento"
     reason = Column(String, nullable=True)
@@ -126,7 +126,7 @@ class Prescription(Base):
     dose = Column(String, nullable=False)
     frequency = Column(String, nullable=False)
     status = Column(String, default="activa")  # "activa", "vencida", "despachada"
-    issued_at = Column(DateTime, default=datetime.datetime.utcnow)
+    issued_at = Column(DateTime, default=datetime.datetime.now)
     expires_at = Column(DateTime, nullable=False)
     patient_lat = Column(Float, nullable=False)
     patient_lon = Column(Float, nullable=False)
@@ -143,7 +143,7 @@ class ClinicalHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
-    date = Column(DateTime, default=datetime.datetime.utcnow)
+    date = Column(DateTime, default=datetime.datetime.now)
     gestures_detected = Column(String, nullable=True)  # Stored as text / comma-separated
     translation_text = Column(String, nullable=True)
     summary_ia = Column(String, nullable=True)
@@ -169,7 +169,7 @@ class SupplierOrder(Base):
     total = Column(Float, nullable=False)
     estimated_delivery = Column(String, nullable=False)
     status = Column(String, default="borrador")  # "borrador", "enviado", "transito", "recibido"
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
@@ -177,15 +177,7 @@ class ChatSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, default="Nueva consulta médica")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-class DismissedNotification(Base):
-    __tablename__ = "dismissed_notifications"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    notification_raw_id = Column(String, index=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     # Relationships
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
@@ -200,7 +192,7 @@ class ChatMessage(Base):
     content = Column(String, nullable=False)
     tokens_count = Column(Integer, default=0)
     metadata_json = Column(String, nullable=True) # Conversation ID temporal, adjuntos, etc.
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     # Relationships
     session = relationship("ChatSession", back_populates="messages")
@@ -213,8 +205,8 @@ class ConversationSummary(Base):
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
     summary_text = Column(String, nullable=False)
     last_message_id_included = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
 
     session = relationship("ChatSession")
 
@@ -230,8 +222,8 @@ class PatientMemory(Base):
     origin = Column(String, nullable=False)       # paciente, inferencia, documento, doctor, teleconsulta
     status = Column(String, default="activo")     # activo / inactivo
     embedding_ref = Column(String, nullable=True) # Referencia al índice vectorial
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
 
     patient = relationship("Patient")
 
@@ -243,7 +235,7 @@ class DoctorPatientInvitation(Base):
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     status = Column(String, default="pending")  # "pending", "accepted", "rejected"
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     # We could add relationships here, but often manual querying is enough
     doctor = relationship("Doctor", foreign_keys=[doctor_id])
@@ -256,7 +248,7 @@ class DoctorPatientLink(Base):
     id = Column(Integer, primary_key=True, index=True)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
-    linked_at = Column(DateTime, default=datetime.datetime.utcnow)
+    linked_at = Column(DateTime, default=datetime.datetime.now)
 
     doctor = relationship("Doctor", foreign_keys=[doctor_id])
     patient = relationship("Patient", foreign_keys=[patient_id])
@@ -264,10 +256,16 @@ class DoctorPatientLink(Base):
 
 class EmailVerificationCode(Base):
     __tablename__ = "email_verification_codes"
-
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, index=True, nullable=False)
     code = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
+class DismissedNotification(Base):
+    __tablename__ = "dismissed_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    notification_raw_id = Column(String, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.now)

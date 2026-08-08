@@ -183,8 +183,8 @@ def seed_database():
                     dose="30 comprimidos",
                     frequency="1 comprimido al día",
                     status="activa",
-                    issued_at=datetime.datetime.utcnow(),
-                    expires_at=datetime.datetime.utcnow() + datetime.timedelta(days=30),
+                    issued_at=datetime.datetime.now(),
+                    expires_at=datetime.datetime.now() + datetime.timedelta(days=30),
                     patient_lat=pat_rosa.lat,
                     patient_lon=pat_rosa.lon
                 )
@@ -199,8 +199,8 @@ def seed_database():
                     dose="30 comprimidos",
                     frequency="1 comprimido por la mañana",
                     status="activa",
-                    issued_at=datetime.datetime.utcnow(),
-                    expires_at=datetime.datetime.utcnow() + datetime.timedelta(days=30),
+                    issued_at=datetime.datetime.now(),
+                    expires_at=datetime.datetime.now() + datetime.timedelta(days=30),
                     patient_lat=pat_maria.lat,
                     patient_lon=pat_maria.lon
                 )

@@ -197,7 +197,7 @@ def update_appointment_status(
     if requested_status == app.status:
         if requested_status == "en_curso":
             if not app.real_start_time:
-                app.real_start_time = datetime.datetime.utcnow()
+                app.real_start_time = datetime.datetime.now()
                 db.commit()
             try:
                 from app.routers.realtime import start_room_timer, utc_dt_to_timestamp
@@ -269,14 +269,14 @@ def update_appointment_status(
 
     if requested_status == "en_curso":
         if not app.real_start_time:
-            app.real_start_time = datetime.datetime.utcnow()
+            app.real_start_time = datetime.datetime.now()
         try:
             from app.routers.realtime import start_room_timer, utc_dt_to_timestamp
             start_room_timer(str(app.id), start_ts=utc_dt_to_timestamp(app.real_start_time))
         except Exception as ex:
             print("Error starting realtime timer:", ex)
     elif requested_status == "completada" and not app.real_end_time:
-        app.real_end_time = datetime.datetime.utcnow()
+        app.real_end_time = datetime.datetime.now()
 
     if current_user.role == "doctor":
         doc = db.query(models.Doctor).filter(models.Doctor.id == current_user.id).first()
@@ -476,7 +476,7 @@ def get_patient_history(
         doc = h.doctor.user if h.doctor and h.doctor.user else None
         result.append({
             "id": h.id,
-            "date": (h.date - datetime.timedelta(hours=4)).isoformat(),
+            "date": h.date.isoformat(),
             "doctor_name": doc.full_name if doc else "Doctor",
             "summary_ia": h.summary_ia,
             "translation_text": h.translation_text

@@ -12,7 +12,7 @@ def run_cleanup():
     print(f"[{datetime.datetime.now()}] Iniciando limpieza automática diaria de recetas vencidas...")
     db = SessionLocal()
     try:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now()
         # Buscar recetas activas cuyo plazo haya expirado
         expired_recipes = db.query(models.Prescription).filter(
             models.Prescription.status == "activa",

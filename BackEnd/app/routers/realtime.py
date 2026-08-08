@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Set, Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.file_store import append_to_store, read_store, clear_store, update_dict_store, read_dict_store
 from app.routers.auth import get_current_user
 from app import models
 import os
@@ -117,45 +118,47 @@ import time
 import calendar
 
 def utc_dt_to_timestamp(dt) -> float:
-    """Convierte un datetime naive de UTC a Unix timestamp (float) correctamente.
-    datetime.timestamp() asume hora LOCAL, causando errores en servidores no UTC.
-    calendar.timegm() siempre trata el datetime como UTC."""
-    return float(calendar.timegm(dt.timetuple()))
+    """Convierte un datetime local a Unix timestamp (float) correctamente.
+    Como el servidor ahora usa hora local para todas las fechas,
+    dt.timestamp() asume que dt es local y genera el timestamp correcto."""
+    return float(dt.timestamp())
 
-room_sessions_store: Dict[str, dict] = {}
 room_media_store: Dict[str, Dict[str, dict]] = {}
 
 def get_or_create_session(room_id: str) -> dict:
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
-
-    if clean_room not in room_sessions_store:
-        room_sessions_store[clean_room] = {
+    session = read_dict_store("sessions", clean_room)
+    if not session:
+        session = {
             "room_id": clean_room,
             "start_time": 0.0,
             "status": "active",
             "doctor_time": 0.0,
             "patient_time": 0.0
         }
-    return room_sessions_store[clean_room]
+        update_dict_store("sessions", clean_room, "status", "active")
+        update_dict_store("sessions", clean_room, "start_time", 0.0)
+        update_dict_store("sessions", clean_room, "doctor_time", 0.0)
+        update_dict_store("sessions", clean_room, "patient_time", 0.0)
+    return session
 
 def resolve_start_time(session: dict, room_id: str, db) -> float:
     """Obtiene el start_time correcto. Si la sesión en memoria tiene 0,
-    consulta la BD y actualiza la sesión. Fuente de verdad permanente."""
-    if session["start_time"] > 0:
+    intenta leer el real_start_time de la base de datos (por si se reinició el servidor)."""
+    
+    if session.get("start_time", 0.0) > 0:
         return session["start_time"]
-    if db is None or not room_id.isdigit():
-        return 0.0
+
+    # Intento de recuperación desde la BD
     try:
-        appt = db.query(models.Appointment).filter(
-            models.Appointment.id == int(room_id),
-            models.Appointment.status == "en_curso"
-        ).first()
+        appt = db.query(models.Appointment).filter(models.Appointment.id == int(room_id)).first()
         if appt and appt.real_start_time:
             ts = utc_dt_to_timestamp(appt.real_start_time)
-            session["start_time"] = ts  # Cachear en memoria
+            update_dict_store("sessions", room_id, "start_time", ts)
             return ts
     except Exception:
         pass
+    
     return 0.0
 
 @router.post("/start-timer/{room_id}")
@@ -165,21 +168,19 @@ def start_room_timer(room_id: str, start_ts: float = 0.0, db: Session = Depends(
     session = get_or_create_session(clean_room)
     now = time.time()
 
-    if session["start_time"] == 0.0:
+    if session.get("start_time", 0.0) == 0.0:
         if start_ts > 0:
             session["start_time"] = start_ts
         else:
             try:
-                if clean_room.isdigit():
-                    appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
-                    if appt and appt.real_start_time:
-                        session["start_time"] = utc_dt_to_timestamp(appt.real_start_time)
-                    else:
-                        session["start_time"] = now
+                appt = db.query(models.Appointment).filter(models.Appointment.id == int(clean_room)).first()
+                if appt and appt.real_start_time:
+                    session["start_time"] = utc_dt_to_timestamp(appt.real_start_time)
                 else:
                     session["start_time"] = now
             except Exception:
                 session["start_time"] = now
+        update_dict_store("sessions", clean_room, "start_time", session["start_time"])
 
     return {
         "status": "ok",
@@ -197,9 +198,9 @@ def update_room_presence(room_id: str, role: str, muted: bool = False, video_off
     
     # Actualizar marca de tiempo según el rol
     if clean_role == "doctor":
-        session["doctor_time"] = now
+        update_dict_store("sessions", clean_room, "doctor_time", now)
     else:
-        session["patient_time"] = now
+        update_dict_store("sessions", clean_room, "patient_time", now)
         
     if clean_room not in room_media_store:
         room_media_store[clean_room] = {}
@@ -257,28 +258,25 @@ def get_room_presence(room_id: str, db: Session = Depends(get_db)):
 def leave_room_presence(room_id: str, role: str):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
     clean_role = "doctor" if role == "doctor" else "patient"
-    session = get_or_create_session(clean_room)
-    session[f"{clean_role}_time"] = 0
+    update_dict_store("sessions", clean_room, f"{clean_role}_time", 0)
     return {"status": "ok", "message": f"{clean_role} abandonó la sala '{clean_room}'"}
 
 @router.post("/end/{room_id}")
 async def end_room_session(room_id: str):
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
-    session = get_or_create_session(clean_room)
-    session["status"] = "ended"
-    session["doctor_time"] = 0
-    session["patient_time"] = 0
+    update_dict_store("sessions", clean_room, "status", "ended")
+    update_dict_store("sessions", clean_room, "ended_at", time.time())
     
     try:
         await manager.broadcast_to_room({"action": "end_call", "status": "completada"}, clean_room)
     except Exception as e:
         logger.warn(f"Error broadcasting end_call: {e}")
 
-    # Limpiar estado en memoria para que no persista si se reutiliza el room_id
-    room_subtitles_store.pop(clean_room, None)
-    room_comments_store.pop(clean_room, None)
+    # Limpiar estado en disco y en memoria para que no persista si se reutiliza el room_id
+    clear_store("subtitles", clean_room)
+    clear_store("comments", clean_room)
+    clear_store("sessions", clean_room)
     room_media_store.pop(clean_room, None)
-    room_sessions_store.pop(clean_room, None)
         
     return {"status": "ok", "message": f"Sesión de la sala '{clean_room}' finalizada exitosamente"}
 
@@ -303,29 +301,25 @@ class LiveCommentPayload(BaseModel):
     text: str
     time: str
 
-room_comments_store: Dict[str, List[dict]] = {}
-
 @router.get("/comments/{room_id}")
 def get_room_comments(room_id: str):
     clean_room = room_id if room_id and room_id != "undefined" else "global"
-    return room_comments_store.get(clean_room, [])
+    return read_store("comments", clean_room)
 
 @router.post("/comments/{room_id}")
 def post_room_comment(room_id: str, payload: LiveCommentPayload):
     clean_room = room_id if room_id and room_id != "undefined" else "global"
-    if clean_room not in room_comments_store:
-        room_comments_store[clean_room] = []
     
     msg_dict = {
-        "id": len(room_comments_store[clean_room]) + 1,
+        "id": "auto",
         "sender": payload.sender,
         "role": payload.role,
         "text": payload.text,
         "time": payload.time
     }
     
-    room_comments_store[clean_room].append(msg_dict)
-    return {"status": "ok", "comments": room_comments_store[clean_room]}
+    updated_data = append_to_store("comments", clean_room, msg_dict)
+    return {"status": "ok", "comments": updated_data}
 
 # Subtítulos Persistentes por Sala
 class SubtitlePayload(BaseModel):
@@ -335,21 +329,17 @@ class SubtitlePayload(BaseModel):
     text: str
     timestamp: str
 
-room_subtitles_store: Dict[str, List[dict]] = {}
-
 @router.get("/subtitles/{room_id}")
 def get_room_subtitles(room_id: str):
     clean_room = room_id if room_id and room_id != "undefined" else "global"
-    return room_subtitles_store.get(clean_room, [])
+    return read_store("subtitles", clean_room)
 
 @router.post("/subtitles/{room_id}")
 def post_room_subtitle(room_id: str, payload: SubtitlePayload):
     clean_room = room_id if room_id and room_id != "undefined" else "global"
-    if clean_room not in room_subtitles_store:
-        room_subtitles_store[clean_room] = []
     
     sub_dict = {
-        "id": len(room_subtitles_store[clean_room]) + 1,
+        "id": "auto",
         "speaker_name": payload.speaker_name,
         "speaker_role": payload.speaker_role,
         "speaker_avatar": payload.speaker_avatar,
@@ -357,8 +347,8 @@ def post_room_subtitle(room_id: str, payload: SubtitlePayload):
         "timestamp": payload.timestamp
     }
     
-    room_subtitles_store[clean_room].append(sub_dict)
-    return {"status": "ok", "subtitles": room_subtitles_store[clean_room]}
+    updated_data = append_to_store("subtitles", clean_room, sub_dict)
+    return {"status": "ok", "subtitles": updated_data}
 
 try:
     from livekit.api import AccessToken, VideoGrants
@@ -383,10 +373,11 @@ def get_livekit_token(
     clean_room = room_id if room_id and room_id != "undefined" and room_id != "null" else "global"
 
     # Limpiar sesiones finalizadas
-    if clean_room in room_sessions_store and room_sessions_store[clean_room].get("status") == "ended":
-        room_subtitles_store.pop(clean_room, None)
-        room_comments_store.pop(clean_room, None)
-        room_sessions_store.pop(clean_room, None)
+    session_data = read_dict_store("sessions", clean_room)
+    if session_data and session_data.get("status") == "ended":
+        clear_store("subtitles", clean_room)
+        clear_store("comments", clean_room)
+        clear_store("sessions", clean_room)
 
     session = get_or_create_session(clean_room)
     now = time.time()
