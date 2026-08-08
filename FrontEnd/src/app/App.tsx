@@ -3,6 +3,7 @@ import { api, getToken, removeToken, API_BASE_URL } from "./utils/api";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { Sidebar } from "./components/Sidebar";
+import { BottomNav } from "./components/BottomNav";
 import { PatientDashboard } from "./components/PatientDashboard";
 import { DoctorDashboard } from "./components/DoctorDashboard";
 import { PharmacyDashboard } from "./components/PharmacyDashboard";
@@ -350,8 +351,17 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 flex flex-col overflow-y-auto relative">{renderDashboard()}</main>
+        <main className="flex-1 overflow-auto relative md:pb-0 pb-[72px]">
+          {renderDashboard()}
+        </main>
       </div>
+
+      {/* Navegación móvil inferior */}
+      <BottomNav 
+        role={user.role as Role}
+        currentView={currentView}
+        onViewChange={(view) => setCurrentView(view)}
+      />
     </div>
   );
 }

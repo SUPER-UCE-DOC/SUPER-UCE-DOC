@@ -19,7 +19,7 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-const menuByRole: Record<Role, { id: string; label: string; icon: React.ReactNode; badge?: number }[]> = {
+export const menuByRole: Record<Role, { id: string; label: string; icon: React.ReactNode; badge?: number }[]> = {
   patient: [
     { id: "home", label: "Inicio", icon: <LayoutDashboard size={20} /> },
     { id: "appointments", label: "Mis Citas", icon: <Calendar size={20} /> },
@@ -70,7 +70,7 @@ export function Sidebar({ role, userName, currentView, onViewChange, onLogout }:
 
   return (
     <aside
-      className="flex flex-col h-full transition-all duration-300 relative"
+      className="hidden md:flex flex-col h-full transition-all duration-300 relative"
       style={{
         width: collapsed ? "72px" : "240px",
         background: "white",
