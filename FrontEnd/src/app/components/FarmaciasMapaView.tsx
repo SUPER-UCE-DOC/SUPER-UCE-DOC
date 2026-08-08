@@ -295,17 +295,16 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
           {/* Selected pharmacy detail card — floats over map top-left */}
           {selectedPharmacy && (
             <div
-              className="absolute left-6 rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
+              className="absolute rounded-2xl p-0 anim-scale-in overflow-hidden flex flex-col"
               style={{
-                top: "50%",
-                transform: "translateY(-50%)",
+                left: "24px",
+                top: "8%",
+                bottom: "8%",
                 background: "white",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
                 minWidth: "300px",
                 maxWidth: "320px",
-                zIndex: 40,
-                height: "85%",
-                maxHeight: "650px"
+                zIndex: 40
               }}
             >
               {/* Street View Image or Fallback */}
