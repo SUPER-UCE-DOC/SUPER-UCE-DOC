@@ -238,19 +238,16 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
         <header
-          className="flex items-center justify-between px-6 border-b flex-shrink-0 transition-all duration-300 ease-in-out"
+          className="flex items-center justify-between px-6 flex-shrink-0 transition-all duration-300 ease-in-out absolute md:relative top-0 left-0 w-full z-30 pointer-events-none md:pointer-events-auto bg-gradient-to-b from-[#F9FAFB] via-[#F9FAFB] to-transparent md:bg-none md:bg-white border-none md:border-solid md:border-b md:border-[#E5E7EB]"
           style={{ 
-            background: "white", 
-            borderColor: "#E5E7EB", 
-            height: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : "66px",
+            height: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : "80px",
             opacity: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? 0 : 1,
-            borderBottomWidth: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : "1px",
             paddingTop: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : undefined,
             paddingBottom: (currentView === "live_teleconsult" || (currentView === "teleconsult" && user.role === "patient")) ? "0px" : undefined
           }}
         >
           <div />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pointer-events-auto">
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -351,7 +348,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto relative md:pb-0 pb-[72px]">
+        <main className="flex-1 overflow-auto relative md:pb-0 pb-[72px] pt-[66px] md:pt-0">
           {renderDashboard()}
         </main>
       </div>

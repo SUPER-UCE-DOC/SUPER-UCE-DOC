@@ -1451,7 +1451,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
   const isEmpty = msgs.length === 0;
 
   return (
-    <div className="flex h-full relative" style={{ height: "calc(100vh - 66px)", background: "#F9FAFB", overflow: "hidden" }}>
+    <div className="flex flex-1 w-full h-full relative" style={{ background: "#F9FAFB", overflow: "hidden" }}>
       
       {!isSidebarOpen && (
         <button
