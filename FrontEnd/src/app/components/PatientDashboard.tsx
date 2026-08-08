@@ -1700,7 +1700,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                             if (!typing && (input.trim() || attachedFiles.length > 0)) send();
                           }
                         }}
-                        placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta o síntoma..." : "Escribe un mensaje..."}
+                        placeholder={isEmpty && attachedFiles.length === 0 ? "Escribe tu consulta..." : "Escribe un mensaje..."}
                         className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 resize-none modern-scroll disabled:opacity-60 py-2.5 px-2 md:py-0 md:px-0 h-[44px] md:h-auto min-h-[44px] md:min-h-[72px] overflow-hidden md:overflow-y-auto"
                         style={{ fontSize: "16px" }}
                         rows={1}
