@@ -163,7 +163,7 @@ export function FarmaciasMapaView({ medicine, prescriptionId, onBack }: Farmacia
       <div className="flex flex-col-reverse md:flex-row flex-1 gap-0 overflow-hidden">
         {/* ── LEFT PANEL (28%) ── */}
         <div
-          className={`flex flex-col border-t md:border-t-0 md:border-r flex-shrink-0 anim-slide-left anim-d-0 w-full md:w-[350px] lg:w-[28%] md:min-w-[300px] min-h-0 ${selectedPharmacy ? 'hidden md:flex' : 'flex-1 md:flex-none'}`}
+          className={`border-t md:border-t-0 md:border-r flex-shrink-0 anim-slide-left anim-d-0 w-full md:w-[350px] lg:w-[28%] md:min-w-[300px] min-h-0 ${selectedPharmacy ? 'hidden md:flex md:flex-col' : 'flex flex-col flex-1 md:flex-none'}`}
           style={{ borderColor: "#E5E7EB", background: "white" }}
         >
           <div className="p-4 border-b" style={{ borderColor: "#F3F4F6" }}>
