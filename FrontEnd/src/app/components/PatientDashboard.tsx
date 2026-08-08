@@ -1561,7 +1561,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
             <div className="space-y-6" style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
               {msgs.map((m, i) => (
                 <div key={`${activeSessionId}-${i}`} className={`flex gap-4 anim-fade-in-up ${m.from === "user" ? "flex-row-reverse" : ""}`} style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s`, animationFillMode: "both" }}>
-                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden font-bold" style={{ background: m.from === "bot" ? "transparent" : (userAvatar ? "white" : "#00A69D"), color: m.from === "bot" ? "white" : (userAvatar ? "#6B7280" : "white") }}>
+                  <div className="hidden md:flex w-10 h-10 rounded-xl flex-shrink-0 items-center justify-center shadow-sm overflow-hidden font-bold" style={{ background: m.from === "bot" ? "transparent" : (userAvatar ? "white" : "#00A69D"), color: m.from === "bot" ? "white" : (userAvatar ? "#6B7280" : "white") }}>
                     {m.from === "bot" ? (
                       <img src={logoIconImg} alt="Bot" className="w-full h-full object-contain" />
                     ) : userAvatar ? (
@@ -1577,7 +1577,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
               ))}
               {typing && (
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden" style={{ background: "transparent", color: "white" }}>
+                  <div className="hidden md:flex w-10 h-10 rounded-xl flex-shrink-0 items-center justify-center shadow-sm overflow-hidden" style={{ background: "transparent", color: "white" }}>
                     <img src={logoIconImg} alt="Bot" className="w-full h-full object-contain" />
                   </div>
                   <div className="pt-3 px-2 flex items-center gap-1.5">
@@ -1670,7 +1670,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                   <div className={`w-full flex ${isRecording ? "flex-col" : "flex-row md:flex-col"} items-end md:items-stretch transition-all duration-300 gap-1 md:gap-0`}>
                     
                     {/* Botón Plus Mobile */}
-                    <div className={`flex md:hidden items-center shrink-0 pb-0.5 ${isRecording ? "hidden" : ""}`}>
+                    <div className={`flex md:hidden items-center shrink-0 ${isRecording ? "hidden" : ""}`}>
                       <input
                         type="file"
                         ref={fileInputRef}
@@ -1764,12 +1764,12 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                     </div>
 
                     {/* Mobile Right Buttons (Mic/Send/Stop) */}
-                    <div className={`flex md:hidden order-5 items-center shrink-0 pb-0.5`}>
+                    <div className={`flex md:hidden order-5 items-center shrink-0`}>
                       {!input.trim() && attachedFiles.length === 0 ? (
                         <button
                           onClick={handleToggleRecord}
                           disabled={isTranscribing || typing || isUploadingDoc}
-                          className={`p-2.5 rounded-full transition-all duration-300 flex items-center justify-center relative w-[44px] h-[44px] disabled:opacity-30 disabled:cursor-not-allowed ${isRecording ? "text-[#203A70] bg-gray-50 hover:bg-gray-100 ml-1" : isTranscribing ? "text-[#00A69D]" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+                          className={`p-2 rounded-full transition-all duration-300 flex items-center justify-center relative w-[40px] h-[40px] disabled:opacity-30 disabled:cursor-not-allowed ${isRecording ? "text-[#203A70] bg-gray-50 hover:bg-gray-100 ml-1" : isTranscribing ? "text-[#00A69D]" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
                         >
                           {isTranscribing ? <Loader2 size={20} className="animate-spin" /> : isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
                         </button>
@@ -1777,7 +1777,7 @@ function AsistenteView({ userName, userAvatar }: { userName?: string; userAvatar
                         <button
                           onClick={() => send()}
                           disabled={typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)}
-                          className={`shrink-0 rounded-full text-white shadow-md transition-all duration-300 disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center w-[44px] h-[44px] ${isRecording ? "mr-1" : ""}`}
+                          className={`shrink-0 rounded-full text-white shadow-md transition-all duration-300 disabled:opacity-40 disabled:scale-95 disabled:cursor-not-allowed flex items-center justify-center w-[40px] h-[40px] ${isRecording ? "mr-1" : ""}`}
                           style={{ background: (typing || isUploadingDoc || (isTranscribing && !autoSendAfterRecordRef.current)) ? "#9CA3AF" : "#203A70" }}
                         >
                           {(isTranscribing && autoSendAfterRecordRef.current) ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} style={{ transform: "translate(-1px, 1px)" }} />}
