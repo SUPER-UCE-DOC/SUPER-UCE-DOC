@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Search, MapPin, Navigation, Clock, Phone, CheckCircle, XCircle, Building2 } from "lucide-react";
+import { ArrowLeft, Search, MapPin, Navigation, Clock, Phone, CheckCircle, XCircle, Building2, X } from "lucide-react";
 import { api } from "../utils/api";
 import { Map, Marker, APIProvider } from "@vis.gl/react-google-maps";
 
